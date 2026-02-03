@@ -17,6 +17,12 @@ export const useGestures = (containerRef, callbacks = {}) => {
 
   // Refs to prevent memory leaks
   const gestureActiveRef = useRef(false);
+  const containerRefInternal = useRef(containerRef);
+
+  // Keep containerRef in sync
+  useEffect(() => {
+    containerRefInternal.current = containerRef;
+  }, [containerRef]);
 
   // ========================================
   // ORIENTATION DETECTION
@@ -108,9 +114,9 @@ export const useGestures = (containerRef, callbacks = {}) => {
         console.log('🔊 Volume gesture, deltaY:', deltaY, 'newVolume:', newVolume);
       }
     }
-  }, [touchStartY, initialPinchDistance, getTouchDistance, callbacks]);
+  }, [touchStartY, initialPinchDistance, initialVolume, getTouchDistance, callbacks]);
 
-  const handleTouchEnd = useCallback((e) => {
+  const handleTouchEnd = useCallback(() => {
     gestureActiveRef.current = false;
     setTouchStartY(null);
     setInitialPinchDistance(null);
@@ -122,7 +128,7 @@ export const useGestures = (containerRef, callbacks = {}) => {
   // ATTACH HANDLERS TO CONTAINER
   // ========================================
   useEffect(() => {
-    const container = containerRef?.current;
+    const container = containerRefInternal.current?.current;
     if (!container) return;
 
     // CRITICAL: passive: false allows preventDefault()

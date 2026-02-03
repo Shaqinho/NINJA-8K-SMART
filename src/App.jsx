@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Preferences } from '@capacitor/preferences';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { PlaylistProvider, usePlaylistContext } from './context/PlaylistContext';
 import LandingPage from './components/LandingPage';
@@ -19,7 +18,6 @@ const NINJA_THEME = {
 const AppContent = () => {
   const { playlist, setPlaylist, clearPlaylist, isRestored } = usePlaylistContext();
   const [currentPage, setCurrentPage] = useState(null);
-  const [currentItem, setCurrentItem] = useState(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [isHeaderOpen, setIsHeaderOpen] = useState(false);
@@ -100,8 +98,8 @@ const AppContent = () => {
     setCurrentPage('smart');
   };
 
-  const navigateToPlayer = (item) => {
-    setCurrentItem(item);
+  const navigateToPlayer = () => {
+    // Player is handled by Smart component
   };
 
   const navigateBack = () => {

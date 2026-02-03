@@ -71,11 +71,13 @@ const Player = memo(({
   const [initialVolume, setInitialVolume] = useState(1);
 
   // Orientation detection - 0, 90, 180, 270
-  const [orientation, setOrientation] = useState(0);
   const [isInvertedGravity, setIsInvertedGravity] = useState(false);
 
   // Build stream URL
   const src = channel?.streamUrl || channel?.url || null;
+
+  // Suppress unused vars warning for channels
+  void channels;
 
   // If Smart says we're fullscreen, we ARE fullscreen
   useEffect(() => {
@@ -84,7 +86,7 @@ const Player = memo(({
     } else if (!isSmartFullscreen && isFullscreen) {
       setIsFullscreen(false);
     }
-  }, [isSmartFullscreen]);
+  }, [isSmartFullscreen, isFullscreen]);
 
   // ========================================
   // VIDEO STATE HANDLERS
@@ -195,7 +197,6 @@ const Player = memo(({
         (window.orientation || 90) : 
         (window.orientation || 0);
       
-      setOrientation(angle);
       // Inverted gravity = 180° or 270° (upside down)
       setIsInvertedGravity(angle === 180 || angle === 270);
     };
@@ -240,13 +241,12 @@ const Player = memo(({
         if (distanceChange > 0 && !isFullscreen) {
           toggleFullscreen();
           setInitialPinchDistance(null);
-          setTouchStartY(null);
         } else if (distanceChange < 0 && isFullscreen) {
           toggleFullscreen();
           setInitialPinchDistance(null);
-          setTouchStartY(null);
         }
       } else {
+        // Volume control
         const avgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         const deltaY = touchStartY - avgY;
         const volumeChange = deltaY / 200;
@@ -297,10 +297,16 @@ const Player = memo(({
     }
   }, [onMultiGridToggle]);
 
+  // Suppress unused var warning
+  void onMultiGridAdd;
+
   // Render video for MultiGrid cell
   const renderMultiGridVideo = useCallback((item, index) => {
     const itemSrc = item?.streamUrl || item?.url;
     if (!itemSrc) return null;
+
+    // Suppress unused var warning
+    void index;
 
     return (
       <VideoPlayer
