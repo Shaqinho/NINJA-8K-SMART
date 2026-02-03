@@ -1,5 +1,5 @@
 # codemagic.yaml
-# NINJA 8K - Web HLS.js player (no native ExoPlayer)
+# NINJA 8K - LibVLC Native Player
 workflows:
   android-debug:
     name: NINJA 8K FINAL
@@ -36,7 +36,307 @@ workflows:
           npx cap add android
           npx cap sync android
       
-      - name: 4. Update MainActivity
+      - name: 4. Add LibVLC Dependency
+        script: |
+          # Add LibVLC dependency to app/build.gradle
+          sed -i '' '/dependencies {/a\
+              implementation "org.videolan.android:libvlc-all:3.5.1"
+          ' android/app/build.gradle || {
+            sed -i '/dependencies {/a\
+              implementation "org.videolan.android:libvlc-all:3.5.1"
+            ' android/app/build.gradle
+          }
+      
+      - name: 5. Copy LibVLCPlugin
+        script: |
+          cat > android/app/src/main/java/io/ninja/ninja8k/LibVLCPlugin.java << 'VLCEOF'
+          package io.ninja.ninja8k;
+
+          import android.graphics.Color;
+          import android.graphics.PixelFormat;
+          import android.net.Uri;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.util.Log;
+          import android.view.Gravity;
+          import android.view.SurfaceHolder;
+          import android.view.SurfaceView;
+          import android.view.View;
+          import android.view.ViewGroup;
+          import android.webkit.WebView;
+          import android.widget.FrameLayout;
+
+          import androidx.annotation.NonNull;
+          import androidx.coordinatorlayout.widget.CoordinatorLayout;
+
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          import org.videolan.libvlc.LibVLC;
+          import org.videolan.libvlc.Media;
+          import org.videolan.libvlc.MediaPlayer;
+          import org.videolan.libvlc.interfaces.IVLCVout;
+
+          import java.util.ArrayList;
+
+          @CapacitorPlugin(name = "LibVLCPlugin")
+          public class LibVLCPlugin extends Plugin {
+              private static final String TAG = "LibVLCPlugin";
+
+              private LibVLC libVLC;
+              private MediaPlayer mediaPlayer;
+              private SurfaceView surfaceView;
+              private FrameLayout playerContainer;
+
+              private boolean isSurfaceReady = false;
+              private boolean isOverlayAttached = false;
+              private String currentUrl = null;
+
+              private int playerTop = 0;
+              private int playerLeft = 0;
+              private int playerWidth = 0;
+              private int playerHeight = 0;
+              private boolean isFullscreen = false;
+
+              @PluginMethod
+              public void initialize(PluginCall call) {
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          cleanup();
+
+                          ArrayList<String> options = new ArrayList<>();
+                          options.add("--network-caching=1500");
+                          options.add("--no-sub-autodetect-file");
+                          options.add("--no-osd");
+                          options.add("--no-video-title-show");
+
+                          libVLC = new LibVLC(getContext(), options);
+                          mediaPlayer = new MediaPlayer(libVLC);
+                          
+                          surfaceView = new SurfaceView(getContext());
+                          surfaceView.setZOrderMediaOverlay(true);
+                          surfaceView.getHolder().setFormat(PixelFormat.TRANSLUCENT);
+
+                          surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
+                              @Override
+                              public void surfaceCreated(@NonNull SurfaceHolder holder) {
+                                  isSurfaceReady = true;
+                                  attachSurfaceToVLC();
+                              }
+                              @Override
+                              public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
+                                  if (mediaPlayer != null) mediaPlayer.getVLCVout().setWindowSize(width, height);
+                              }
+                              @Override
+                              public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+                                  isSurfaceReady = false;
+                                  detachSurfaceFromVLC();
+                              }
+                          });
+
+                          playerContainer = new FrameLayout(getContext());
+                          playerContainer.setBackgroundColor(Color.TRANSPARENT);
+                          playerContainer.addView(surfaceView);
+                          playerContainer.setVisibility(View.GONE);
+
+                          attachBehindWebView();
+
+                          call.resolve();
+                      } catch (Exception e) {
+                          call.reject(e.getMessage());
+                      }
+                  });
+              }
+
+              @PluginMethod
+              public void setZOrder(PluginCall call) {
+                  boolean onTop = call.getBoolean("onTop", false);
+                  getActivity().runOnUiThread(() -> {
+                      if (surfaceView != null) {
+                          surfaceView.setZOrderOnTop(onTop);
+                          surfaceView.setZOrderMediaOverlay(!onTop);
+                      }
+                      call.resolve();
+                  });
+              }
+
+              private void attachBehindWebView() {
+                  if (playerContainer == null || isOverlayAttached) return;
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          WebView webView = getBridge().getWebView();
+                          ViewGroup parent = (ViewGroup) webView.getParent();
+                          
+                          webView.setBackgroundColor(Color.TRANSPARENT);
+                          
+                          if (playerContainer.getParent() == null) {
+                              ViewGroup.LayoutParams lp;
+                              if (parent instanceof CoordinatorLayout) {
+                                  lp = new CoordinatorLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+                              } else {
+                                  lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+                              }
+                              parent.addView(playerContainer, 0, lp);
+                          }
+                          
+                          isOverlayAttached = true;
+                      } catch (Exception e) {
+                          Log.e(TAG, "Attach failed", e);
+                      }
+                  });
+              }
+
+              @PluginMethod
+              public void play(PluginCall call) {
+                  String url = call.getString("url");
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          currentUrl = url;
+                          playerContainer.setVisibility(View.VISIBLE);
+                          updatePlayerPosition();
+
+                          getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
+
+                          if (isSurfaceReady) {
+                              playUrl(url);
+                          } else {
+                              new Handler(Looper.getMainLooper()).postDelayed(() -> playUrl(url), 500);
+                          }
+                          call.resolve();
+                      } catch (Exception e) {
+                          call.reject(e.getMessage());
+                      }
+                  });
+              }
+
+              private void playUrl(String url) {
+                  if (mediaPlayer == null || url == null) return;
+                  mediaPlayer.stop();
+                  attachSurfaceToVLC();
+                  Media media = new Media(libVLC, Uri.parse(url));
+                  media.setHWDecoderEnabled(true, false);
+                  mediaPlayer.setMedia(media);
+                  media.release();
+                  mediaPlayer.play();
+              }
+
+              private void updatePlayerPosition() {
+                  if (playerContainer == null) return;
+                  ViewGroup.LayoutParams params = playerContainer.getLayoutParams();
+                  if (params == null) return;
+
+                  int w = isFullscreen ? ViewGroup.LayoutParams.MATCH_PARENT : (playerWidth > 0 ? playerWidth : ViewGroup.LayoutParams.MATCH_PARENT);
+                  int h = isFullscreen ? ViewGroup.LayoutParams.MATCH_PARENT : (playerHeight > 0 ? playerHeight : ViewGroup.LayoutParams.MATCH_PARENT);
+
+                  if (params instanceof CoordinatorLayout.LayoutParams) {
+                      CoordinatorLayout.LayoutParams lp = (CoordinatorLayout.LayoutParams) params;
+                      lp.width = w; lp.height = h;
+                      lp.leftMargin = isFullscreen ? 0 : playerLeft;
+                      lp.topMargin = isFullscreen ? 0 : playerTop;
+                      playerContainer.setLayoutParams(lp);
+                  } else if (params instanceof FrameLayout.LayoutParams) {
+                      FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) params;
+                      lp.width = w; lp.height = h;
+                      lp.leftMargin = isFullscreen ? 0 : playerLeft;
+                      lp.topMargin = isFullscreen ? 0 : playerTop;
+                      lp.gravity = Gravity.TOP | Gravity.START;
+                      playerContainer.setLayoutParams(lp);
+                  }
+              }
+
+              private void attachSurfaceToVLC() {
+                  if (mediaPlayer == null || surfaceView == null || !isSurfaceReady) return;
+                  IVLCVout vout = mediaPlayer.getVLCVout();
+                  if (!vout.areViewsAttached()) {
+                      vout.setVideoView(surfaceView);
+                      vout.attachViews();
+                  }
+              }
+
+              private void detachSurfaceFromVLC() {
+                  if (mediaPlayer != null) mediaPlayer.getVLCVout().detachViews();
+              }
+
+              @PluginMethod
+              public void setPosition(PluginCall call) {
+                  int top = call.getInt("top", 0);
+                  int left = call.getInt("left", 0);
+                  int width = call.getInt("width", 0);
+                  int height = call.getInt("height", 0);
+                  float density = getContext().getResources().getDisplayMetrics().density;
+                  playerTop = Math.round(top * density);
+                  playerLeft = Math.round(left * density);
+                  playerWidth = Math.round(width * density);
+                  playerHeight = Math.round(height * density);
+                  getActivity().runOnUiThread(() -> {
+                      updatePlayerPosition();
+                      call.resolve();
+                  });
+              }
+
+              @PluginMethod
+              public void setFullscreen(PluginCall call) {
+                  isFullscreen = call.getBoolean("fullscreen", false);
+                  getActivity().runOnUiThread(() -> {
+                      updatePlayerPosition();
+                      call.resolve();
+                  });
+              }
+
+              @PluginMethod
+              public void setVolume(PluginCall call) {
+                  int volume = call.getInt("volume", 100);
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          if (mediaPlayer != null) {
+                              int vlcVolume = Math.max(0, Math.min(200, volume));
+                              mediaPlayer.setVolume(vlcVolume);
+                          }
+                          call.resolve();
+                      } catch (Exception e) {
+                          call.reject(e.getMessage());
+                      }
+                  });
+              }
+
+              @PluginMethod
+              public void stop(PluginCall call) {
+                  getActivity().runOnUiThread(() -> {
+                      if (mediaPlayer != null) mediaPlayer.stop();
+                      if (playerContainer != null) playerContainer.setVisibility(View.GONE);
+                      call.resolve();
+                  });
+              }
+
+              private void cleanup() {
+                  if (mediaPlayer != null) {
+                      mediaPlayer.stop();
+                      mediaPlayer.release();
+                      mediaPlayer = null;
+                  }
+                  if (libVLC != null) {
+                      libVLC.release();
+                      libVLC = null;
+                  }
+                  if (playerContainer != null && playerContainer.getParent() != null) {
+                      ((ViewGroup)playerContainer.getParent()).removeView(playerContainer);
+                      playerContainer = null;
+                  }
+                  isOverlayAttached = false;
+              }
+
+              @Override
+              protected void handleOnDestroy() {
+                  super.handleOnDestroy();
+                  cleanup();
+              }
+          }
+          VLCEOF
+      
+      - name: 6. Update MainActivity with LibVLC
         script: |
           cat > android/app/src/main/java/io/ninja/ninja8k/MainActivity.java << 'MAINEOF'
           package io.ninja.ninja8k;
@@ -47,6 +347,7 @@ workflows:
           import android.view.View;
           import android.view.WindowManager;
           import android.webkit.WebView;
+
           import androidx.core.view.WindowCompat;
           import androidx.core.view.WindowInsetsCompat;
           import androidx.core.view.WindowInsetsControllerCompat;
@@ -55,12 +356,37 @@ workflows:
 
           public class MainActivity extends BridgeActivity {
               
+              private static final String TAG = "MainActivity";
+              
               @Override
               protected void onCreate(Bundle savedInstanceState) {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                  } else {
+                      getWindow().addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+                  }
+                  
+                  // Register LibVLC plugin ONLY
+                  registerPlugin(LibVLCPlugin.class);
+                  
                   super.onCreate(savedInstanceState);
                   
                   enableImmersiveMode();
-                  makeWebViewTransparent();
+              }
+              
+              @Override
+              public void onStart() {
+                  super.onStart();
+                  
+                  if (getBridge() != null && getBridge().getWebView() != null) {
+                      WebView webView = getBridge().getWebView();
+                      webView.setBackgroundColor(0x00000000);
+                      webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                      
+                      if (webView.getParent() instanceof View) {
+                          ((View) webView.getParent()).setBackgroundColor(0x00000000);
+                      }
+                  }
               }
 
               @Override
@@ -92,25 +418,12 @@ workflows:
                               | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
                       decorView.setSystemUiVisibility(uiOptions);
                   }
-
                   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-              }
-              
-              private void makeWebViewTransparent() {
-                  try {
-                      WebView webView = getBridge().getWebView();
-                      if (webView != null) {
-                          webView.setBackgroundColor(Color.TRANSPARENT);
-                          webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-                      }
-                  } catch (Exception e) {
-                      // WebView might not be ready yet
-                  }
               }
           }
           MAINEOF
       
-      - name: 5. Permissions Manifest
+      - name: 7. Permissions Manifest
         script: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -153,7 +466,7 @@ workflows:
           </manifest>
           EOF
       
-      - name: 6. PATCH KOTLIN DUPLICATES
+      - name: 8. PATCH KOTLIN DUPLICATES
         script: |
           cat >> android/build.gradle << 'EOF'
           
@@ -169,7 +482,7 @@ workflows:
           }
           EOF
       
-      - name: 7. FABRICATION APK
+      - name: 9. FABRICATION APK
         script: |
           cd android
           chmod +x gradlew
