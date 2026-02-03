@@ -1,5 +1,4 @@
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { THEME } from '../../constants/theme';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import PlayerControls from './PlayerControls';
