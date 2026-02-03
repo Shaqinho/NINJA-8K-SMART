@@ -336,7 +336,121 @@ workflows:
           }
           VLCEOF
       
-      - name: 6. Update MainActivity with LibVLC
+      - name: 6. Copy MacAddressPlugin
+        script: |
+          cat > android/app/src/main/java/io/ninja/ninja8k/MacAddressPlugin.java << 'MACEOF'
+          package io.ninja.ninja8k;
+
+          import android.content.Context;
+          import android.net.wifi.WifiInfo;
+          import android.net.wifi.WifiManager;
+          import android.util.Log;
+
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          import java.io.BufferedReader;
+          import java.io.FileReader;
+          import java.io.InputStreamReader;
+          import java.net.NetworkInterface;
+          import java.util.Collections;
+          import java.util.List;
+
+          @CapacitorPlugin(name = "MacAddressPlugin")
+          public class MacAddressPlugin extends Plugin {
+              private static final String TAG = "MacAddressPlugin";
+              
+              @PluginMethod
+              public void getMacAddress(PluginCall call) {
+                  try {
+                      String mac = null;
+                      
+                      mac = getMacFromNetworkInterface();
+                      if (isValidMac(mac)) {
+                          returnMac(call, mac, "network_interface");
+                          return;
+                      }
+                      
+                      mac = getMacFromFile();
+                      if (isValidMac(mac)) {
+                          returnMac(call, mac, "sys_file");
+                          return;
+                      }
+                      
+                      mac = getMacFromWifiManager();
+                      if (isValidMac(mac)) {
+                          returnMac(call, mac, "wifi_manager");
+                          return;
+                      }
+                      
+                      call.reject("Unable to retrieve MAC address");
+                  } catch (Exception e) {
+                      call.reject("Error: " + e.getMessage());
+                  }
+              }
+              
+              private String getMacFromNetworkInterface() {
+                  try {
+                      List<NetworkInterface> interfaces = Collections.list(NetworkInterface.getNetworkInterfaces());
+                      for (NetworkInterface intf : interfaces) {
+                          if (!intf.getName().equalsIgnoreCase("wlan0")) continue;
+                          byte[] mac = intf.getHardwareAddress();
+                          if (mac == null || mac.length == 0) continue;
+                          StringBuilder sb = new StringBuilder();
+                          for (int i = 0; i < mac.length; i++) {
+                              sb.append(String.format("%02X%s", mac[i], (i < mac.length - 1) ? ":" : ""));
+                          }
+                          return sb.toString();
+                      }
+                  } catch (Exception e) { }
+                  return null;
+              }
+              
+              private String getMacFromFile() {
+                  try {
+                      BufferedReader reader = new BufferedReader(new FileReader("/sys/class/net/wlan0/address"));
+                      String mac = reader.readLine();
+                      reader.close();
+                      return mac != null ? mac.trim().toUpperCase() : null;
+                  } catch (Exception e) { }
+                  return null;
+              }
+              
+              @SuppressWarnings("deprecation")
+              private String getMacFromWifiManager() {
+                  try {
+                      WifiManager wifiManager = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                      if (wifiManager == null) return null;
+                      WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+                      if (wifiInfo == null) return null;
+                      String mac = wifiInfo.getMacAddress();
+                      if (mac != null && !mac.equals("02:00:00:00:00:00")) {
+                          return mac.toUpperCase();
+                      }
+                  } catch (Exception e) { }
+                  return null;
+              }
+              
+              private boolean isValidMac(String mac) {
+                  if (mac == null || mac.isEmpty()) return false;
+                  if (mac.equals("02:00:00:00:00:00")) return false;
+                  if (mac.equals("00:00:00:00:00:00")) return false;
+                  return true;
+              }
+              
+              private void returnMac(PluginCall call, String mac, String method) {
+                  JSObject result = new JSObject();
+                  result.put("mac", mac);
+                  result.put("method", method);
+                  call.resolve(result);
+              }
+          }
+          MACEOF
+
+      - name: 7. Update MainActivity with LibVLC and MacAddress
         script: |
           cat > android/app/src/main/java/io/ninja/ninja8k/MainActivity.java << 'MAINEOF'
           package io.ninja.ninja8k;
@@ -366,8 +480,9 @@ workflows:
                       getWindow().addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
                   }
                   
-                  // Register LibVLC plugin ONLY
+                  // Register plugins
                   registerPlugin(LibVLCPlugin.class);
+                  registerPlugin(MacAddressPlugin.class);
                   
                   super.onCreate(savedInstanceState);
                   
@@ -423,7 +538,7 @@ workflows:
           }
           MAINEOF
       
-      - name: 7. Permissions Manifest
+      - name: 8. Permissions Manifest
         script: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -466,7 +581,7 @@ workflows:
           </manifest>
           EOF
       
-      - name: 8. PATCH KOTLIN DUPLICATES
+      - name: 9. PATCH KOTLIN DUPLICATES
         script: |
           cat >> android/build.gradle << 'EOF'
           
@@ -482,7 +597,7 @@ workflows:
           }
           EOF
       
-      - name: 9. FABRICATION APK
+      - name: 10. FABRICATION APK
         script: |
           cd android
           chmod +x gradlew

@@ -11,6 +11,7 @@ import ContextMenu, { getAliases, setAlias, getHiddenItems, setHiddenItem, isEPG
 import { usePlaylistContext } from '../context/PlaylistContext';
 import { XtreamService } from '../services/XtreamService';
 import { useGestures } from '../hooks/useGestures';
+import { ninjaCentral, STORES } from '../services/NinjaCentral';
 
 // ============================================================================
 // HEADER - Sans flèche, icônes sans background pour OLED
@@ -29,7 +30,6 @@ const Header = ({ onBack, onSearch, onSettings, onOpenHub }) => (
       <span className="font-black text-lg ml-1" style={{ color: '#6225ff' }}>8K</span>
     </div>
 
-    {/* Icône Maison au centre pour le HUB OTT */}
     <button
       onClick={onOpenHub}
       className="w-10 h-10 flex items-center justify-center active:scale-90 transition-transform"
@@ -41,7 +41,6 @@ const Header = ({ onBack, onSearch, onSettings, onOpenHub }) => (
     </button>
 
     <div className="flex items-center gap-3">
-      {/* Icône Serveur - va vers LandingPage */}
       <button onClick={onBack} className="w-9 h-9 flex items-center justify-center active:scale-95">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
           <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
@@ -65,18 +64,35 @@ const Header = ({ onBack, onSearch, onSettings, onOpenHub }) => (
 );
 
 // ============================================================================
-// TAB NAVIGATION - Live, Movies, Series tous fonctionnels
+// TAB NAVIGATION - With Long Press to Reload
 // ============================================================================
-const TabNav = ({ activeTab, setActiveTab, onSwitchToHub }) => {
+const TabNav = ({ activeTab, setActiveTab, onLongPress, reloadingTab }) => {
   const tabs = [
     { id: 'live', label: 'Live' },
     { id: 'vod', label: 'Movies' },
     { id: 'series', label: 'Series' },
   ];
 
-  // CORRECTION: Tous les tabs fonctionnent de la même manière (plus de redirection)
-  const handleTabClick = (tabId) => {
-    setActiveTab(tabId);
+  const longPressTimer = useRef(null);
+  const isLongPress = useRef(false);
+
+  const handleTouchStart = (tabId) => {
+    isLongPress.current = false;
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
+      onLongPress(tabId);
+    }, 800); // 800ms pour long press
+  };
+
+  const handleTouchEnd = (tabId) => {
+    clearTimeout(longPressTimer.current);
+    if (!isLongPress.current) {
+      setActiveTab(tabId);
+    }
+  };
+
+  const handleTouchMove = () => {
+    clearTimeout(longPressTimer.current);
   };
 
   return (
@@ -84,11 +100,23 @@ const TabNav = ({ activeTab, setActiveTab, onSwitchToHub }) => {
       {tabs.map((tab) => (
         <button
           key={tab.id}
-          onClick={() => handleTabClick(tab.id)}
+          onTouchStart={() => handleTouchStart(tab.id)}
+          onTouchEnd={() => handleTouchEnd(tab.id)}
+          onTouchMove={handleTouchMove}
+          onMouseDown={() => handleTouchStart(tab.id)}
+          onMouseUp={() => handleTouchEnd(tab.id)}
+          onMouseLeave={() => clearTimeout(longPressTimer.current)}
           className="flex-1 py-3.5 text-sm font-semibold relative"
           style={{ color: activeTab === tab.id ? '#ffffff' : '#9ca3af' }}
         >
-          {tab.label}
+          {reloadingTab === tab.id ? (
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              <span>Reloading...</span>
+            </div>
+          ) : (
+            tab.label
+          )}
           {activeTab === tab.id && (
             <div className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full" style={{ background: THEME.gradients.primary }} />
           )}
@@ -183,10 +211,10 @@ const buildCategories = (items, apiCategories, type) => {
 };
 
 // ============================================================================
-// SMART COMPONENT - Main Layout with EPG NOW
+// SMART COMPONENT - Main Layout with NinjaCentral Integration
 // ============================================================================
 const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreaming }) => {
-  const { clearPlaylist, refreshPlaylist } = usePlaylistContext();
+  const { clearPlaylist } = usePlaylistContext();
   
   const [activeTab, setActiveTab] = useState('live');
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -197,6 +225,16 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const [listHeight, setListHeight] = useState(400);
   const contentListRef = useRef(null);
   const playerContainerRef = useRef(null);
+  
+  // NinjaCentral data states
+  const [liveData, setLiveData] = useState([]);
+  const [vodData, setVodData] = useState([]);
+  const [seriesData, setSeriesData] = useState([]);
+  const [liveCategories, setLiveCategories] = useState([]);
+  const [vodCategories, setVodCategories] = useState([]);
+  const [seriesCategories, setSeriesCategories] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [reloadingTab, setReloadingTab] = useState(null);
   
   const [epgData, setEpgData] = useState({});
   const [epgLoading, setEpgLoading] = useState(false);
@@ -212,10 +250,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const [hiddenItems, setHiddenItems] = useState(() => getHiddenItems());
   const [epgEnabled, setEpgEnabledState] = useState(() => isEPGEnabled());
 
-  // Détection orientation paysage / fullscreen
   const [isLandscape, setIsLandscape] = useState(false);
-  
-  // Header drawer state
   const [headerOpen, setHeaderOpen] = useState(false);
 
   useEffect(() => {
@@ -228,7 +263,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   }, []);
 
   // ========================================
-  // GESTURES - Safe centralized hook
+  // GESTURES
   // ========================================
   const gestures = useGestures(playerContainerRef, {
     onSpread: () => {
@@ -240,7 +275,6 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
       setIsPlaying(false);
     },
     onVolumeChange: (vol) => {
-      console.log('🔊 Volume change:', vol);
       setVolume(vol);
     },
   });
@@ -258,39 +292,142 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   }, [isPlaying, selectedItem, setIsStreaming]);
 
   // ============================================================================
-  // SQL EPG ENGINE - Initialization & Sync
+  // NINJA CENTRAL - Load data from IndexedDB or fetch if needed
   // ============================================================================
-  const isSqlSynced = useRef(false);
-
   useEffect(() => {
-    const initSqlEngine = async () => {
-      if (!xtreamService || isSqlSynced.current) return;
+    const initNinjaCentral = async () => {
+      if (!xtreamService || isDataLoaded) return;
       
       try {
-        if (window.db) {
-          await xtreamService.initEPGDatabase(window.db);
-          console.log('[SQL] EPG Database Initialized');
-
-          const selectedLangs = ['FR', 'BE']; 
-          
-          console.log('[SQL] Starting EPG Windowing Sync...');
-          const batch = await xtreamService.syncEPGWithMapping(selectedLangs);
-          console.log("Données reçues de l'API:", batch.slice(0, 2)); // Vérifie si le titre est lisible
-          
-          if (batch.length > 0) {
-            await xtreamService.saveEPGToSQL(window.db, batch);
-            console.log(`[SQL] Sync Complete: ${batch.length} programs indexed`);
-          }
-          
-          isSqlSynced.current = true;
+        await ninjaCentral.init();
+        
+        // Check if we have data
+        const counts = await ninjaCentral.getCounts();
+        console.log('[NinjaCentral] Current counts:', counts);
+        
+        if (counts.total > 0) {
+          // Load from IndexedDB
+          console.log('[NinjaCentral] Loading from cache...');
+          await loadFromNinjaCentral();
+        } else {
+          // First time - sync from API
+          console.log('[NinjaCentral] First sync from API...');
+          await syncAllFromAPI();
         }
+        
+        setIsDataLoaded(true);
       } catch (err) {
-        console.error('[SQL] Engine Error:', err);
+        console.error('[NinjaCentral] Init error:', err);
+        // Fallback to playlist.data if NinjaCentral fails
+        if (playlist?.data) {
+          setLiveData(playlist.data.live || []);
+          setVodData(playlist.data.vod || []);
+          setSeriesData(playlist.data.series || []);
+          setLiveCategories(playlist.data.liveCategories || []);
+          setVodCategories(playlist.data.vodCategories || []);
+          setSeriesCategories(playlist.data.seriesCategories || []);
+          setIsDataLoaded(true);
+        }
       }
     };
 
-    initSqlEngine();
-  }, [xtreamService]);
+    initNinjaCentral();
+  }, [xtreamService, isDataLoaded, playlist]);
+
+  const loadFromNinjaCentral = async () => {
+    const [live, vod, series, liveCats, vodCats, seriesCats] = await Promise.all([
+      ninjaCentral.getAll(STORES.LIVE),
+      ninjaCentral.getAll(STORES.VOD),
+      ninjaCentral.getAll(STORES.SERIES),
+      ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
+      ninjaCentral.getAll(STORES.VOD_CATEGORIES),
+      ninjaCentral.getAll(STORES.SERIES_CATEGORIES),
+    ]);
+    
+    setLiveData(live);
+    setVodData(vod);
+    setSeriesData(series);
+    setLiveCategories(liveCats);
+    setVodCategories(vodCats);
+    setSeriesCategories(seriesCats);
+    
+    console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+  };
+
+  const syncAllFromAPI = async () => {
+    if (!xtreamService) return;
+    
+    try {
+      await ninjaCentral.syncAll(xtreamService, (step, percent) => {
+        console.log(`[NinjaCentral] ${step} (${percent}%)`);
+      });
+      
+      await loadFromNinjaCentral();
+    } catch (err) {
+      console.error('[NinjaCentral] Sync error:', err);
+      throw err;
+    }
+  };
+
+  // ============================================================================
+  // LONG PRESS TAB - Reload specific category
+  // ============================================================================
+  const handleTabLongPress = useCallback(async (tabId) => {
+    if (!xtreamService || reloadingTab) return;
+    
+    console.log(`[NinjaCentral] Long press - reloading ${tabId}...`);
+    setReloadingTab(tabId);
+    
+    try {
+      if (tabId === 'live') {
+        const [categories, streams] = await Promise.all([
+          xtreamService.getLiveCategories(),
+          xtreamService.getLiveStreams(),
+        ]);
+        const parsed = xtreamService.parseLiveStreams(streams, categories);
+        await ninjaCentral.saveItems(STORES.LIVE, parsed);
+        await ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, categories);
+        setLiveData(parsed);
+        setLiveCategories(categories);
+        // Clear EPG cache for this category
+        epgLoadedCategoriesRef.current.clear();
+        setEpgData({});
+        console.log(`[NinjaCentral] Live reloaded: ${parsed.length} channels`);
+        
+      } else if (tabId === 'vod') {
+        const [categories, streams] = await Promise.all([
+          xtreamService.getVodCategories(),
+          xtreamService.getVodStreams(),
+        ]);
+        const parsed = xtreamService.parseVodStreams(streams, categories);
+        await ninjaCentral.saveItems(STORES.VOD, parsed);
+        await ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, categories);
+        setVodData(parsed);
+        setVodCategories(categories);
+        console.log(`[NinjaCentral] VOD reloaded: ${parsed.length} movies`);
+        
+      } else if (tabId === 'series') {
+        const [categories, seriesList] = await Promise.all([
+          xtreamService.getSeriesCategories(),
+          xtreamService.getSeries(),
+        ]);
+        const parsed = xtreamService.parseSeries(seriesList, categories);
+        await ninjaCentral.saveItems(STORES.SERIES, parsed);
+        await ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, categories);
+        setSeriesData(parsed);
+        setSeriesCategories(categories);
+        console.log(`[NinjaCentral] Series reloaded: ${parsed.length} series`);
+      }
+      
+      // Update last sync time
+      await ninjaCentral.setMeta('lastSync', new Date().toISOString());
+      
+    } catch (err) {
+      console.error(`[NinjaCentral] Reload ${tabId} error:`, err);
+    } finally {
+      setReloadingTab(null);
+    }
+  }, [xtreamService, reloadingTab]);
 
   const [particleTheme, setParticleTheme] = useState(() => {
     return localStorage.getItem('ninja_particle_theme') || 'soft';
@@ -301,29 +438,28 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     setParticleTheme(localStorage.getItem('ninja_particle_theme') || 'soft');
   }, []);
 
+  // ============================================================================
+  // DATA SELECTORS - Read from NinjaCentral states
+  // ============================================================================
   const currentItems = useMemo(() => {
-    if (!playlist?.data) return [];
     switch (activeTab) {
-      case 'live': return playlist.data.live || [];
-      case 'vod': return playlist.data.vod || [];
-      case 'series': return playlist.data.series || [];
+      case 'live': return liveData;
+      case 'vod': return vodData;
+      case 'series': return seriesData;
       default: return [];
     }
-  }, [playlist, activeTab]);
+  }, [activeTab, liveData, vodData, seriesData]);
 
   const apiCategories = useMemo(() => {
-    if (!playlist?.data) return [];
     switch (activeTab) {
-      case 'live': return playlist.data.liveCategories || [];
-      case 'vod': return playlist.data.vodCategories || [];
-      case 'series': return playlist.data.seriesCategories || [];
+      case 'live': return liveCategories;
+      case 'vod': return vodCategories;
+      case 'series': return seriesCategories;
       default: return [];
     }
-  }, [playlist, activeTab]);
+  }, [activeTab, liveCategories, vodCategories, seriesCategories]);
 
-  const liveChannels = useMemo(() => {
-    return playlist?.data?.live || [];
-  }, [playlist]);
+  const liveChannels = useMemo(() => liveData, [liveData]);
 
   const categories = useMemo(() => {
     return buildCategories(currentItems, apiCategories, activeTab);
@@ -422,7 +558,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setIsPlaying(true);
-  }, []);
+    // Add to recent
+    ninjaCentral.addRecent(item, activeTab).catch(console.error);
+  }, [activeTab]);
 
   const handleChannelChange = useCallback((channel) => {
     setSelectedItem(channel);
@@ -432,20 +570,16 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const handleLongPress = useCallback((item) => {
     setMultiGridItems(prev => {
       if (prev.some(i => i.id === item.id)) {
-        console.log('[MultiGrid] Item already in list:', item.name);
         return prev;
       }
       if (prev.length >= 4) {
-        console.log('[MultiGrid] Max 4 items reached');
         return prev;
       }
-      console.log('[MultiGrid] Added:', item.name);
       return [...prev, item];
     });
   }, []);
 
   const handleExtraLongPress = useCallback((item) => {
-    console.log('[ContextMenu] Opening for:', item.name);
     setContextMenuItem(item);
     setContextMenuVisible(true);
   }, []);
@@ -491,7 +625,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     }
   }, [selectedCategory, onBack]);
 
-  const handleClearPlaylist = useCallback(() => {
+  const handleClearPlaylist = useCallback(async () => {
+    // Clear NinjaCentral data too
+    await ninjaCentral.clearAll().catch(console.error);
     clearPlaylist();
     onLogout?.();
   }, [clearPlaylist, onLogout]);
@@ -500,8 +636,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     setShowSettings(false);
     setEpgData({});
     epgLoadedCategoriesRef.current.clear();
-    await refreshPlaylist({ live: true, movies: true, series: true });
-  }, [refreshPlaylist]);
+    setIsDataLoaded(false);
+    // This will trigger re-sync in useEffect
+  }, []);
 
   const updateListHeight = useCallback(() => {
     if (contentListRef.current) {
@@ -521,15 +658,27 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     };
   }, [updateListHeight, selectedCategory]);
 
-  // FIX ÉCRAN NOIR : Le fond doit être transparent si on joue une vidéo
   const containerStyle = {
     background: isPlaying ? 'transparent' : '#000000',
     transition: 'background-color 0.3s'
   };
 
+  // Loading state
+  if (!isDataLoaded) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center" style={{ background: '#000000' }}>
+        <div className="text-center">
+          <div className="w-12 h-12 mx-auto border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-white text-sm">Loading content...</p>
+          <p className="text-gray-500 text-xs mt-1">First load may take a moment</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden" style={containerStyle}>
-      {/* Edge trigger zone - only when playing */}
+      {/* Edge trigger zone */}
       {isPlaying && (
         <div 
           className="fixed top-0 left-0 right-0 h-8 z-[10001]"
@@ -538,7 +687,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
         />
       )}
 
-      {/* Header - Drawer mode when playing, normal when not */}
+      {/* Header */}
       {isPlaying ? (
         <div 
           className={`fixed top-0 left-0 right-0 z-[10002] transition-transform duration-300 ${headerOpen ? 'translate-y-0' : '-translate-y-full'}`}
@@ -564,7 +713,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
         </div>
       )}
 
-      {/* Player Area (Transparent) */}
+      {/* Player Area */}
       <div 
         ref={playerContainerRef}
         className="flex-shrink-0 z-30 overflow-hidden transition-all duration-300"
@@ -594,29 +743,28 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
         />
       </div>
 
-      {/* Onglets - Masqués seulement en paysage + lecture */}
+      {/* Tabs with Long Press */}
       {!(isLandscape && isPlaying) && (
         <div className="flex-shrink-0 z-20" style={{ background: '#000000' }}>
           <TabNav 
             activeTab={activeTab} 
             setActiveTab={(tab) => {
-              // CORRECTION: Plus de redirection vers Hub, comportement normal pour tous les tabs
               setActiveTab(tab);
               setSelectedCategory(null);
             }}
-            onSwitchToHub={onSwitchToHub}
+            onLongPress={handleTabLongPress}
+            reloadingTab={reloadingTab}
           />
         </div>
       )}
 
-      {/* Content - Scrollable - Masqué seulement en paysage + lecture */}
+      {/* Content */}
       {!(isLandscape && isPlaying) && (
         <div 
           ref={contentListRef}
           className="flex-1 overflow-hidden relative"
           style={{ background: '#000000' }}
         >
-          {/* Particle Effects Background */}
           {particleTheme !== 'off' && !isPlaying && (
             <div className="absolute inset-0 pointer-events-none z-0">
               <ParticleThemes containerRef={contentListRef} theme={particleTheme} />
@@ -626,7 +774,6 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
           <div className="relative z-10 h-full overflow-hidden">
             {selectedCategory ? (
               <div className="flex flex-col h-full overflow-hidden">
-                {/* Category header */}
                 <div className="px-4 py-3 flex items-center gap-2 flex-shrink-0" style={{ background: 'transparent' }}>
                   <button onClick={handleBack} className="p-1 -ml-1 active:scale-95">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2">
