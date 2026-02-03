@@ -190,7 +190,7 @@ class NinjaCentral {
   // ========================= SAVE METHODS =========================
 
   /**
-   * Sauvegarde des items en batch (VOD, Series, Live)
+   * Sauvegarde des items en batch (VOD, Series, Live) avec ordre d'origine
    */
   async saveItems(storeName, items) {
     if (!this.db || !items || items.length === 0) return;
@@ -202,9 +202,9 @@ class NinjaCentral {
       // Clear existing data first
       store.clear();
 
-      // Add all items
-      items.forEach(item => {
-        store.put(item);
+      // Add all items with sort_order to preserve API order
+      items.forEach((item, index) => {
+        store.put({ ...item, sort_order: index });
       });
 
       transaction.oncomplete = () => {
@@ -220,7 +220,7 @@ class NinjaCentral {
   }
 
   /**
-   * Sauvegarde des catégories
+   * Sauvegarde des catégories avec ordre d'origine
    */
   async saveCategories(storeName, categories) {
     if (!this.db || !categories || categories.length === 0) return;
@@ -232,9 +232,9 @@ class NinjaCentral {
       // Clear existing
       store.clear();
 
-      // Add all categories
-      categories.forEach(cat => {
-        store.put(cat);
+      // Add all categories with sort_order to preserve API order
+      categories.forEach((cat, index) => {
+        store.put({ ...cat, sort_order: index });
       });
 
       transaction.oncomplete = () => resolve();
@@ -245,7 +245,7 @@ class NinjaCentral {
   // ========================= READ METHODS =========================
 
   /**
-   * Récupère tous les items d'un store
+   * Récupère tous les items d'un store (triés par ordre d'origine)
    */
   async getAll(storeName) {
     if (!this.db) await this.init();
@@ -255,7 +255,15 @@ class NinjaCentral {
       const store = transaction.objectStore(storeName);
       const request = store.getAll();
 
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        // Sort by sort_order to preserve original API order
+        const results = (request.result || []).sort((a, b) => {
+          const orderA = a.sort_order ?? Infinity;
+          const orderB = b.sort_order ?? Infinity;
+          return orderA - orderB;
+        });
+        resolve(results);
+      };
       request.onerror = (event) => reject(event.target.error);
     });
   }
