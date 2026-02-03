@@ -294,47 +294,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   // ============================================================================
   // NINJA CENTRAL - Load data from IndexedDB or fetch if needed
   // ============================================================================
-  useEffect(() => {
-    const initNinjaCentral = async () => {
-      if (!xtreamService || isDataLoaded) return;
-      
-      try {
-        await ninjaCentral.init();
-        
-        // Check if we have data
-        const counts = await ninjaCentral.getCounts();
-        console.log('[NinjaCentral] Current counts:', counts);
-        
-        if (counts.total > 0) {
-          // Load from IndexedDB
-          console.log('[NinjaCentral] Loading from cache...');
-          await loadFromNinjaCentral();
-        } else {
-          // First time - sync from API
-          console.log('[NinjaCentral] First sync from API...');
-          await syncAllFromAPI();
-        }
-        
-        setIsDataLoaded(true);
-      } catch (err) {
-        console.error('[NinjaCentral] Init error:', err);
-        // Fallback to playlist.data if NinjaCentral fails
-        if (playlist?.data) {
-          setLiveData(playlist.data.live || []);
-          setVodData(playlist.data.vod || []);
-          setSeriesData(playlist.data.series || []);
-          setLiveCategories(playlist.data.liveCategories || []);
-          setVodCategories(playlist.data.vodCategories || []);
-          setSeriesCategories(playlist.data.seriesCategories || []);
-          setIsDataLoaded(true);
-        }
-      }
-    };
-
-    initNinjaCentral();
-  }, [xtreamService, isDataLoaded, playlist]);
-
-  const loadFromNinjaCentral = async () => {
+  const loadFromNinjaCentral = useCallback(async () => {
     const [live, vod, series, liveCats, vodCats, seriesCats] = await Promise.all([
       ninjaCentral.getAll(STORES.LIVE),
       ninjaCentral.getAll(STORES.VOD),
@@ -352,9 +312,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     setSeriesCategories(seriesCats);
     
     console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
-  };
+  }, []);
 
-  const syncAllFromAPI = async () => {
+  const syncAllFromAPI = useCallback(async () => {
     if (!xtreamService) return;
     
     try {
@@ -367,7 +327,43 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
       console.error('[NinjaCentral] Sync error:', err);
       throw err;
     }
-  };
+  }, [xtreamService, loadFromNinjaCentral]);
+
+  useEffect(() => {
+    const initNinjaCentral = async () => {
+      if (!xtreamService || isDataLoaded) return;
+      
+      try {
+        await ninjaCentral.init();
+        
+        const counts = await ninjaCentral.getCounts();
+        console.log('[NinjaCentral] Current counts:', counts);
+        
+        if (counts.total > 0) {
+          console.log('[NinjaCentral] Loading from cache...');
+          await loadFromNinjaCentral();
+        } else {
+          console.log('[NinjaCentral] First sync from API...');
+          await syncAllFromAPI();
+        }
+        
+        setIsDataLoaded(true);
+      } catch (err) {
+        console.error('[NinjaCentral] Init error:', err);
+        if (playlist?.data) {
+          setLiveData(playlist.data.live || []);
+          setVodData(playlist.data.vod || []);
+          setSeriesData(playlist.data.series || []);
+          setLiveCategories(playlist.data.liveCategories || []);
+          setVodCategories(playlist.data.vodCategories || []);
+          setSeriesCategories(playlist.data.seriesCategories || []);
+          setIsDataLoaded(true);
+        }
+      }
+    };
+
+    initNinjaCentral();
+  }, [xtreamService, isDataLoaded, playlist, loadFromNinjaCentral, syncAllFromAPI]);
 
   // ============================================================================
   // LONG PRESS TAB - Reload specific category
