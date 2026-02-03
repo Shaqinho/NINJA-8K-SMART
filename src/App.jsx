@@ -146,13 +146,6 @@ const AppContent = () => {
   return (
     <div style={appStyle} className={isVideoActive ? '!bg-transparent' : ''}>
 
-      {/* DEBUG OVERLAY VISUEL (Supprime-le une fois que ça marche) */}
-      <div className="fixed top-2 left-2 z-[9999] pointer-events-none opacity-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <div className={`px-2 py-1 rounded text-[8px] font-mono ${isVideoActive ? 'bg-green-600' : 'bg-red-600'} text-white`}>
-          DEBUG: {currentPage} | Stream: {isStreaming ? 'ON' : 'OFF'} | Mode: {isVideoActive ? 'TRANSPARENT' : 'OPAQUE'}
-        </div>
-      </div>
-
       {/* ZONE DE DÉTECTION HAUTE */}
       <div
         className="top-edge-trigger"
