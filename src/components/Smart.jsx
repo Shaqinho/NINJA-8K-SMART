@@ -11,6 +11,7 @@ import ContextMenu, { getAliases, setAlias, getHiddenItems, setHiddenItem, isEPG
 import { usePlaylistContext } from '../context/PlaylistContext';
 import { XtreamService } from '../services/XtreamService';
 import { useGestures } from '../hooks/useGestures';
+import { ninjaCentral, STORES } from '../services/NinjaCentral';
 
 // ============================================================================
 // HEADER
@@ -244,6 +245,81 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     return localStorage.getItem('ninja_particle_theme') || 'soft';
   });
 
+  // NinjaCentral data states (persiste après rotation/pinch)
+  const [liveData, setLiveData] = useState([]);
+  const [vodData, setVodData] = useState([]);
+  const [seriesData, setSeriesData] = useState([]);
+  const [liveCats, setLiveCats] = useState([]);
+  const [vodCats, setVodCats] = useState([]);
+  const [seriesCats, setSeriesCats] = useState([]);
+  const [ninjaReady, setNinjaReady] = useState(false);
+
+  // Charger depuis NinjaCentral au mount
+  useEffect(() => {
+    const loadFromNinja = async () => {
+      try {
+        await ninjaCentral.init();
+        const [live, vod, series, lc, vc, sc] = await Promise.all([
+          ninjaCentral.getAll(STORES.LIVE),
+          ninjaCentral.getAll(STORES.VOD),
+          ninjaCentral.getAll(STORES.SERIES),
+          ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
+          ninjaCentral.getAll(STORES.VOD_CATEGORIES),
+          ninjaCentral.getAll(STORES.SERIES_CATEGORIES),
+        ]);
+        if (live.length > 0 || vod.length > 0 || series.length > 0) {
+          setLiveData(live);
+          setVodData(vod);
+          setSeriesData(series);
+          setLiveCats(lc);
+          setVodCats(vc);
+          setSeriesCats(sc);
+          console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+        }
+        setNinjaReady(true);
+      } catch (err) {
+        console.error('[NinjaCentral] Load error:', err);
+        setNinjaReady(true);
+      }
+    };
+    loadFromNinja();
+  }, []);
+
+  // Sauvegarder dans NinjaCentral quand playlist.data arrive
+  useEffect(() => {
+    if (!playlist?.data || !ninjaReady) return;
+    
+    const saveToNinja = async () => {
+      try {
+        await ninjaCentral.init();
+        const { live, vod, series, liveCategories, vodCategories, seriesCategories } = playlist.data;
+        
+        if (live?.length > 0) {
+          await ninjaCentral.saveItems(STORES.LIVE, live);
+          await ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, liveCategories || []);
+          setLiveData(live);
+          setLiveCats(liveCategories || []);
+        }
+        if (vod?.length > 0) {
+          await ninjaCentral.saveItems(STORES.VOD, vod);
+          await ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, vodCategories || []);
+          setVodData(vod);
+          setVodCats(vodCategories || []);
+        }
+        if (series?.length > 0) {
+          await ninjaCentral.saveItems(STORES.SERIES, series);
+          await ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, seriesCategories || []);
+          setSeriesData(series);
+          setSeriesCats(seriesCategories || []);
+        }
+        console.log('[NinjaCentral] Saved playlist.data');
+      } catch (err) {
+        console.error('[NinjaCentral] Save error:', err);
+      }
+    };
+    saveToNinja();
+  }, [playlist?.data, ninjaReady]);
+
   // Orientation detection
   useEffect(() => {
     const checkOrientation = () => {
@@ -284,31 +360,29 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   }, [isPlaying, selectedItem, setIsStreaming]);
 
   // ============================================================================
-  // DATA FROM playlist.data (fetched by LandingPage)
+  // DATA FROM NinjaCentral (persiste après rotation/pinch)
   // ============================================================================
   const currentItems = useMemo(() => {
-    if (!playlist?.data) return [];
     switch (activeTab) {
-      case 'live': return playlist.data.live || [];
-      case 'vod': return playlist.data.vod || [];
-      case 'series': return playlist.data.series || [];
+      case 'live': return liveData;
+      case 'vod': return vodData;
+      case 'series': return seriesData;
       default: return [];
     }
-  }, [playlist, activeTab]);
+  }, [activeTab, liveData, vodData, seriesData]);
 
   const apiCategories = useMemo(() => {
-    if (!playlist?.data) return [];
     switch (activeTab) {
-      case 'live': return playlist.data.liveCategories || [];
-      case 'vod': return playlist.data.vodCategories || [];
-      case 'series': return playlist.data.seriesCategories || [];
+      case 'live': return liveCats;
+      case 'vod': return vodCats;
+      case 'series': return seriesCats;
       default: return [];
     }
-  }, [playlist, activeTab]);
+  }, [activeTab, liveCats, vodCats, seriesCats]);
 
   const liveChannels = useMemo(() => {
-    return playlist?.data?.live || [];
-  }, [playlist]);
+    return liveData;
+  }, [liveData]);
 
   const categories = useMemo(() => {
     return buildCategories(currentItems, apiCategories, activeTab);
