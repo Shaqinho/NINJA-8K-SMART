@@ -9,7 +9,7 @@ workflows:
     environment:
       vars:
         PACKAGE_NAME: "io.ninja.ninja8k"
-      node: 20
+      node: 22
       java: 21
     
     triggering:
