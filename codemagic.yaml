@@ -368,21 +368,45 @@ workflows:
                   try {
                       String mac = null;
                       
-                      mac = getMacFromNetworkInterface();
-                      if (isValidMac(mac)) {
-                          returnMac(call, mac, "network_interface");
-                          return;
-                      }
-                      
+                      // PRIORITÉ 1: Lecture fichier système (plus fiable)
                       mac = getMacFromFile();
                       if (isValidMac(mac)) {
                           returnMac(call, mac, "sys_file");
                           return;
                       }
                       
+                      // PRIORITÉ 2: Shell commands
+                      mac = getMacFromShell();
+                      if (isValidMac(mac)) {
+                          returnMac(call, mac, "shell");
+                          return;
+                      }
+                      
+                      // PRIORITÉ 3: ip link show
+                      mac = getMacFromIpLink();
+                      if (isValidMac(mac)) {
+                          returnMac(call, mac, "ip_link");
+                          return;
+                      }
+                      
+                      // PRIORITÉ 4: NetworkInterface
+                      mac = getMacFromNetworkInterface();
+                      if (isValidMac(mac)) {
+                          returnMac(call, mac, "network_interface");
+                          return;
+                      }
+                      
+                      // PRIORITÉ 5: WifiManager (deprecated)
                       mac = getMacFromWifiManager();
                       if (isValidMac(mac)) {
                           returnMac(call, mac, "wifi_manager");
+                          return;
+                      }
+                      
+                      // PRIORITÉ 6: Bluetooth MAC (souvent = WiFi MAC + 1)
+                      mac = getMacFromBluetooth();
+                      if (isValidMac(mac)) {
+                          returnMac(call, mac, "bluetooth");
                           return;
                       }
                       
@@ -392,58 +416,172 @@ workflows:
                   }
               }
               
+              // MÉTHODE 1: Lecture directe fichiers système
+              private String getMacFromFile() {
+                  String[] paths = {
+                      "/sys/class/net/wlan0/address",
+                      "/sys/class/net/eth0/address",
+                      "/sys/class/net/wifi/address",
+                      "/sys/devices/virtual/net/wlan0/address",
+                      "/data/misc/wifi/config"
+                  };
+                  for (String path : paths) {
+                      try {
+                          BufferedReader reader = new BufferedReader(new FileReader(path));
+                          String line = reader.readLine();
+                          reader.close();
+                          if (line != null) {
+                              String mac = extractMac(line);
+                              if (mac != null) return mac;
+                          }
+                      } catch (Exception e) { }
+                  }
+                  return null;
+              }
+              
+              // MÉTHODE 2: Shell cat direct
+              private String getMacFromShell() {
+                  String[] commands = {
+                      "cat /sys/class/net/wlan0/address",
+                      "cat /sys/class/net/eth0/address",
+                      "getprop ro.boot.wifimacaddr",
+                      "getprop persist.sys.wifi.mac",
+                      "getprop wifi.interface.mac"
+                  };
+                  for (String cmd : commands) {
+                      try {
+                          Process p = Runtime.getRuntime().exec(cmd);
+                          BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                          String line = reader.readLine();
+                          reader.close();
+                          p.destroy();
+                          if (line != null) {
+                              String mac = extractMac(line);
+                              if (mac != null) return mac;
+                          }
+                      } catch (Exception e) { }
+                  }
+                  return null;
+              }
+              
+              // MÉTHODE 3: ip link show
+              private String getMacFromIpLink() {
+                  try {
+                      Process p = Runtime.getRuntime().exec("ip link show wlan0");
+                      BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                      String line;
+                      while ((line = reader.readLine()) != null) {
+                          if (line.contains("link/ether")) {
+                              String mac = extractMac(line);
+                              if (mac != null) {
+                                  reader.close();
+                                  p.destroy();
+                                  return mac;
+                              }
+                          }
+                      }
+                      reader.close();
+                      p.destroy();
+                  } catch (Exception e) { }
+                  return null;
+              }
+              
+              // MÉTHODE 4: NetworkInterface
               private String getMacFromNetworkInterface() {
                   try {
                       List<NetworkInterface> interfaces = Collections.list(NetworkInterface.getNetworkInterfaces());
+                      // D'abord chercher wlan0
                       for (NetworkInterface intf : interfaces) {
-                          if (!intf.getName().equalsIgnoreCase("wlan0")) continue;
-                          byte[] mac = intf.getHardwareAddress();
-                          if (mac == null || mac.length == 0) continue;
-                          StringBuilder sb = new StringBuilder();
-                          for (int i = 0; i < mac.length; i++) {
-                              sb.append(String.format("%02X%s", mac[i], (i < mac.length - 1) ? ":" : ""));
+                          if (intf.getName().equalsIgnoreCase("wlan0")) {
+                              byte[] mac = intf.getHardwareAddress();
+                              if (mac != null && mac.length == 6) {
+                                  return formatMac(mac);
+                              }
                           }
-                          return sb.toString();
+                      }
+                      // Sinon n'importe quelle interface non-loopback
+                      for (NetworkInterface intf : interfaces) {
+                          if (intf.isLoopback()) continue;
+                          if (intf.getName().startsWith("dummy")) continue;
+                          if (intf.getName().startsWith("rmnet")) continue;
+                          byte[] mac = intf.getHardwareAddress();
+                          if (mac != null && mac.length == 6) {
+                              String result = formatMac(mac);
+                              if (isValidMac(result)) return result;
+                          }
                       }
                   } catch (Exception e) { }
                   return null;
               }
               
-              private String getMacFromFile() {
-                  try {
-                      BufferedReader reader = new BufferedReader(new FileReader("/sys/class/net/wlan0/address"));
-                      String mac = reader.readLine();
-                      reader.close();
-                      return mac != null ? mac.trim().toUpperCase() : null;
-                  } catch (Exception e) { }
-                  return null;
-              }
-              
+              // MÉTHODE 5: WifiManager
               @SuppressWarnings("deprecation")
               private String getMacFromWifiManager() {
                   try {
-                      WifiManager wifiManager = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-                      if (wifiManager == null) return null;
-                      WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-                      if (wifiInfo == null) return null;
-                      String mac = wifiInfo.getMacAddress();
-                      if (mac != null && !mac.equals("02:00:00:00:00:00")) {
-                          return mac.toUpperCase();
+                      WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                      if (wm != null) {
+                          WifiInfo info = wm.getConnectionInfo();
+                          if (info != null) {
+                              String mac = info.getMacAddress();
+                              if (isValidMac(mac)) return mac.toUpperCase();
+                          }
                       }
                   } catch (Exception e) { }
                   return null;
               }
               
+              // MÉTHODE 6: Bluetooth (MAC souvent = WiFi + 1)
+              @SuppressWarnings("deprecation")
+              private String getMacFromBluetooth() {
+                  try {
+                      android.bluetooth.BluetoothAdapter bt = android.bluetooth.BluetoothAdapter.getDefaultAdapter();
+                      if (bt != null) {
+                          String mac = bt.getAddress();
+                          if (isValidMac(mac)) return mac.toUpperCase();
+                      }
+                  } catch (Exception e) { }
+                  return null;
+              }
+              
+              // Extrait MAC d'une string
+              private String extractMac(String input) {
+                  if (input == null) return null;
+                  java.util.regex.Pattern p = java.util.regex.Pattern.compile("([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}");
+                  java.util.regex.Matcher m = p.matcher(input);
+                  if (m.find()) return m.group().toUpperCase().replace("-", ":");
+                  // Essayer format sans séparateur
+                  p = java.util.regex.Pattern.compile("[0-9A-Fa-f]{12}");
+                  m = p.matcher(input.replace(":", "").replace("-", ""));
+                  if (m.find()) {
+                      String raw = m.group();
+                      return String.format("%s:%s:%s:%s:%s:%s",
+                          raw.substring(0,2), raw.substring(2,4), raw.substring(4,6),
+                          raw.substring(6,8), raw.substring(8,10), raw.substring(10,12)).toUpperCase();
+                  }
+                  return null;
+              }
+              
+              // Formate bytes en MAC
+              private String formatMac(byte[] mac) {
+                  StringBuilder sb = new StringBuilder();
+                  for (int i = 0; i < mac.length; i++) {
+                      sb.append(String.format("%02X%s", mac[i], (i < mac.length - 1) ? ":" : ""));
+                  }
+                  return sb.toString();
+              }
+              
+              // Valide la MAC
               private boolean isValidMac(String mac) {
                   if (mac == null || mac.isEmpty()) return false;
                   if (mac.equals("02:00:00:00:00:00")) return false;
                   if (mac.equals("00:00:00:00:00:00")) return false;
+                  if (mac.length() < 17) return false;
                   return true;
               }
               
               private void returnMac(PluginCall call, String mac, String method) {
                   JSObject result = new JSObject();
-                  result.put("mac", mac);
+                  result.put("mac", mac.toUpperCase());
                   result.put("method", method);
                   call.resolve(result);
               }
@@ -546,6 +684,9 @@ workflows:
               xmlns:amazon="http://schemas.amazon.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
