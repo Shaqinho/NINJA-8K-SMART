@@ -11,14 +11,20 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
   const isAndroid = Capacitor.getPlatform() === 'android';
   const [mode] = useState(getPlayerMode());
   const useNative = isAndroid && (mode === 'libvlc' || mode === 'exoplayer' || mode === 'both');
+  const prevFullscreenRef = useRef(isFullScreen);
 
   const updatePos = useCallback(() => {
     if (!useNative || !containerRef.current) return;
     const r = containerRef.current.getBoundingClientRect();
-    libVLC.setPosition(
-      Math.round(r.top), Math.round(r.left),
-      Math.round(r.width), Math.round(r.height)
-    );
+    
+    // Only update if we have valid dimensions
+    if (r.width > 0 && r.height > 0) {
+      console.log('[VideoPlayer] updatePos:', r.top, r.left, r.width, r.height);
+      libVLC.setPosition(
+        Math.round(r.top), Math.round(r.left),
+        Math.round(r.width), Math.round(r.height)
+      );
+    }
   }, [useNative]);
 
   useImperativeHandle(ref, () => ({
@@ -31,7 +37,7 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
     stop: () => useNative ? libVLC.stop() : null,
     setVolume: (vol) => {
       if (useNative) {
-        libVLC.setVolume(vol);  // Trigger immediately, no await blocking
+        libVLC.setVolume(vol);
       } else {
         if (videoRef.current) videoRef.current.volume = vol;
       }
@@ -51,11 +57,13 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
     }
   }, [useNative, updatePos]);
 
-  // AUTO-PLAY when src changes (CRITICAL for native player)
+  // AUTO-PLAY when src changes
   useEffect(() => {
     if (useNative && src) {
       console.log('[VideoPlayer] Native auto-play:', src);
       libVLC.play(src);
+      // Update position after play starts
+      setTimeout(updatePos, 200);
     }
 
     return () => {
@@ -63,13 +71,30 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
         libVLC.stop();
       }
     };
-  }, [useNative, src]);
+  }, [useNative, src, updatePos]);
 
-  // FULLSCREEN sync with native player
+  // FULLSCREEN sync with native player - CRITICAL FIX
   useEffect(() => {
-    if (useNative) {
-      libVLC.setFullscreen(isFullScreen);
+    if (!useNative) return;
+    
+    const wasFullscreen = prevFullscreenRef.current;
+    prevFullscreenRef.current = isFullScreen;
+    
+    libVLC.setFullscreen(isFullScreen);
+    
+    // Exiting fullscreen needs more time for layout to stabilize
+    if (wasFullscreen && !isFullScreen) {
+      console.log('[VideoPlayer] Exiting fullscreen - scheduling position updates');
+      // Multiple delays to catch layout stabilization
       setTimeout(updatePos, 100);
+      setTimeout(updatePos, 200);
+      setTimeout(updatePos, 300);
+      setTimeout(updatePos, 500);
+      setTimeout(updatePos, 800);
+    } else {
+      // Entering fullscreen or initial
+      setTimeout(updatePos, 100);
+      setTimeout(updatePos, 300);
     }
   }, [useNative, isFullScreen, updatePos]);
 

@@ -11,13 +11,6 @@ import MultiGrid from './MultiGrid';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
-// Features:
-// - ExoPlayer on Android, HTML5 on Web
-// - Gesture: 2 fingers up/down = volume
-// - Gesture: spread (pinch out) = fullscreen landscape
-// - Gesture: pinch (pinch in) = exit fullscreen
-// - MultiGrid: Long press on channel to add
-// - Search EPG opens fullscreen modal replacing channel list
 // ============================================================================
 
 const Player = memo(({
@@ -38,10 +31,8 @@ const Player = memo(({
   const videoRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Check if native Android
   const isNative = Capacitor.getPlatform() === 'android';
 
-  // Player states
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -55,42 +46,39 @@ const Player = memo(({
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [aspectRatio, setAspectRatio] = useState('Auto');
 
-  // MultiGrid states (internal if not controlled externally)
   const [internalMultiGridItems, setInternalMultiGridItems] = useState([]);
   const [internalShowMultiGrid, setInternalShowMultiGrid] = useState(false);
   const [multiGridActiveIndex, setMultiGridActiveIndex] = useState(0);
   const [multiGridSize, setMultiGridSize] = useState(2);
 
-  // Use internal or external state
   const actualMultiGridItems = multiGridItems.length > 0 ? multiGridItems : internalMultiGridItems;
   const actualShowMultiGrid = showMultiGrid !== undefined ? showMultiGrid : internalShowMultiGrid;
 
-  // Gesture states
   const [touchStartY, setTouchStartY] = useState(null);
   const [initialPinchDistance, setInitialPinchDistance] = useState(null);
   const [initialVolume, setInitialVolume] = useState(1);
 
-  // Orientation detection - 0, 90, 180, 270
   const [isInvertedGravity, setIsInvertedGravity] = useState(false);
 
-  // Build stream URL
   const src = channel?.streamUrl || channel?.url || null;
 
-  // Suppress unused vars warning for channels
   void channels;
 
-  // If Smart says we're fullscreen, we ARE fullscreen
+  // Sync fullscreen state with Smart's isSmartFullscreen
   useEffect(() => {
-    if (isSmartFullscreen && !isFullscreen) {
-      setIsFullscreen(true);
-    } else if (!isSmartFullscreen && isFullscreen) {
-      setIsFullscreen(false);
-    }
-  }, [isSmartFullscreen, isFullscreen]);
+    setIsFullscreen(isSmartFullscreen);
+  }, [isSmartFullscreen]);
 
-  // ========================================
-  // VIDEO STATE HANDLERS
-  // ========================================
+  // Force VideoPlayer position update when fullscreen changes
+  useEffect(() => {
+    if (videoRef.current?.updatePosition) {
+      // Multiple delays for layout stabilization
+      setTimeout(() => videoRef.current?.updatePosition?.(), 100);
+      setTimeout(() => videoRef.current?.updatePosition?.(), 300);
+      setTimeout(() => videoRef.current?.updatePosition?.(), 500);
+    }
+  }, [isFullscreen, isSmartFullscreen]);
+
   const handleStateChange = useCallback((state) => {
     setIsLoading(state === 'buffering');
   }, []);
@@ -100,7 +88,6 @@ const Player = memo(({
     setIsLoading(false);
   }, []);
 
-  // Time update for HTML5
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current?.getVideoElement) {
       const video = videoRef.current.getVideoElement();
@@ -111,9 +98,6 @@ const Player = memo(({
     }
   }, []);
 
-  // ========================================
-  // PLAYBACK CONTROLS
-  // ========================================
   const handleSeek = useCallback((time) => {
     if (videoRef.current) {
       videoRef.current.seekTo(time);
@@ -148,9 +132,6 @@ const Player = memo(({
     }
   }, [muted, volume]);
 
-  // ========================================
-  // FULLSCREEN with Landscape Lock
-  // ========================================
   const toggleFullscreen = useCallback(async () => {
     if (!containerRef.current) return;
     try {
@@ -176,7 +157,6 @@ const Player = memo(({
     }
   }, []);
 
-  // Listen for fullscreen change
   useEffect(() => {
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement && isFullscreen) {
@@ -190,20 +170,18 @@ const Player = memo(({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, [isFullscreen]);
 
-  // Orientation detection - adapt gravity based on device rotation
   useEffect(() => {
     const handleOrientationChange = () => {
       const angle = window.innerWidth > window.innerHeight ? 
         (window.orientation || 90) : 
         (window.orientation || 0);
       
-      // Inverted gravity = 180° or 270° (upside down)
       setIsInvertedGravity(angle === 180 || angle === 270);
     };
 
     window.addEventListener('orientationchange', handleOrientationChange);
     window.addEventListener('resize', handleOrientationChange);
-    handleOrientationChange(); // Initial check
+    handleOrientationChange();
 
     return () => {
       window.removeEventListener('orientationchange', handleOrientationChange);
@@ -211,9 +189,6 @@ const Player = memo(({
     };
   }, []);
 
-  // ========================================
-  // GESTURE HANDLERS - 2 Fingers Volume & Pinch Zoom
-  // ========================================
   const getTouchDistance = (touches) => {
     if (touches.length < 2) return 0;
     const dx = touches[0].clientX - touches[1].clientX;
@@ -246,7 +221,6 @@ const Player = memo(({
           setInitialPinchDistance(null);
         }
       } else {
-        // Volume control
         const avgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         const deltaY = touchStartY - avgY;
         const volumeChange = deltaY / 200;
@@ -254,16 +228,13 @@ const Player = memo(({
         handleVolumeChange(newVolume);
       }
     }
-  }, [touchStartY, initialPinchDistance, initialVolume, handleVolumeChange, isFullscreen, toggleFullscreen]);
+  }, [touchStartY, initialPinchDistance, initialVolume, isFullscreen, toggleFullscreen, handleVolumeChange]);
 
   const handleTouchEnd = useCallback(() => {
     setTouchStartY(null);
     setInitialPinchDistance(null);
   }, []);
 
-  // ========================================
-  // MULTIGRID HANDLERS
-  // ========================================
   const handleMultiGridToggle = useCallback(() => {
     if (onMultiGridToggle) {
       onMultiGridToggle();
@@ -289,7 +260,6 @@ const Player = memo(({
   }, [onMultiGridRemove]);
 
   const handleMultiGridAdd = useCallback(() => {
-    // Close MultiGrid to let user select from channel list
     if (onMultiGridToggle) {
       onMultiGridToggle();
     } else {
@@ -297,15 +267,12 @@ const Player = memo(({
     }
   }, [onMultiGridToggle]);
 
-  // Suppress unused var warning
   void onMultiGridAdd;
 
-  // Render video for MultiGrid cell
   const renderMultiGridVideo = useCallback((item, index) => {
     const itemSrc = item?.streamUrl || item?.url;
     if (!itemSrc) return null;
 
-    // Suppress unused var warning
     void index;
 
     return (
@@ -317,16 +284,10 @@ const Player = memo(({
     );
   }, []);
 
-  // ========================================
-  // TIMESHIFT
-  // ========================================
   const handleTimeshiftSeek = useCallback((offset) => {
     setTimeshiftOffset(offset);
   }, []);
 
-  // ========================================
-  // SETTINGS
-  // ========================================
   const handleSpeedChange = useCallback((speed) => {
     setPlaybackSpeed(speed);
     if (videoRef.current?.getVideoElement) {
@@ -335,9 +296,6 @@ const Player = memo(({
     }
   }, []);
 
-  // ========================================
-  // AUTO-HIDE CONTROLS
-  // ========================================
   useEffect(() => {
     if (!isPlaying || showSettings) return;
     const timer = setTimeout(() => setShowControls(false), 6000);
@@ -351,11 +309,11 @@ const Player = memo(({
       style={{
         aspectRatio: isFullscreen ? 'auto' : '16/9',
         height: isFullscreen ? '100%' : 'auto',
-        backgroundColor: isNative ? 'transparent' : 'transparent',
+        backgroundColor: 'transparent',
       }}
       onClick={() => setShowControls(true)}
     >
-      {/* Video Player */}
+      {/* Video Player - CRITICAL: Pass isFullScreen prop */}
       <div
         className="absolute inset-0"
         onTouchStart={handleTouchStart}
@@ -367,6 +325,7 @@ const Player = memo(({
           <VideoPlayer
             ref={videoRef}
             src={src}
+            isFullScreen={isFullscreen || isSmartFullscreen}
             aspectRatio={aspectRatio.toLowerCase()}
             onStateChange={handleStateChange}
             onError={handleError}
@@ -423,7 +382,7 @@ const Player = memo(({
         </div>
       )}
 
-      {/* Overlay - Title - Adapt position based on gravity */}
+      {/* Overlay */}
       <div style={{ transform: isInvertedGravity ? 'scaleY(-1)' : 'none' }}>
         <PlayerOverlay
           title={channel?.name}
@@ -433,7 +392,7 @@ const Player = memo(({
         />
       </div>
 
-      {/* Controls - Adapt position based on gravity */}
+      {/* Controls */}
       <div style={{ transform: isInvertedGravity ? 'scaleY(-1)' : 'none' }}>
         <PlayerControls
           playing={isPlaying}
