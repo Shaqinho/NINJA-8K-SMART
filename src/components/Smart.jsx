@@ -257,7 +257,17 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   // Gestures
   const gestures = useGestures(playerContainerRef, {
     onSpread: () => setIsPlaying(true),
-    onPinch: () => setIsPlaying(false),
+    onPinch: () => {
+      setIsPlaying(false);
+      // Force recalcul après que le layout soit stable
+      setTimeout(() => {
+        if (contentListRef.current) {
+          const rect = contentListRef.current.getBoundingClientRect();
+          const headerOffset = selectedCategory ? 52 : 0;
+          setListHeight(rect.height - headerOffset);
+        }
+      }, 300);
+    },
     onVolumeChange: (vol) => setVolume(vol),
   });
 
@@ -499,24 +509,35 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     setParticleTheme(localStorage.getItem('ninja_particle_theme') || 'soft');
   }, []);
 
-  // List height calculation
+  // List height calculation - with multiple delays for stability
   const updateListHeight = useCallback(() => {
     if (contentListRef.current) {
       const rect = contentListRef.current.getBoundingClientRect();
       const headerOffset = selectedCategory ? 52 : 0;
-      setListHeight(rect.height - headerOffset);
+      const newHeight = rect.height - headerOffset;
+      // Only update if height is valid (> 100px)
+      if (newHeight > 100) {
+        setListHeight(newHeight);
+      }
     }
   }, [selectedCategory]);
 
   useEffect(() => {
     updateListHeight();
     window.addEventListener('resize', updateListHeight);
-    const timeout = setTimeout(updateListHeight, 100);
+    
+    // Multiple delays to catch layout changes
+    const t1 = setTimeout(updateListHeight, 100);
+    const t2 = setTimeout(updateListHeight, 300);
+    const t3 = setTimeout(updateListHeight, 500);
+    
     return () => {
       window.removeEventListener('resize', updateListHeight);
-      clearTimeout(timeout);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
     };
-  }, [updateListHeight, selectedCategory]);
+  }, [updateListHeight, selectedCategory, isPlaying]);
 
   const containerStyle = {
     background: isPlaying ? 'transparent' : '#000000',
