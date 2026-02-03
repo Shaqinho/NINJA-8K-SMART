@@ -11,10 +11,9 @@ import ContextMenu, { getAliases, setAlias, getHiddenItems, setHiddenItem, isEPG
 import { usePlaylistContext } from '../context/PlaylistContext';
 import { XtreamService } from '../services/XtreamService';
 import { useGestures } from '../hooks/useGestures';
-import { ninjaCentral, STORES } from '../services/NinjaCentral';
 
 // ============================================================================
-// HEADER - Sans flèche, icônes sans background pour OLED
+// HEADER
 // ============================================================================
 const Header = ({ onBack, onSearch, onSettings, onOpenHub }) => (
   <header 
@@ -81,7 +80,7 @@ const TabNav = ({ activeTab, setActiveTab, onLongPress, reloadingTab }) => {
     longPressTimer.current = setTimeout(() => {
       isLongPress.current = true;
       onLongPress(tabId);
-    }, 800); // 800ms pour long press
+    }, 800);
   };
 
   const handleTouchEnd = (tabId) => {
@@ -127,7 +126,7 @@ const TabNav = ({ activeTab, setActiveTab, onLongPress, reloadingTab }) => {
 };
 
 // ============================================================================
-// VIRTUALIZED CHANNEL LIST - Netflix style windowing
+// VIRTUALIZED CHANNEL LIST
 // ============================================================================
 const VirtualizedChannelList = ({ items, onSelect, onLongPress, onExtraLongPress, selectedItem, height, aliases, hiddenItems }) => {
   const rowHeight = 72;
@@ -172,7 +171,7 @@ const VirtualizedChannelList = ({ items, onSelect, onLongPress, onExtraLongPress
 };
 
 // ============================================================================
-// BUILD CATEGORIES - Uses provider order from API
+// BUILD CATEGORIES
 // ============================================================================
 const buildCategories = (items, apiCategories, type) => {
   const systemFolders = [
@@ -201,20 +200,17 @@ const buildCategories = (items, apiCategories, type) => {
     const count = items.filter(item => 
       String(item.categoryId) === String(cat.category_id)
     ).length;
-    return {
-      ...cat,
-      count,
-    };
+    return { ...cat, count };
   });
 
   return [...systemFolders, ...categoriesWithCounts];
 };
 
 // ============================================================================
-// SMART COMPONENT - Main Layout with NinjaCentral Integration
+// SMART COMPONENT
 // ============================================================================
 const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreaming }) => {
-  const { clearPlaylist } = usePlaylistContext();
+  const { clearPlaylist, refreshPlaylist } = usePlaylistContext();
   
   const [activeTab, setActiveTab] = useState('live');
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -223,18 +219,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const [showSettings, setShowSettings] = useState(false);
   const [showEPGSearch, setShowEPGSearch] = useState(false);
   const [listHeight, setListHeight] = useState(400);
+  const [reloadingTab, setReloadingTab] = useState(null);
   const contentListRef = useRef(null);
   const playerContainerRef = useRef(null);
-  
-  // NinjaCentral data states
-  const [liveData, setLiveData] = useState([]);
-  const [vodData, setVodData] = useState([]);
-  const [seriesData, setSeriesData] = useState([]);
-  const [liveCategories, setLiveCategories] = useState([]);
-  const [vodCategories, setVodCategories] = useState([]);
-  const [seriesCategories, setSeriesCategories] = useState([]);
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [reloadingTab, setReloadingTab] = useState(null);
   
   const [epgData, setEpgData] = useState({});
   const [epgLoading, setEpgLoading] = useState(false);
@@ -253,6 +240,11 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const [isLandscape, setIsLandscape] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(false);
 
+  const [particleTheme, setParticleTheme] = useState(() => {
+    return localStorage.getItem('ninja_particle_theme') || 'soft';
+  });
+
+  // Orientation detection
   useEffect(() => {
     const checkOrientation = () => {
       setIsLandscape(window.innerWidth > window.innerHeight);
@@ -262,21 +254,11 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     return () => window.removeEventListener('resize', checkOrientation);
   }, []);
 
-  // ========================================
-  // GESTURES
-  // ========================================
+  // Gestures
   const gestures = useGestures(playerContainerRef, {
-    onSpread: () => {
-      console.log('🎯 SPREAD detected - entering fullscreen');
-      setIsPlaying(true);
-    },
-    onPinch: () => {
-      console.log('🎯 PINCH detected - exiting fullscreen');
-      setIsPlaying(false);
-    },
-    onVolumeChange: (vol) => {
-      setVolume(vol);
-    },
+    onSpread: () => setIsPlaying(true),
+    onPinch: () => setIsPlaying(false),
+    onVolumeChange: (vol) => setVolume(vol),
   });
 
   const xtreamService = useMemo(() => {
@@ -284,7 +266,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     return new XtreamService(playlist.server, playlist.username, playlist.password);
   }, [playlist]);
 
-  // Sync isStreaming with parent for LibVLC transparency
+  // Sync isStreaming with parent
   useEffect(() => {
     if (setIsStreaming) {
       setIsStreaming(isPlaying && !!selectedItem);
@@ -292,170 +274,31 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   }, [isPlaying, selectedItem, setIsStreaming]);
 
   // ============================================================================
-  // NINJA CENTRAL - Load data from IndexedDB or fetch if needed
-  // ============================================================================
-  const loadFromNinjaCentral = useCallback(async () => {
-    const [live, vod, series, liveCats, vodCats, seriesCats] = await Promise.all([
-      ninjaCentral.getAll(STORES.LIVE),
-      ninjaCentral.getAll(STORES.VOD),
-      ninjaCentral.getAll(STORES.SERIES),
-      ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
-      ninjaCentral.getAll(STORES.VOD_CATEGORIES),
-      ninjaCentral.getAll(STORES.SERIES_CATEGORIES),
-    ]);
-    
-    setLiveData(live);
-    setVodData(vod);
-    setSeriesData(series);
-    setLiveCategories(liveCats);
-    setVodCategories(vodCats);
-    setSeriesCategories(seriesCats);
-    
-    console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
-  }, []);
-
-  const syncAllFromAPI = useCallback(async () => {
-    if (!xtreamService) return;
-    
-    try {
-      await ninjaCentral.syncAll(xtreamService, (step, percent) => {
-        console.log(`[NinjaCentral] ${step} (${percent}%)`);
-      });
-      
-      await loadFromNinjaCentral();
-    } catch (err) {
-      console.error('[NinjaCentral] Sync error:', err);
-      throw err;
-    }
-  }, [xtreamService, loadFromNinjaCentral]);
-
-  useEffect(() => {
-    const initNinjaCentral = async () => {
-      if (!xtreamService || isDataLoaded) return;
-      
-      try {
-        await ninjaCentral.init();
-        
-        const counts = await ninjaCentral.getCounts();
-        console.log('[NinjaCentral] Current counts:', counts);
-        
-        if (counts.total > 0) {
-          console.log('[NinjaCentral] Loading from cache...');
-          await loadFromNinjaCentral();
-        } else {
-          console.log('[NinjaCentral] First sync from API...');
-          await syncAllFromAPI();
-        }
-        
-        setIsDataLoaded(true);
-      } catch (err) {
-        console.error('[NinjaCentral] Init error:', err);
-        if (playlist?.data) {
-          setLiveData(playlist.data.live || []);
-          setVodData(playlist.data.vod || []);
-          setSeriesData(playlist.data.series || []);
-          setLiveCategories(playlist.data.liveCategories || []);
-          setVodCategories(playlist.data.vodCategories || []);
-          setSeriesCategories(playlist.data.seriesCategories || []);
-          setIsDataLoaded(true);
-        }
-      }
-    };
-
-    initNinjaCentral();
-  }, [xtreamService, isDataLoaded, playlist, loadFromNinjaCentral, syncAllFromAPI]);
-
-  // ============================================================================
-  // LONG PRESS TAB - Reload specific category
-  // ============================================================================
-  const handleTabLongPress = useCallback(async (tabId) => {
-    if (!xtreamService || reloadingTab) return;
-    
-    console.log(`[NinjaCentral] Long press - reloading ${tabId}...`);
-    setReloadingTab(tabId);
-    
-    try {
-      if (tabId === 'live') {
-        const [categories, streams] = await Promise.all([
-          xtreamService.getLiveCategories(),
-          xtreamService.getLiveStreams(),
-        ]);
-        const parsed = xtreamService.parseLiveStreams(streams, categories);
-        await ninjaCentral.saveItems(STORES.LIVE, parsed);
-        await ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, categories);
-        setLiveData(parsed);
-        setLiveCategories(categories);
-        // Clear EPG cache for this category
-        epgLoadedCategoriesRef.current.clear();
-        setEpgData({});
-        console.log(`[NinjaCentral] Live reloaded: ${parsed.length} channels`);
-        
-      } else if (tabId === 'vod') {
-        const [categories, streams] = await Promise.all([
-          xtreamService.getVodCategories(),
-          xtreamService.getVodStreams(),
-        ]);
-        const parsed = xtreamService.parseVodStreams(streams, categories);
-        await ninjaCentral.saveItems(STORES.VOD, parsed);
-        await ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, categories);
-        setVodData(parsed);
-        setVodCategories(categories);
-        console.log(`[NinjaCentral] VOD reloaded: ${parsed.length} movies`);
-        
-      } else if (tabId === 'series') {
-        const [categories, seriesList] = await Promise.all([
-          xtreamService.getSeriesCategories(),
-          xtreamService.getSeries(),
-        ]);
-        const parsed = xtreamService.parseSeries(seriesList, categories);
-        await ninjaCentral.saveItems(STORES.SERIES, parsed);
-        await ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, categories);
-        setSeriesData(parsed);
-        setSeriesCategories(categories);
-        console.log(`[NinjaCentral] Series reloaded: ${parsed.length} series`);
-      }
-      
-      // Update last sync time
-      await ninjaCentral.setMeta('lastSync', new Date().toISOString());
-      
-    } catch (err) {
-      console.error(`[NinjaCentral] Reload ${tabId} error:`, err);
-    } finally {
-      setReloadingTab(null);
-    }
-  }, [xtreamService, reloadingTab]);
-
-  const [particleTheme, setParticleTheme] = useState(() => {
-    return localStorage.getItem('ninja_particle_theme') || 'soft';
-  });
-
-  const handleSettingsClose = useCallback(() => {
-    setShowSettings(false);
-    setParticleTheme(localStorage.getItem('ninja_particle_theme') || 'soft');
-  }, []);
-
-  // ============================================================================
-  // DATA SELECTORS - Read from NinjaCentral states
+  // DATA FROM playlist.data (fetched by LandingPage)
   // ============================================================================
   const currentItems = useMemo(() => {
+    if (!playlist?.data) return [];
     switch (activeTab) {
-      case 'live': return liveData;
-      case 'vod': return vodData;
-      case 'series': return seriesData;
+      case 'live': return playlist.data.live || [];
+      case 'vod': return playlist.data.vod || [];
+      case 'series': return playlist.data.series || [];
       default: return [];
     }
-  }, [activeTab, liveData, vodData, seriesData]);
+  }, [playlist, activeTab]);
 
   const apiCategories = useMemo(() => {
+    if (!playlist?.data) return [];
     switch (activeTab) {
-      case 'live': return liveCategories;
-      case 'vod': return vodCategories;
-      case 'series': return seriesCategories;
+      case 'live': return playlist.data.liveCategories || [];
+      case 'vod': return playlist.data.vodCategories || [];
+      case 'series': return playlist.data.seriesCategories || [];
       default: return [];
     }
-  }, [activeTab, liveCategories, vodCategories, seriesCategories]);
+  }, [playlist, activeTab]);
 
-  const liveChannels = useMemo(() => liveData, [liveData]);
+  const liveChannels = useMemo(() => {
+    return playlist?.data?.live || [];
+  }, [playlist]);
 
   const categories = useMemo(() => {
     return buildCategories(currentItems, apiCategories, activeTab);
@@ -476,15 +319,12 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
       );
     }
     
+    // Add EPG data if available
     if (activeTab === 'live' && Object.keys(epgData).length > 0) {
       return items.map(item => {
         const epg = epgData[item.id];
         if (epg) {
-          return {
-            ...item,
-            epg_now: epg.epg_now,
-            epg_progress: epg.progress,
-          };
+          return { ...item, epg_now: epg.epg_now, epg_progress: epg.progress };
         }
         return item;
       });
@@ -493,6 +333,39 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     return items;
   }, [selectedCategory, currentItems, activeTab, epgData]);
 
+  // ============================================================================
+  // LONG PRESS TAB - Reload specific category
+  // ============================================================================
+  const handleTabLongPress = useCallback(async (tabId) => {
+    if (!xtreamService || reloadingTab) return;
+    
+    console.log(`[Smart] Long press - reloading ${tabId}...`);
+    setReloadingTab(tabId);
+    
+    try {
+      await refreshPlaylist({ 
+        live: tabId === 'live', 
+        movies: tabId === 'vod', 
+        series: tabId === 'series' 
+      });
+      
+      // Clear EPG cache if live
+      if (tabId === 'live') {
+        epgLoadedCategoriesRef.current.clear();
+        setEpgData({});
+      }
+      
+      console.log(`[Smart] ${tabId} reloaded`);
+    } catch (err) {
+      console.error(`[Smart] Reload ${tabId} error:`, err);
+    } finally {
+      setReloadingTab(null);
+    }
+  }, [xtreamService, reloadingTab, refreshPlaylist]);
+
+  // ============================================================================
+  // EPG LOADING
+  // ============================================================================
   const loadEPGForCategory = useCallback(async (categoryId, items) => {
     if (!xtreamService || activeTab !== 'live') return;
     if (epgLoadedCategoriesRef.current.has(categoryId)) return;
@@ -503,22 +376,13 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     
     try {
       const streamIds = items.map(item => item.id).filter(Boolean);
-      
       if (streamIds.length === 0) {
         setEpgLoading(false);
         return;
       }
       
-      console.log(`[EPG] Loading EPG for ${streamIds.length} channels in category ${categoryId}`);
-      
       const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
-      
-      setEpgData(prev => ({
-        ...prev,
-        ...epgResults,
-      }));
-      
-      console.log(`[EPG] Loaded ${Object.keys(epgResults).length} EPG entries`);
+      setEpgData(prev => ({ ...prev, ...epgResults }));
     } catch (err) {
       console.error('[EPG] Error loading EPG:', err);
     } finally {
@@ -543,6 +407,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     }
   }, [selectedCategory, activeTab, currentItems, loadEPGForCategory]);
 
+  // ============================================================================
+  // HANDLERS
+  // ============================================================================
   const handleCategorySelect = useCallback((category) => {
     if (category.subfolders) {
       setSelectedCategory({ ...category, isSubfolder: true });
@@ -554,9 +421,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setIsPlaying(true);
-    // Add to recent
-    ninjaCentral.addRecent(item, activeTab).catch(console.error);
-  }, [activeTab]);
+  }, []);
 
   const handleChannelChange = useCallback((channel) => {
     setSelectedItem(channel);
@@ -565,12 +430,8 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
 
   const handleLongPress = useCallback((item) => {
     setMultiGridItems(prev => {
-      if (prev.some(i => i.id === item.id)) {
-        return prev;
-      }
-      if (prev.length >= 4) {
-        return prev;
-      }
+      if (prev.some(i => i.id === item.id)) return prev;
+      if (prev.length >= 4) return prev;
       return [...prev, item];
     });
   }, []);
@@ -621,9 +482,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     }
   }, [selectedCategory, onBack]);
 
-  const handleClearPlaylist = useCallback(async () => {
-    // Clear NinjaCentral data too
-    await ninjaCentral.clearAll().catch(console.error);
+  const handleClearPlaylist = useCallback(() => {
     clearPlaylist();
     onLogout?.();
   }, [clearPlaylist, onLogout]);
@@ -632,10 +491,15 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     setShowSettings(false);
     setEpgData({});
     epgLoadedCategoriesRef.current.clear();
-    setIsDataLoaded(false);
-    // This will trigger re-sync in useEffect
+    await refreshPlaylist({ live: true, movies: true, series: true });
+  }, [refreshPlaylist]);
+
+  const handleSettingsClose = useCallback(() => {
+    setShowSettings(false);
+    setParticleTheme(localStorage.getItem('ninja_particle_theme') || 'soft');
   }, []);
 
+  // List height calculation
   const updateListHeight = useCallback(() => {
     if (contentListRef.current) {
       const rect = contentListRef.current.getBoundingClientRect();
@@ -658,19 +522,6 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     background: isPlaying ? 'transparent' : '#000000',
     transition: 'background-color 0.3s'
   };
-
-  // Loading state
-  if (!isDataLoaded) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center" style={{ background: '#000000' }}>
-        <div className="text-center">
-          <div className="w-12 h-12 mx-auto border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-white text-sm">Loading content...</p>
-          <p className="text-gray-500 text-xs mt-1">First load may take a moment</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden" style={containerStyle}>
@@ -739,7 +590,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
         />
       </div>
 
-      {/* Tabs with Long Press */}
+      {/* Tabs */}
       {!(isLandscape && isPlaying) && (
         <div className="flex-shrink-0 z-20" style={{ background: '#000000' }}>
           <TabNav 
