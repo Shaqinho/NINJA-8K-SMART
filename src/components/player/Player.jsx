@@ -31,8 +31,6 @@ const Player = memo(({
   const videoRef = useRef(null);
   const containerRef = useRef(null);
 
-  const isNative = Capacitor.getPlatform() === 'android';
-
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
