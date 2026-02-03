@@ -1,0 +1,15 @@
+#EXTM3U
+#EXTINF:-1 tvg-name="Ghost Town 8K" tvg-logo="" group-title="8K DEMO",Ghost Town 8K HEVC
+https://ninja-apps.io/wp-content/m3u/videos/ghost%20towns%208k%20hevc.mkv
+
+#EXTINF:-1 tvg-name="Japan Nights 8K" tvg-logo="" group-title="8K DEMO",Japan Nights 8K HEVC
+https://ninja-apps.io/wp-content/m3u/videos/night%208k%20hevc.mkv
+
+#EXTINF:-1 tvg-name="Sample 8K Rio" tvg-logo="" group-title="8K DEMO",Sample 8K UHD Rio
+https://ninja-apps.io/wp-content/m3u/videos/Sample%208k%20UHD%20(Ultra%20HD)%20video%20download%20of%20Rio.mkv
+
+#EXTINF:-1 tvg-name="Samsung Demo 8K" tvg-logo="" group-title="8K DEMO",Samsung Official Demo 8K HEVC
+https://ninja-apps.io/wp-content/m3u/videos/samsung%20demo%208k%20hevc.mkv
+
+#EXTINF:-1 tvg-name="Swiss Landscape 8K" tvg-logo="" group-title="8K DEMO",Swiss Landscape 8K HEVC
+https://ninja-apps.io/wp-content/m3u/videos/swiss%20landscapes%208k%20hevc.mkv

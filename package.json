@@ -1,0 +1,67 @@
+{
+  "name": "ninja8k",
+  "version": "1.0.0",
+  "description": "NINJA 8K - OTT & IPTV HUB",
+  "private": true,
+  "homepage": "https://ninja-apps.io",
+  "author": {
+    "name": "NINJA 8K",
+    "email": "ninjadigi@proton.me",
+    "url": "https://ninja-apps.io"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "cap:add": "npx cap add android && npx cap add ios",
+    "cap:sync": "npx cap sync",
+    "cap:copy": "npx cap copy",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
+    "deploy": "npm run build && npx cap copy"
+  },
+  "dependencies": {
+    "@capacitor-community/sqlite": "^5.6.0",
+    "@capacitor/android": "^5.0.0",
+    "@capacitor/app": "^5.0.0",
+    "@capacitor/clipboard": "^5.0.0",
+    "@capacitor/core": "^5.0.0",
+    "@capacitor/device": "^5.0.0",
+    "@capacitor/haptics": "^5.0.0",
+    "@capacitor/ios": "^5.0.0",
+    "@capacitor/preferences": "^5.0.0",
+    "@capacitor/screen-orientation": "^5.0.0",
+    "@capacitor/status-bar": "^5.0.8",
+    "lodash.debounce": "^4.0.8",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "react-window": "^1.8.10"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.2",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.33",
+    "tailwind-scrollbar-hide": "^1.1.7",
+    "tailwindcss": "^3.4.0"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

@@ -1,0 +1,634 @@
+# codemagic.yaml
+# NINJA 8K - ExoPlayer WITHOUT auto-fullscreen overlay
+workflows:
+  android-debug:
+    name: NINJA 8K FINAL
+    instance_type: mac_mini_m1
+    max_build_duration: 60
+    
+    environment:
+      vars:
+        PACKAGE_NAME: "io.ninja.ninja8k"
+      node: 20
+      java: 21
+    
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    
+    scripts:
+      - name: 1. Installation Dependances
+        script: |
+          npm install --legacy-peer-deps
+          npm install @capacitor/cli @capacitor/android --save-dev --legacy-peer-deps
+          npm install ajv@8.17.1 ajv-keywords@5.1.0 --save-exact --legacy-peer-deps
+          npm install react-window @capacitor/screen-orientation @capacitor/preferences --legacy-peer-deps
+      
+      - name: 2. Build Web
+        script: npm run build
+      
+      - name: 3. Setup Android
+        script: |
+          rm -rf android
+          npx cap add android
+          npx cap sync android
+      
+      - name: 4. Add ExoPlayer Dependencies
+        script: |
+          # Add Media3/ExoPlayer dependencies to app/build.gradle
+          sed -i '' '/dependencies {/a\
+              // ExoPlayer Media3 for .ts .m3u8 .mp4 .mkv playback\
+              implementation "androidx.media3:media3-exoplayer:1.2.0"\
+              implementation "androidx.media3:media3-exoplayer-hls:1.2.0"\
+              implementation "androidx.media3:media3-exoplayer-dash:1.2.0"\
+              implementation "androidx.media3:media3-datasource:1.2.0"\
+              implementation "androidx.media3:media3-ui:1.2.0"\
+              implementation "androidx.media3:media3-common:1.2.0"
+          ' android/app/build.gradle || {
+            # Fallback for Linux sed
+            sed -i '/dependencies {/a\
+              // ExoPlayer Media3 for .ts .m3u8 .mp4 .mkv playback\
+              implementation "androidx.media3:media3-exoplayer:1.2.0"\
+              implementation "androidx.media3:media3-exoplayer-hls:1.2.0"\
+              implementation "androidx.media3:media3-exoplayer-dash:1.2.0"\
+              implementation "androidx.media3:media3-datasource:1.2.0"\
+              implementation "androidx.media3:media3-ui:1.2.0"\
+              implementation "androidx.media3:media3-common:1.2.0"
+            ' android/app/build.gradle
+          }
+      
+      - name: 5. Copy ExoPlayerPlugin
+        script: |
+          cat > android/app/src/main/java/io/ninja/ninja8k/ExoPlayerPlugin.java << 'EXOEOF'
+          package io.ninja.ninja8k;
+
+          import android.graphics.Color;
+          import android.net.Uri;
+          import android.util.Log;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.view.ViewGroup;
+          import android.widget.FrameLayout;
+
+          import androidx.annotation.NonNull;
+          import androidx.media3.common.MediaItem;
+          import androidx.media3.common.PlaybackException;
+          import androidx.media3.common.Player;
+          import androidx.media3.common.util.UnstableApi;
+          import androidx.media3.datasource.DataSource;
+          import androidx.media3.datasource.DefaultDataSource;
+          import androidx.media3.datasource.DefaultHttpDataSource;
+          import androidx.media3.exoplayer.ExoPlayer;
+          import androidx.media3.exoplayer.source.MediaSource;
+          import androidx.media3.exoplayer.source.ProgressiveMediaSource;
+          import androidx.media3.exoplayer.hls.HlsMediaSource;
+          import androidx.media3.exoplayer.dash.DashMediaSource;
+          import androidx.media3.ui.AspectRatioFrameLayout;
+          import androidx.media3.ui.PlayerView;
+
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          @UnstableApi
+          @CapacitorPlugin(name = "ExoPlayerPlugin")
+          public class ExoPlayerPlugin extends Plugin {
+
+              private static final String TAG = "ExoPlayerPlugin";
+              
+              private ExoPlayer player;
+              private PlayerView playerView;
+              private FrameLayout playerContainer;
+              private boolean isPlaying = false;
+              private String currentUrl = null;
+              private boolean isOverlayAttached = false;
+
+              @Override
+              public void load() {
+                  super.load();
+                  Log.d(TAG, "ExoPlayerPlugin loaded");
+              }
+
+              @PluginMethod
+              public void initialize(PluginCall call) {
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          player = new ExoPlayer.Builder(getContext()).build();
+                          
+                          playerView = new PlayerView(getContext());
+                          playerView.setPlayer(player);
+                          playerView.setUseController(false);
+                          playerView.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
+                          playerView.setBackgroundColor(Color.BLACK);
+                          
+                          playerContainer = new FrameLayout(getContext());
+                          playerContainer.setBackgroundColor(Color.BLACK);
+                          
+                          FrameLayout.LayoutParams playerParams = new FrameLayout.LayoutParams(
+                              ViewGroup.LayoutParams.MATCH_PARENT,
+                              ViewGroup.LayoutParams.MATCH_PARENT
+                          );
+                          playerParams.gravity = Gravity.CENTER;
+                          playerView.setLayoutParams(playerParams);
+                          playerContainer.addView(playerView);
+                          
+                          player.addListener(new Player.Listener() {
+                              @Override
+                              public void onPlaybackStateChanged(int state) {
+                                  JSObject ret = new JSObject();
+                                  ret.put("state", getStateString(state));
+                                  notifyListeners("playbackStateChanged", ret);
+                              }
+
+                              @Override
+                              public void onIsPlayingChanged(boolean playing) {
+                                  isPlaying = playing;
+                                  JSObject ret = new JSObject();
+                                  ret.put("isPlaying", playing);
+                                  notifyListeners("isPlayingChanged", ret);
+                              }
+
+                              @Override
+                              public void onPlayerError(@NonNull PlaybackException error) {
+                                  JSObject ret = new JSObject();
+                                  ret.put("error", error.getMessage());
+                                  ret.put("errorCode", error.errorCode);
+                                  notifyListeners("error", ret);
+                                  Log.e(TAG, "Player error: " + error.getMessage());
+                              }
+                          });
+
+                          JSObject ret = new JSObject();
+                          ret.put("success", true);
+                          call.resolve(ret);
+                          
+                          Log.d(TAG, "ExoPlayer initialized successfully");
+                          
+                      } catch (Exception e) {
+                          Log.e(TAG, "Failed to initialize ExoPlayer", e);
+                          call.reject("Failed to initialize: " + e.getMessage());
+                      }
+                  });
+              }
+
+              @PluginMethod
+              public void play(PluginCall call) {
+                  String url = call.getString("url");
+                  
+                  if (url == null || url.isEmpty()) {
+                      call.reject("URL is required");
+                      return;
+                  }
+
+                  getActivity().runOnUiThread(() -> {
+                      try {
+                          if (player == null) {
+                              call.reject("Player not initialized");
+                              return;
+                          }
+
+                          currentUrl = url;
+                          
+                          // Attach overlay BEHIND WebView (index 0)
+                          attachOverlay();
+                          
+                          MediaSource mediaSource = createMediaSource(url);
+                          player.setMediaSource(mediaSource);
+                          player.prepare();
+                          player.play();
+
+                          JSObject ret = new JSObject();
+                          ret.put("success", true);
+                          ret.put("url", url);
+                          call.resolve(ret);
+                          
+                          Log.d(TAG, "Playing: " + url);
+                          
+                      } catch (Exception e) {
+                          Log.e(TAG, "Failed to play", e);
+                          call.reject("Failed to play: " + e.getMessage());
+                      }
+                  });
+              }
+
+              @PluginMethod
+              public void pause(PluginCall call) {
+                  getActivity().runOnUiThread(() -> {
+                      if (player != null) {
+                          player.pause();
+                      }
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                  });
+              }
+
+              @PluginMethod
+              public void resume(PluginCall call) {
+                  getActivity().runOnUiThread(() -> {
+                      if (player != null) {
+                          player.play();
+                      }
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                  });
+              }
+
+              @PluginMethod
+              public void stop(PluginCall call) {
+                  getActivity().runOnUiThread(() -> {
+                      if (player != null) {
+                          player.stop();
+                          currentUrl = null;
+                      }
+                      
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                  });
+              }
+
+              @PluginMethod
+              public void seekTo(PluginCall call) {
+                  Long position = call.getLong("position", 0L);
+                  
+                  getActivity().runOnUiThread(() -> {
+                      if (player != null) {
+                          player.seekTo(position);
+                      }
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                  });
+              }
+
+              @PluginMethod
+              public void seekRelative(PluginCall call) {
+                  Long offset = call.getLong("offset", 0L);
+                  
+                  getActivity().runOnUiThread(() -> {
+                      if (player != null) {
+                          long currentPosition = player.getCurrentPosition();
+                          long newPosition = Math.max(0, currentPosition + offset);
+                          player.seekTo(newPosition);
+                      }
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                  });
+              }
+
+              @PluginMethod
+              public void setVolume(PluginCall call) {
+                  Float volume = call.getFloat("volume", 1.0f);
+                  
+                  getActivity().runOnUiThread(() -> {
+                      if (player != null) {
+                          player.setVolume(volume);
+                      }
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                  });
+              }
+
+              @PluginMethod
+              public void getState(PluginCall call) {
+                  getActivity().runOnUiThread(() -> {
+                      JSObject ret = new JSObject();
+                      
+                      if (player != null) {
+                          ret.put("isPlaying", player.isPlaying());
+                          ret.put("currentPosition", player.getCurrentPosition());
+                          ret.put("duration", player.getDuration());
+                          ret.put("bufferedPosition", player.getBufferedPosition());
+                          ret.put("playbackState", getStateString(player.getPlaybackState()));
+                          ret.put("volume", player.getVolume());
+                          ret.put("currentUrl", currentUrl);
+                      } else {
+                          ret.put("isPlaying", false);
+                          ret.put("currentPosition", 0);
+                          ret.put("duration", 0);
+                          ret.put("playbackState", "idle");
+                      }
+                      
+                      call.resolve(ret);
+                  });
+              }
+
+              @PluginMethod
+              public void setFullscreen(PluginCall call) {
+                  Boolean fullscreen = call.getBoolean("fullscreen", false);
+                  
+                  getActivity().runOnUiThread(() -> {
+                      if (playerContainer != null) {
+                          ViewGroup.LayoutParams params = playerContainer.getLayoutParams();
+                          if (params != null) {
+                              params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                              params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                              playerContainer.setLayoutParams(params);
+                          }
+                          
+                          if (fullscreen) {
+                              playerContainer.bringToFront();
+                          }
+                      }
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      ret.put("fullscreen", fullscreen);
+                      call.resolve(ret);
+                  });
+              }
+
+              @PluginMethod
+              public void destroy(PluginCall call) {
+                  getActivity().runOnUiThread(() -> {
+                      detachOverlay();
+                      
+                      if (player != null) {
+                          player.release();
+                          player = null;
+                      }
+                      if (playerContainer != null) {
+                          playerContainer.removeAllViews();
+                          playerContainer = null;
+                      }
+                      playerView = null;
+                      currentUrl = null;
+                      
+                      JSObject ret = new JSObject();
+                      ret.put("success", true);
+                      call.resolve(ret);
+                      
+                      Log.d(TAG, "ExoPlayer destroyed");
+                  });
+              }
+
+              /**
+               * Attach player overlay BEHIND the WebView (at index 0)
+               * This allows the WebView to be transparent and show the video
+               */
+              private void attachOverlay() {
+                  if (playerContainer == null || isOverlayAttached) return;
+                  
+                  try {
+                      ViewGroup rootView = (ViewGroup) getActivity().getWindow().getDecorView().getRootView();
+                      
+                      // Set layout params for full screen
+                      FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                          ViewGroup.LayoutParams.MATCH_PARENT,
+                          ViewGroup.LayoutParams.MATCH_PARENT
+                      );
+                      playerContainer.setLayoutParams(params);
+                      
+                      if (playerContainer.getParent() == null) {
+                          // Add at index 0 = BEHIND the WebView
+                          rootView.addView(playerContainer, 0);
+                      }
+                      
+                      playerContainer.setVisibility(View.VISIBLE);
+                      isOverlayAttached = true;
+                      
+                      Log.d(TAG, "Overlay attached behind WebView");
+                  } catch (Exception e) {
+                      Log.e(TAG, "Failed to attach overlay", e);
+                  }
+              }
+
+              /**
+               * Detach player overlay
+               */
+              private void detachOverlay() {
+                  if (playerContainer == null || !isOverlayAttached) return;
+                  
+                  try {
+                      if (playerContainer.getParent() != null) {
+                          ((ViewGroup) playerContainer.getParent()).removeView(playerContainer);
+                      }
+                      
+                      isOverlayAttached = false;
+                      
+                      Log.d(TAG, "Overlay detached");
+                  } catch (Exception e) {
+                      Log.e(TAG, "Failed to detach overlay", e);
+                  }
+              }
+
+              private MediaSource createMediaSource(String url) {
+                  Uri uri = Uri.parse(url);
+                  String path = uri.getPath() != null ? uri.getPath().toLowerCase() : "";
+                  
+                  DataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
+                      .setAllowCrossProtocolRedirects(true)
+                      .setConnectTimeoutMs(15000)
+                      .setReadTimeoutMs(15000)
+                      .setUserAgent("NINJA8K/1.0");
+                  
+                  DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(
+                      getContext(), 
+                      httpDataSourceFactory
+                  );
+
+                  if (path.endsWith(".m3u8") || url.contains("m3u8")) {
+                      Log.d(TAG, "Creating HLS source for: " + url);
+                      return new HlsMediaSource.Factory(dataSourceFactory)
+                          .createMediaSource(MediaItem.fromUri(uri));
+                          
+                  } else if (path.endsWith(".mpd")) {
+                      Log.d(TAG, "Creating DASH source for: " + url);
+                      return new DashMediaSource.Factory(dataSourceFactory)
+                          .createMediaSource(MediaItem.fromUri(uri));
+                          
+                  } else {
+                      Log.d(TAG, "Creating Progressive source for: " + url);
+                      return new ProgressiveMediaSource.Factory(dataSourceFactory)
+                          .createMediaSource(MediaItem.fromUri(uri));
+                  }
+              }
+
+              private String getStateString(int state) {
+                  switch (state) {
+                      case Player.STATE_IDLE:
+                          return "idle";
+                      case Player.STATE_BUFFERING:
+                          return "buffering";
+                      case Player.STATE_READY:
+                          return "ready";
+                      case Player.STATE_ENDED:
+                          return "ended";
+                      default:
+                          return "unknown";
+                  }
+              }
+
+              @Override
+              protected void handleOnDestroy() {
+                  super.handleOnDestroy();
+                  detachOverlay();
+                  if (player != null) {
+                      player.release();
+                      player = null;
+                  }
+              }
+          }
+          EXOEOF
+      
+      - name: 6. Update MainActivity with ExoPlayer
+        script: |
+          cat > android/app/src/main/java/io/ninja/ninja8k/MainActivity.java << 'MAINEOF'
+          package io.ninja.ninja8k;
+
+          import android.graphics.Color;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.view.WindowManager;
+          import android.webkit.WebView;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
+          import androidx.core.view.WindowInsetsControllerCompat;
+
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  registerPlugin(ExoPlayerPlugin.class);
+                  
+                  super.onCreate(savedInstanceState);
+                  
+                  enableImmersiveMode();
+                  
+                  // Make WebView transparent to show ExoPlayer behind
+                  makeWebViewTransparent();
+              }
+
+              @Override
+              public void onWindowFocusChanged(boolean hasFocus) {
+                  super.onWindowFocusChanged(hasFocus);
+                  if (hasFocus) {
+                      enableImmersiveMode();
+                  }
+              }
+
+              private void enableImmersiveMode() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                      WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(
+                          getWindow(), 
+                          getWindow().getDecorView()
+                      );
+                      controller.hide(WindowInsetsCompat.Type.systemBars());
+                      controller.setSystemBarsBehavior(
+                          WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                      );
+                  } else {
+                      View decorView = getWindow().getDecorView();
+                      int uiOptions = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                              | View.SYSTEM_UI_FLAG_FULLSCREEN
+                              | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                              | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                              | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                              | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+                      decorView.setSystemUiVisibility(uiOptions);
+                  }
+
+                  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+              }
+              
+              private void makeWebViewTransparent() {
+                  // Find the WebView and make it transparent
+                  try {
+                      WebView webView = getBridge().getWebView();
+                      if (webView != null) {
+                          webView.setBackgroundColor(Color.TRANSPARENT);
+                          webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                      }
+                  } catch (Exception e) {
+                      // WebView might not be ready yet
+                  }
+              }
+          }
+          MAINEOF
+      
+      - name: 7. Permissions Manifest
+        script: |
+          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:amazon="http://schemas.amazon.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="true"
+                  android:hardwareAccelerated="true">
+                  <activity
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+                      android:name=".MainActivity"
+                      android:label="@string/title_activity_main"
+                      android:theme="@style/AppTheme.NoActionBarLaunch"
+                      android:launchMode="singleTask"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="${applicationId}.fileprovider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/file_paths" />
+                  </provider>
+              </application>
+          </manifest>
+          EOF
+      
+      - name: 8. PATCH KOTLIN DUPLICATES
+        script: |
+          cat >> android/build.gradle << 'EOF'
+          
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-reflect:1.8.22'
+                  }
+              }
+          }
+          EOF
+      
+      - name: 9. FABRICATION APK
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+    
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
+    
+    publishing:
+      email:
+        recipients:
+          - ninjadigi@proton.me
+        notify:
+          success: true
+          failure: true

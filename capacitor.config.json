@@ -1,0 +1,19 @@
+{
+  "appId": "io.ninja.ninja8k",
+  "appName": "NINJA 8K",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#00000000"
+  },
+  "plugins": {
+    "Preferences": {},
+    "Device": {} 
+  }
+}

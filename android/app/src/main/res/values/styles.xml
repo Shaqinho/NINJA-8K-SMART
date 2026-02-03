@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme -->
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <!-- Status bar transparent -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        
+        <!-- Navigation bar transparent -->
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        
+        <!-- Draw behind system bars -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        
+        <!-- No title bar -->
+        <item name="android:windowNoTitle">true</item>
+        
+        <!-- Fullscreen -->
+        <item name="android:windowFullscreen">true</item>
+        
+        <!-- Dark icons on light background (set to false for dark theme) -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        
+        <!-- ============================================================ -->
+        <!-- CRITICAL: Transparent background to see ExoPlayer behind WebView -->
+        <!-- ============================================================ -->
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        
+        <!-- Content transitions -->
+        <item name="android:windowContentTransitions">true</item>
+    </style>
+
+    <!-- Splash screen theme (before app loads) -->
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme">
+        <item name="android:background">@android:color/transparent</item>
+    </style>
+</resources>

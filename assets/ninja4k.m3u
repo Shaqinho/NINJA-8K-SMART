@@ -1,0 +1,28 @@
+#EXTM3U
+# ============ 4K / HDR / DOLBY CONTENT ============
+#EXTINF:-1 tvg-name="HDR10 Test" tvg-logo="" group-title="4K DEMO",HDR10 Tone Mapping Test
+https://github.com/mpvkit/video-test/raw/master/resources/HDR10_ToneMapping_Test_240_1000_nits.mp4
+
+#EXTINF:-1 tvg-name="Dolby 7.1" tvg-logo="" group-title="4K DEMO",Dolby Digital Plus 7.1
+https://d4e5f6.debrid.it/dl/3dpertc2739/Dolby%20Digital%20Plus%20E-AC3%207.1.mp4
+
+#EXTINF:-1 tvg-name="Dolby 5.1" tvg-logo="" group-title="4K DEMO",Dolby 5.1 AAC
+https://a1b2c3.debrid.it/dl/3dpess3d9e0/AAC%205.1.mp4
+
+#EXTINF:-1 tvg-name="H264 Test" tvg-logo="" group-title="4K DEMO",H264 Oceans
+https://vjs.zencdn.net/v/oceans.mp4
+
+#EXTINF:-1 tvg-name="H265 Test" tvg-logo="" group-title="4K DEMO",H265 HEVC Test
+https://github.com/mpvkit/video-test/raw/master/resources/h265.mp4
+
+#EXTINF:-1 tvg-name="Subtitle Test" tvg-logo="" group-title="4K DEMO",Subtitle PGS Test
+https://github.com/mpvkit/video-test/raw/master/resources/pgs_subtitle.mkv
+
+#EXTINF:-1 tvg-name="HDR Test" tvg-logo="" group-title="4K DEMO",HDR Test
+https://github.com/mpvkit/video-test/raw/master/resources/hdr.mkv
+
+#EXTINF:-1 tvg-name="Dolby Vision P5" tvg-logo="" group-title="DOLBY VISION",Dolby Vision Profile 5
+https://github.com/mpvkit/video-test/raw/master/resources/DolbyVision_P5.mp4
+
+#EXTINF:-1 tvg-name="Dolby Vision P8" tvg-logo="" group-title="DOLBY VISION",Dolby Vision Profile 8
+https://github.com/mpvkit/video-test/raw/master/resources/DolbyVision_P8.mp4

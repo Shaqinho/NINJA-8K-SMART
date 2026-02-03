@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<resources> 
+    <string name="app_name">NINJA 8K</string> 
+    <string name="title_activity_main">NINJA 8K</string> 
+    <string name="package_name">io.ninja.ninja8k</string> 
+    <string name="custom_url_scheme">io.ninja.ninja8k</string> 
+</resources> 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android/app/src/main/res/xml/network_security_config.xml -->
+<!-- 
+  NINJA 8K - Network Security Configuration
+  Permet les connexions HTTP pour les serveurs IPTV legacy
+  Compatible Android 16 / SDK 35
+-->
+<network-security-config>
+  <!-- Autoriser HTTP pour tous les domaines (serveurs IPTV) -->
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system" />
+      <certificates src="user" />
+    </trust-anchors>
+  </base-config>
+</network-security-config>
