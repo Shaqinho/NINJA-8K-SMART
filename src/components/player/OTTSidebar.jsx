@@ -19,14 +19,20 @@ const OTTSidebar = ({
   selectedChannel,
   onCategorySelect,
   onChannelSelect,
-  onClose 
+  onClose,
+  isOpen: externalIsOpen,
+  onToggle: externalOnToggle,
 }) => {
   // States
   const [isVisible, setIsVisible] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [internalSidebarOpen, setInternalSidebarOpen] = useState(false);
   const [isBouncing, setIsBouncing] = useState(false);
   const [showChannels, setShowChannels] = useState(false);
   const [currentCategory, setCurrentCategory] = useState(null);
+  
+  // Use external control if provided, otherwise internal
+  const isSidebarOpen = externalIsOpen !== undefined ? externalIsOpen : internalSidebarOpen;
+  const setSidebarOpen = externalOnToggle || setInternalSidebarOpen;
   
   // Refs
   const pillRef = useRef(null);
@@ -68,18 +74,18 @@ const OTTSidebar = ({
   
   // ========== SIDEBAR CONTROLS ==========
   const openSidebar = useCallback(() => {
-    setIsSidebarOpen(true);
+    setSidebarOpen(true);
     setIsBouncing(false);
     clearTimeout(hideTimerRef.current);
-  }, []);
+  }, [setSidebarOpen]);
   
   const closeSidebar = useCallback(() => {
-    setIsSidebarOpen(false);
+    setSidebarOpen(false);
     setShowChannels(false);
     setCurrentCategory(null);
     startHideTimer();
     onClose?.();
-  }, [startHideTimer, onClose]);
+  }, [setSidebarOpen, startHideTimer, onClose]);
   
   // ========== PILL GESTURES ==========
   const triggerBounce = useCallback(() => {

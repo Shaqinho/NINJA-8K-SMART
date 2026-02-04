@@ -330,6 +330,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     return () => window.removeEventListener('resize', checkOrientation);
   }, []);
 
+  // OTT Sidebar state (controlled by 3-finger gestures)
+  const [ottSidebarOpen, setOttSidebarOpen] = useState(false);
+
   // Gestures
   const gestures = useGestures(playerContainerRef, {
     onSpread: () => setIsPlaying(true),
@@ -345,6 +348,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
       }, 300);
     },
     onVolumeChange: (vol) => setVolume(vol),
+    // 3-finger gestures for OTT sidebar
+    onOTTOpen: () => setOttSidebarOpen(true),
+    onOTTClose: () => setOttSidebarOpen(false),
   });
 
   const xtreamService = useMemo(() => {
@@ -695,6 +701,8 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
           onVolumeChange={setVolume}
           invertedGravity={gestures.isInvertedGravity}
           orientation={gestures.orientation}
+          ottSidebarOpen={ottSidebarOpen}
+          onOttSidebarChange={setOttSidebarOpen}
         />
       </div>
 

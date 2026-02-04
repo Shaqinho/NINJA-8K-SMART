@@ -28,6 +28,8 @@ const Player = memo(({
   showMultiGrid = false,
   onMultiGridToggle,
   isSmartFullscreen = false,
+  ottSidebarOpen = false,
+  onOttSidebarChange,
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -458,6 +460,8 @@ const Player = memo(({
           channels={channels}
           selectedChannel={channel}
           onChannelSelect={onChannelChange}
+          isOpen={ottSidebarOpen}
+          onToggle={onOttSidebarChange}
         />
       )}
     </div>
