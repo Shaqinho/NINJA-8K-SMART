@@ -4,7 +4,6 @@
 
 export { default as Player } from './Player';
 export { default as PlayerControls } from './PlayerControls';
-export { default as PlayerOverlay } from './PlayerOverlay';
 export { default as PlayerSettings } from './PlayerSettings';
 export { default as TimeshiftBar } from './TimeshiftBar';
 export { default as CastButton, CastModal } from './CastButton';
