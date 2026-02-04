@@ -234,6 +234,8 @@ export const PlayerControls = ({
   maxTimeshiftOffset = 7200,
   onTimeshiftSeek,
   onJumpToLive,
+  // Stream info
+  streamInfo = null, // { category: 'FR| SPORT', resolution: '1080p', codec: 'HEVC', fps: '50fps', bitrate: '8.5 Mbps' }
   // Volume display
   showVolumeGauge = false,
 }) => {
@@ -244,6 +246,19 @@ export const PlayerControls = ({
   const [skipForwardCount, setSkipForwardCount] = useState(0);
   const skipBackTimerRef = useRef(null);
   const skipForwardTimerRef = useRef(null);
+  
+  // Stream info display state
+  const [showStreamInfo, setShowStreamInfo] = useState(false);
+  const streamInfoTimerRef = useRef(null);
+  
+  // Handle tap on current channel to show stream info
+  const handleCurrentChannelTap = useCallback(() => {
+    clearTimeout(streamInfoTimerRef.current);
+    setShowStreamInfo(true);
+    streamInfoTimerRef.current = setTimeout(() => {
+      setShowStreamInfo(false);
+    }, 2000);
+  }, []);
   
   // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
   const skipAmounts = [10, 15, 30, 45, 60];
@@ -303,6 +318,7 @@ export const PlayerControls = ({
     return () => {
       clearTimeout(skipBackTimerRef.current);
       clearTimeout(skipForwardTimerRef.current);
+      clearTimeout(streamInfoTimerRef.current);
     };
   }, []);
   
@@ -488,9 +504,21 @@ export const PlayerControls = ({
             </div>
           </button>
           
-          {/* Current channel logo + name */}
+          {/* Current channel logo + name - tap to show stream info */}
           {isLive && currentChannel && (
-            <>
+            <div 
+              onClick={handleCurrentChannelTap}
+              style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                gap: '4px',
+                cursor: 'pointer',
+                padding: '8px',
+                borderRadius: '8px',
+                transition: 'background 0.2s',
+              }}
+            >
               {currentChannel.logo && (
                 <img
                   src={currentChannel.logo}
@@ -502,13 +530,13 @@ export const PlayerControls = ({
               <span style={{ ...styles.channelName, ...styles.channelNameCurrent }}>
                 {currentChannel.name}
               </span>
-            </>
+            </div>
           )}
         </div>
 
         {/* ROW 2: Channel Navigation (prev/next only) */}
         {isLive && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '12px' }}>
             {/* Previous channel - clickable */}
             {prevChannel && (
               <div
@@ -560,6 +588,65 @@ export const PlayerControls = ({
                   />
                 )}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ROW 3: Stream Info (appears for 2s when tapping current channel) */}
+        {showStreamInfo && streamInfo && (
+          <div 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '8px',
+              marginBottom: '12px',
+              padding: '8px 16px',
+              background: 'rgba(0, 0, 0, 0.6)',
+              borderRadius: '20px',
+              backdropFilter: 'blur(10px)',
+              alignSelf: 'center',
+              margin: '0 auto 12px auto',
+            }}
+          >
+            {/* Category name (first, left) */}
+            {streamInfo.category && (
+              <span style={{ fontSize: '11px', color: '#a855f7', fontWeight: '600' }}>
+                {streamInfo.category}
+              </span>
+            )}
+            {streamInfo.resolution && (
+              <>
+                {streamInfo.category && <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>•</span>}
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
+                  {streamInfo.resolution}
+                </span>
+              </>
+            )}
+            {streamInfo.codec && (
+              <>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>•</span>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
+                  {streamInfo.codec}
+                </span>
+              </>
+            )}
+            {streamInfo.fps && (
+              <>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>•</span>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
+                  {streamInfo.fps}
+                </span>
+              </>
+            )}
+            {/* Bitrate (last, right) */}
+            {streamInfo.bitrate && (
+              <>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>•</span>
+                <span style={{ fontSize: '11px', color: '#22c55e', fontWeight: '600' }}>
+                  {streamInfo.bitrate}
+                </span>
+              </>
             )}
           </div>
         )}
