@@ -414,11 +414,23 @@ const Player = memo(({
     }
   }, []);
 
-  useEffect(() => {
-    if (!isPlaying || showSettings) return;
-    const timer = setTimeout(() => setShowControls(false), 6000);
-    return () => clearTimeout(timer);
+  // Auto-hide controls after 3s
+  const hideTimerRef = useRef(null);
+  
+  const resetHideTimer = useCallback(() => {
+    clearTimeout(hideTimerRef.current);
+    setShowControls(true);
+    if (isPlaying && !showSettings) {
+      hideTimerRef.current = setTimeout(() => setShowControls(false), 3000);
+    }
   }, [isPlaying, showSettings]);
+
+  useEffect(() => {
+    if (showControls && isPlaying && !showSettings) {
+      hideTimerRef.current = setTimeout(() => setShowControls(false), 3000);
+    }
+    return () => clearTimeout(hideTimerRef.current);
+  }, [showControls, isPlaying, showSettings]);
 
   return (
     <div
@@ -429,7 +441,8 @@ const Player = memo(({
         height: isFullscreen ? '100%' : 'auto',
         backgroundColor: 'transparent',
       }}
-      onClick={() => setShowControls(true)}
+      onClick={resetHideTimer}
+      onTouchStart={resetHideTimer}
     >
       {/* Video Player - CRITICAL: Pass isFullScreen prop */}
       <div
