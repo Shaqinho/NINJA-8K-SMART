@@ -268,11 +268,7 @@ const EPGSearch = ({ visible, onClose, onSelectChannel, channels: propsChannels 
 
       {/* Results */}
       <div className="flex-1 overflow-hidden">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="w-8 h-8 border-2 border-[#6225ff] border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : results.length === 0 ? (
+        {results.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             {query ? (
               <>
