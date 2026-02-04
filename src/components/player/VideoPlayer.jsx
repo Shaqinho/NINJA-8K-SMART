@@ -45,14 +45,27 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
     getVideoElement: () => videoRef.current
   }));
 
-  // Position update on resize
+  // Position update on resize + ResizeObserver pour exit FS
   useEffect(() => {
     if (useNative) {
       const timer = setTimeout(updatePos, 150);
       window.addEventListener('resize', updatePos);
+      
+      // ResizeObserver pour détecter quand le container change de taille (exit FS via pinch)
+      let resizeObserver = null;
+      if (containerRef.current && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          setTimeout(updatePos, 50);
+          setTimeout(updatePos, 150);
+          setTimeout(updatePos, 300);
+        });
+        resizeObserver.observe(containerRef.current);
+      }
+      
       return () => {
         clearTimeout(timer);
         window.removeEventListener('resize', updatePos);
+        if (resizeObserver) resizeObserver.disconnect();
       };
     }
   }, [useNative, updatePos]);

@@ -583,7 +583,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     setParticleTheme(localStorage.getItem('ninja_particle_theme') || 'soft');
   }, []);
 
-  // List height calculation - with multiple delays for stability
+  // List height calculation - with ResizeObserver for exit FS
   const updateListHeight = useCallback(() => {
     if (contentListRef.current) {
       const rect = contentListRef.current.getBoundingClientRect();
@@ -600,6 +600,17 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     updateListHeight();
     window.addEventListener('resize', updateListHeight);
     
+    // ResizeObserver pour détecter quand le container change de taille (exit FS via pinch)
+    let resizeObserver = null;
+    if (contentListRef.current && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        setTimeout(updateListHeight, 50);
+        setTimeout(updateListHeight, 150);
+        setTimeout(updateListHeight, 300);
+      });
+      resizeObserver.observe(contentListRef.current);
+    }
+    
     // Multiple delays to catch layout changes
     const t1 = setTimeout(updateListHeight, 100);
     const t2 = setTimeout(updateListHeight, 300);
@@ -607,6 +618,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
     
     return () => {
       window.removeEventListener('resize', updateListHeight);
+      if (resizeObserver) resizeObserver.disconnect();
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
@@ -668,6 +680,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
         <Player 
           channel={selectedItem}
           channels={liveChannels}
+          categories={apiCategories}
           isPlaying={isPlaying}
           onTogglePlay={() => setIsPlaying(!isPlaying)}
           onChannelChange={handleChannelChange}

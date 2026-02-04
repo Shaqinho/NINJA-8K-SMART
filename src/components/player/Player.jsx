@@ -7,6 +7,7 @@ import TimeshiftBar from './TimeshiftBar';
 import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
+import OTTSidebar from './OTTSidebar';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -15,6 +16,7 @@ import MultiGrid from './MultiGrid';
 const Player = memo(({
   channel,
   channels = [],
+  categories = [],
   isPlaying,
   onTogglePlay,
   onChannelChange,
@@ -448,6 +450,16 @@ const Player = memo(({
         currentAspectRatio={aspectRatio}
         onAspectRatioChange={setAspectRatio}
       />
+
+      {/* OTT Sidebar - Only in fullscreen/landscape mode */}
+      {(isFullscreen || isSmartFullscreen) && isLive && (
+        <OTTSidebar
+          categories={categories}
+          channels={channels}
+          selectedChannel={channel}
+          onChannelSelect={onChannelChange}
+        />
+      )}
     </div>
   );
 });
