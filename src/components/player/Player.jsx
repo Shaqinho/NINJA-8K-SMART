@@ -8,7 +8,7 @@ import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
 import OTTSidebar from './OTTSidebar';
-import { PiPMiniController } from './PiPManager';
+import { PiPMiniPlayer } from './PiPManager';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -605,7 +605,7 @@ const Player = memo(({
       )}
 
       {/* PiP Mini Player - Fixed bottom right when in PiP mode */}
-      <PiPMiniController
+      <PiPMiniPlayer
         visible={isPiP}
         channelName={channel?.name}
         channelLogo={channel?.logo}
