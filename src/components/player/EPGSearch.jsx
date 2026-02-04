@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FixedSizeList as List } from 'react-window';
-import { searchChannelsByName, searchProgramsByTitle } from '../../db/ProgramQueries';
+import { searchChannelsByName, searchProgramsByTitle } from '../../database/ProgramQueries';
 
 // ============================================================================
 // EPG SEARCH - Search live channels and programs
