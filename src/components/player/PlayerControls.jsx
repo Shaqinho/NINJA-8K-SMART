@@ -248,6 +248,9 @@ export const PlayerControls = ({
 }) => {
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
   
+  // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
+  const skipAmounts = [10, 15, 30, 45, 60];
+  
   // Skip multiplier state
   const [skipBackCount, setSkipBackCount] = useState(0);
   const [skipForwardCount, setSkipForwardCount] = useState(0);
@@ -269,9 +272,6 @@ export const PlayerControls = ({
   
   // Handle skip back with multiplier
   const handleSkipBack = useCallback(() => {
-    // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
-    const skipAmounts = [10, 15, 30, 45, 60];
-    
     // Clear previous timer
     clearTimeout(skipBackTimerRef.current);
     
@@ -297,9 +297,6 @@ export const PlayerControls = ({
   
   // Handle skip forward with multiplier
   const handleSkipForward = useCallback(() => {
-    // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
-    const skipAmounts = [10, 15, 30, 45, 60];
-    
     // Clear previous timer
     clearTimeout(skipForwardTimerRef.current);
     
