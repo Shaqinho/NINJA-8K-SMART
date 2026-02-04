@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FixedSizeList as List } from 'react-window';
-import { ninjaCentral, STORES } from '../services/NinjaCentral';
+import { ninjaCentral, STORES } from '../../services/NinjaCentral';
 
 // ============================================================================
 // OTT SIDEBAR - Composant autonome pour mode paysage/fullscreen
