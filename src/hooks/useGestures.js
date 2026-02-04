@@ -7,6 +7,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 //   - Up/Down = Volume control
 //   - Spread = Enter fullscreen
 //   - Pinch = Exit fullscreen
+//   - Swipe Left = Previous folder (OTT sidebar)
+//   - Swipe Right = Next folder (OTT sidebar)
 //
 // 3 FINGERS:
 //   - Spread = Exit OTT sidebar
@@ -113,11 +115,14 @@ export const useGestures = (containerRef, callbacks = {}) => {
     const center = getTouchCenter(e.touches);
 
     // ========================================
-    // 2 FINGERS - Volume + Fullscreen
+    // 2 FINGERS - Volume + Fullscreen + Folder Nav
     // ========================================
     if (fingerCount === 2 && touchStartY !== null && initialPinchDistance !== null) {
       const currentDistance = getTouchDistance(e.touches);
       const distanceChange = currentDistance - initialPinchDistance;
+
+      const deltaX = center.x - touchStartX;
+      const deltaY = center.y - touchStartY;
 
       // PINCH/SPREAD detection - 50px threshold
       if (Math.abs(distanceChange) > 50) {
@@ -135,10 +140,25 @@ export const useGestures = (containerRef, callbacks = {}) => {
         setTouchStartX(null);
         gestureActiveRef.current = false;
       }
-      // VOLUME - vertical movement (if not pinching)
+      // SWIPE detection - horizontal movement > 60px, dominant axis
+      else if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+        if (deltaX > 0) {
+          // Swipe Right = Next folder
+          callbacks.onFolderNext?.();
+        } else {
+          // Swipe Left = Previous folder
+          callbacks.onFolderPrev?.();
+        }
+
+        // Reset
+        setInitialPinchDistance(null);
+        setTouchStartY(null);
+        setTouchStartX(null);
+        gestureActiveRef.current = false;
+      }
+      // VOLUME - vertical movement (if not pinching or swiping)
       else {
-        const deltaY = touchStartY - center.y;
-        const volumeChange = deltaY / 200;
+        const volumeChange = (touchStartY - center.y) / 200;
         const newVolume = Math.max(0, Math.min(1, initialVolume + volumeChange));
         
         setVolume(newVolume);
