@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { THEME } from '../../constants/theme';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import PlayerControls from './PlayerControls';
-import PlayerOverlay from './PlayerOverlay';
+
 import TimeshiftBar from './TimeshiftBar';
 import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
@@ -414,23 +414,11 @@ const Player = memo(({
     }
   }, []);
 
-  // Auto-hide controls after 3s
-  const hideTimerRef = useRef(null);
-  
-  const resetHideTimer = useCallback(() => {
-    clearTimeout(hideTimerRef.current);
-    setShowControls(true);
-    if (isPlaying && !showSettings) {
-      hideTimerRef.current = setTimeout(() => setShowControls(false), 3000);
-    }
-  }, [isPlaying, showSettings]);
-
   useEffect(() => {
-    if (showControls && isPlaying && !showSettings) {
-      hideTimerRef.current = setTimeout(() => setShowControls(false), 3000);
-    }
-    return () => clearTimeout(hideTimerRef.current);
-  }, [showControls, isPlaying, showSettings]);
+    if (!isPlaying || showSettings) return;
+    const timer = setTimeout(() => setShowControls(false), 6000);
+    return () => clearTimeout(timer);
+  }, [isPlaying, showSettings]);
 
   return (
     <div
@@ -441,8 +429,7 @@ const Player = memo(({
         height: isFullscreen ? '100%' : 'auto',
         backgroundColor: 'transparent',
       }}
-      onClick={resetHideTimer}
-      onTouchStart={resetHideTimer}
+      onClick={() => setShowControls(true)}
     >
       {/* Video Player - CRITICAL: Pass isFullScreen prop */}
       <div
@@ -513,15 +500,7 @@ const Player = memo(({
         </div>
       )}
 
-      {/* Overlay */}
-      <div style={{ transform: isInvertedGravity ? 'scaleY(-1)' : 'none' }}>
-        <PlayerOverlay
-          title={channel?.name}
-          subtitle={channel?.category}
-          logo={channel?.logo}
-          visible={showControls}
-        />
-      </div>
+
 
       {/* Controls */}
       <div style={{ transform: isInvertedGravity ? 'scaleY(-1)' : 'none' }}>
