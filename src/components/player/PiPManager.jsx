@@ -8,7 +8,7 @@ import React from 'react';
 // - Fullscreen (expand)
 // ============================================================================
 
-export const PiPMiniPlayer = ({ 
+export const PiPMiniController = ({ 
   visible, 
   channelName,
   channelLogo,
@@ -119,4 +119,7 @@ export const PiPMiniPlayer = ({
   );
 };
 
-export default PiPMiniPlayer;
+// Alias for compatibility
+export const PiPMiniPlayer = PiPMiniController;
+
+export default PiPMiniController;

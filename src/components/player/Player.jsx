@@ -8,6 +8,7 @@ import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
 import OTTSidebar from './OTTSidebar';
+import { PiPMiniController } from './PiPManager';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -52,6 +53,8 @@ const Player = memo(({
   const [multiGridActiveIndex, setMultiGridActiveIndex] = useState(0);
   const [multiGridSize, setMultiGridSize] = useState(2);
 
+  const [isPiP, setIsPiP] = useState(false);
+
   const actualMultiGridItems = multiGridItems.length > 0 ? multiGridItems : internalMultiGridItems;
   const actualShowMultiGrid = showMultiGrid !== undefined ? showMultiGrid : internalShowMultiGrid;
 
@@ -63,7 +66,50 @@ const Player = memo(({
 
   const src = channel?.streamUrl || channel?.url || null;
 
-  void channels;
+  // ============================================================================
+  // CALCULATE PREV/NEXT CHANNELS AND CATEGORIES
+  // ============================================================================
+  
+  // Find current channel index in the channels list
+  const currentChannelIndex = channels.findIndex(
+    ch => (ch.streamUrl || ch.url) === src || ch.id === channel?.id || ch.name === channel?.name
+  );
+  
+  // Get prev/next channels
+  const prevChannel = currentChannelIndex > 0 ? channels[currentChannelIndex - 1] : null;
+  const nextChannel = currentChannelIndex < channels.length - 1 ? channels[currentChannelIndex + 1] : null;
+  
+  // Find current category
+  const currentCategoryName = channel?.category || channel?.group;
+  const currentCategoryIndex = categories.findIndex(cat => cat.name === currentCategoryName);
+  
+  // Get channels in current category for count
+  const channelsInCurrentCategory = channels.filter(
+    ch => (ch.category || ch.group) === currentCategoryName
+  );
+  
+  // Get prev/next categories with channel counts
+  const prevCategoryData = currentCategoryIndex > 0 ? categories[currentCategoryIndex - 1] : null;
+  const nextCategoryData = currentCategoryIndex < categories.length - 1 ? categories[currentCategoryIndex + 1] : null;
+  
+  const getChannelCountForCategory = (categoryName) => {
+    return channels.filter(ch => (ch.category || ch.group) === categoryName).length;
+  };
+  
+  const currentCategory = currentCategoryName ? {
+    name: currentCategoryName,
+    count: channelsInCurrentCategory.length,
+  } : null;
+  
+  const prevCategory = prevCategoryData ? {
+    name: prevCategoryData.name,
+    count: getChannelCountForCategory(prevCategoryData.name),
+  } : null;
+  
+  const nextCategory = nextCategoryData ? {
+    name: nextCategoryData.name,
+    count: getChannelCountForCategory(nextCategoryData.name),
+  } : null;
 
   // Sync fullscreen state with Smart's isSmartFullscreen
   useEffect(() => {
@@ -268,6 +314,39 @@ const Player = memo(({
     }
   }, [onMultiGridToggle]);
 
+  // PiP toggle - exit fullscreen and show mini player
+  const handlePiPToggle = useCallback(async () => {
+    if (isPiP) {
+      // Exit PiP - go back to normal
+      setIsPiP(false);
+    } else {
+      // Enter PiP - exit fullscreen first
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+        try {
+          await ScreenOrientation.unlock();
+        } catch (e) {}
+      }
+      setIsPiP(true);
+    }
+  }, [isPiP]);
+
+  // Expand from PiP to fullscreen
+  const handlePiPExpand = useCallback(async () => {
+    setIsPiP(false);
+    // Go to fullscreen
+    if (containerRef.current && !document.fullscreenElement) {
+      try {
+        await containerRef.current.requestFullscreen();
+        setIsFullscreen(true);
+        await ScreenOrientation.lock({ orientation: 'landscape' });
+      } catch (e) {
+        console.log('Fullscreen error:', e);
+      }
+    }
+  }, []);
+
   void onMultiGridAdd;
 
   const renderMultiGridVideo = useCallback((item, index) => {
@@ -288,6 +367,44 @@ const Player = memo(({
   const handleTimeshiftSeek = useCallback((offset) => {
     setTimeshiftOffset(offset);
   }, []);
+
+  // Channel navigation handlers
+  const handleChannelPrev = useCallback(() => {
+    if (prevChannel && onChannelChange) {
+      onChannelChange(prevChannel);
+    }
+  }, [prevChannel, onChannelChange]);
+
+  const handleChannelNext = useCallback(() => {
+    if (nextChannel && onChannelChange) {
+      onChannelChange(nextChannel);
+    }
+  }, [nextChannel, onChannelChange]);
+
+  // Category navigation handlers
+  const handleCategoryPrev = useCallback(() => {
+    if (prevCategoryData && onChannelChange) {
+      // Find first channel in previous category
+      const firstChannelInCategory = channels.find(
+        ch => (ch.category || ch.group) === prevCategoryData.name
+      );
+      if (firstChannelInCategory) {
+        onChannelChange(firstChannelInCategory);
+      }
+    }
+  }, [prevCategoryData, channels, onChannelChange]);
+
+  const handleCategoryNext = useCallback(() => {
+    if (nextCategoryData && onChannelChange) {
+      // Find first channel in next category
+      const firstChannelInCategory = channels.find(
+        ch => (ch.category || ch.group) === nextCategoryData.name
+      );
+      if (firstChannelInCategory) {
+        onChannelChange(firstChannelInCategory);
+      }
+    }
+  }, [nextCategoryData, channels, onChannelChange]);
 
   const handleSpeedChange = useCallback((speed) => {
     setPlaybackSpeed(speed);
@@ -407,12 +524,34 @@ const Player = memo(({
           onVolumeChange={handleVolumeChange}
           onMuteToggle={handleMuteToggle}
           onFullscreenToggle={toggleFullscreen}
+          onPiPToggle={handlePiPToggle}
           fullscreen={isFullscreen}
           onSearchEPG={onSearchEPG}
           onMultiGridToggle={actualMultiGridItems.length > 0 ? handleMultiGridToggle : undefined}
           hasMultiGrid={actualMultiGridItems.length > 0}
           visible={showControls}
           isLive={isLive}
+          // Channel navigation
+          currentChannel={channel ? { name: channel.name, logo: channel.logo } : null}
+          prevChannel={prevChannel ? { name: prevChannel.name, logo: prevChannel.logo } : null}
+          nextChannel={nextChannel ? { name: nextChannel.name, logo: nextChannel.logo } : null}
+          onChannelPrev={handleChannelPrev}
+          onChannelNext={handleChannelNext}
+          // Category navigation
+          currentCategory={currentCategory}
+          prevCategory={prevCategory}
+          nextCategory={nextCategory}
+          onCategoryPrev={handleCategoryPrev}
+          onCategoryNext={handleCategoryNext}
+          // Timeshift
+          timeshiftOffset={timeshiftOffset}
+          maxTimeshiftOffset={7200}
+          onTimeshiftSeek={handleTimeshiftSeek}
+          onJumpToLive={() => setTimeshiftOffset(0)}
+          // Sidebar state
+          sidebarOpen={ottSidebarOpen}
+          // Stream info (TODO: get from VideoPlayer when available)
+          streamInfo={null}
         />
       </div>
 
@@ -464,6 +603,16 @@ const Player = memo(({
           onToggle={onOttSidebarChange}
         />
       )}
+
+      {/* PiP Mini Player - Fixed bottom right when in PiP mode */}
+      <PiPMiniController
+        visible={isPiP}
+        channelName={channel?.name}
+        channelLogo={channel?.logo}
+        isPlaying={isPlaying}
+        onPlayPause={onTogglePlay}
+        onExpand={handlePiPExpand}
+      />
     </div>
   );
 });
