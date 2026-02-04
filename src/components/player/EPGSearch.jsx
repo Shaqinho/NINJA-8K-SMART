@@ -12,13 +12,6 @@ const formatTime = (timestamp) => {
   return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
 };
 
-const getProgress = (startTs, stopTs) => {
-  const now = Math.floor(Date.now() / 1000);
-  if (now < startTs) return 0;
-  if (now > stopTs) return 100;
-  return Math.round(((now - startTs) / (stopTs - startTs)) * 100);
-};
-
 const ResultRow = ({ result, onSelect }) => {
   const { channel, program, isLive, progress } = result;
   
@@ -97,7 +90,6 @@ const EPGSearch = ({ visible, onClose, onSelectChannel, channels: propsChannels 
   const [countryFilter, setCountryFilter] = useState(null);
   const [results, setResults] = useState([]);
   const [channels, setChannels] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef(null);
 
   // 1. Load channels from props if available

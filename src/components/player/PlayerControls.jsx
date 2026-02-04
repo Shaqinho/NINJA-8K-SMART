@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 // ============================================================================
 // PLAYER CONTROLS - OTT Design
@@ -249,7 +249,7 @@ export const PlayerControls = ({
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
   
   // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
-  const skipAmounts = [10, 15, 30, 45, 60];
+  const skipAmounts = useMemo(() => [10, 15, 30, 45, 60], []);
   
   // Skip multiplier state
   const [skipBackCount, setSkipBackCount] = useState(0);
