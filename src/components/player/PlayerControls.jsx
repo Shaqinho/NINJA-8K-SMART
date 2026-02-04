@@ -205,6 +205,9 @@ const styles = {
   },
 };
 
+// Skip amounts: 1x=10s, 2x=15s, 3x=30s, 4x=45s, 5x=60s
+const skipAmounts = [10, 15, 30, 45, 60];
+
 export const PlayerControls = ({
   playing,
   muted = false,
@@ -253,9 +256,6 @@ export const PlayerControls = ({
   const [skipForwardCount, setSkipForwardCount] = useState(0);
   const skipBackTimerRef = useRef(null);
   const skipForwardTimerRef = useRef(null);
-  
-  // Skip amounts: 1x=10s, 2x=15s, 3x=30s, 4x=45s, 5x=60s
-  const skipAmounts = [10, 15, 30, 45, 60];
   
   // Stream info display state
   const [showStreamInfo, setShowStreamInfo] = useState(false);
