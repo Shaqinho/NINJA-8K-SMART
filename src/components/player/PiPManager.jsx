@@ -119,4 +119,7 @@ export const PiPMiniPlayer = ({
   );
 };
 
+// Alias for backward compatibility
+export const PiPMiniController = PiPMiniPlayer;
+
 export default PiPMiniPlayer;
