@@ -7,8 +7,8 @@ import { LoadingScreen } from './LoadingScreen';
 import { ActivationBlock } from './ActivationBlock';
 import { PlaylistForm } from './PlaylistForm';
 import ParticleThemes from './ParticleThemes';
-import { openDatabase } from '../db/NinjaLocalDB';
-import { insertChannels, insertProgramsBatch } from '../db/ProgramQueries';
+import { openDatabase } from '../database/NinjaLocalDB';
+import { insertChannels, insertProgramsBatch } from '../database/ProgramQueries';
 
 // ============================================================================
 // URL NORMALIZER - Auto-add http/https
