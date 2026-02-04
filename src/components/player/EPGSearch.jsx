@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FixedSizeList as List } from 'react-window';
-import { searchChannelsByName } from '../db/ProgramQueries';
+import { searchChannelsByName, searchProgramsByTitle } from '../../db/ProgramQueries';
 
 // ============================================================================
 // EPG SEARCH - Search live channels and programs
@@ -110,7 +110,7 @@ const EPGSearch = ({ visible, onClose, onSelectChannel, channels: propsChannels 
     }
   }, [visible, propsChannels]);
 
-  // 2. Search logic - search channels via SQL (fast!)
+  // 2. Search logic - search programs AND channels via SQL
   useEffect(() => {
     if (!visible || !query.trim()) {
       setResults([]);
@@ -119,22 +119,43 @@ const EPGSearch = ({ visible, onClose, onSelectChannel, channels: propsChannels 
 
     const performSearch = async () => {
       const q = query.trim();
+      const langFilters = countryFilter ? [countryFilter] : [];
       
       try {
-        // SQL search - ultra fast even with 47k channels
-        const langFilters = countryFilter ? [countryFilter] : [];
-        const sqlResults = await searchChannelsByName(q, langFilters, true, 100);
+        // First: Search PROGRAMS by title (real EPG search)
+        const programResults = await searchProgramsByTitle(q, langFilters, true, true, 50);
         
-        if (sqlResults && sqlResults.length > 0) {
-          // Convert SQL results to display format
-          setResults(sqlResults.map(ch => ({
+        if (programResults && programResults.length > 0) {
+          setResults(programResults.map(prog => ({
+            channel: {
+              id: prog.stream_id,
+              name: prog.channel_name,
+              logo: prog.channel_logo,
+              category: prog.category_name,
+            },
+            program: {
+              title: prog.title,
+              description: prog.description,
+              startTimestamp: prog.start_time,
+              stopTimestamp: prog.end_time,
+            },
+            isLive: prog.is_currently_live === 1,
+            progress: prog.progress || 0,
+          })));
+          return;
+        }
+        
+        // Fallback: Search CHANNELS by name
+        const channelResults = await searchChannelsByName(q, langFilters, true, 50);
+        
+        if (channelResults && channelResults.length > 0) {
+          setResults(channelResults.map(ch => ({
             channel: {
               id: ch.stream_id,
               name: ch.name,
               logo: ch.logo,
               category: ch.category_name,
               categoryId: ch.category_id,
-              streamUrl: ch.streamUrl, // May need to reconstruct
             },
             program: null,
             isLive: true,
@@ -142,31 +163,34 @@ const EPGSearch = ({ visible, onClose, onSelectChannel, channels: propsChannels 
           })));
           return;
         }
+        
+        // Last fallback: search in memory
+        if (channels.length > 0) {
+          const qLower = q.toLowerCase();
+          const channelMatches = channels.filter(ch => {
+            const nameMatch = ch.name?.toLowerCase().includes(qLower);
+            const categoryMatch = ch.category?.toLowerCase().includes(qLower);
+            
+            if (countryFilter) {
+              const prefix = ch.name?.substring(0, 3).toUpperCase();
+              if (!prefix.includes(countryFilter)) return false;
+            }
+            
+            return nameMatch || categoryMatch;
+          }).slice(0, 50);
+
+          setResults(channelMatches.map(ch => ({
+            channel: ch,
+            program: null,
+            isLive: true,
+            progress: 0
+          })));
+        } else {
+          setResults([]);
+        }
       } catch (err) {
-        console.warn('SQL search failed, falling back to memory:', err);
-      }
-
-      // Fallback: search in memory (if channels loaded from props)
-      if (channels.length > 0) {
-        const qLower = q.toLowerCase();
-        const channelMatches = channels.filter(ch => {
-          const nameMatch = ch.name?.toLowerCase().includes(qLower);
-          const categoryMatch = ch.category?.toLowerCase().includes(qLower);
-          
-          if (countryFilter) {
-            const prefix = ch.name?.substring(0, 3).toUpperCase();
-            if (!prefix.includes(countryFilter)) return false;
-          }
-          
-          return nameMatch || categoryMatch;
-        }).slice(0, 100);
-
-        setResults(channelMatches.map(ch => ({
-          channel: ch,
-          program: null,
-          isLive: true,
-          progress: 0
-        })));
+        console.warn('Search failed:', err);
+        setResults([]);
       }
     };
 

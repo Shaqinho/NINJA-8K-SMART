@@ -7,6 +7,8 @@ import { LoadingScreen } from './LoadingScreen';
 import { ActivationBlock } from './ActivationBlock';
 import { PlaylistForm } from './PlaylistForm';
 import ParticleThemes from './ParticleThemes';
+import { openDatabase } from '../db/NinjaLocalDB';
+import { insertChannels, insertProgramsBatch } from '../db/ProgramQueries';
 
 // ============================================================================
 // URL NORMALIZER - Auto-add http/https
@@ -177,6 +179,51 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
     }
 
     setProgress({ step: 'Done!', percent: 100 });
+
+    // ========== STORE IN SQLITE FOR SEARCH ==========
+    try {
+      setProgress({ step: 'Indexing for search...', percent: 95 });
+      await openDatabase();
+      if (mappedLive.length > 0) {
+        await insertChannels(mappedLive);
+        console.log(`✅ Indexed ${mappedLive.length} live channels for search`);
+        
+        // Fetch EPG in background (first 500 channels for speed)
+        const channelsToFetch = mappedLive.slice(0, 500);
+        const streamIds = channelsToFetch.map(ch => ch.id);
+        
+        // Don't block - fetch EPG in background
+        (async () => {
+          try {
+            console.log(`🔄 Fetching EPG for ${streamIds.length} channels in background...`);
+            const epgData = await service.getShortEPGBatch(streamIds, 4, 20);
+            
+            // Convert to format expected by insertProgramsBatch
+            const epgForInsert = {};
+            Object.entries(epgData).forEach(([streamId, data]) => {
+              if (data.epg_now) {
+                epgForInsert[streamId] = [{
+                  title: data.epg_now,
+                  start: data.epg_start,
+                  end: data.epg_end,
+                  startTimestamp: Math.floor(Date.now() / 1000) - (data.progress / 100 * 3600),
+                  stopTimestamp: Math.floor(Date.now() / 1000) + ((100 - data.progress) / 100 * 3600),
+                }];
+              }
+            });
+            
+            if (Object.keys(epgForInsert).length > 0) {
+              await insertProgramsBatch(epgForInsert);
+              console.log(`✅ EPG indexed for ${Object.keys(epgForInsert).length} channels`);
+            }
+          } catch (epgErr) {
+            console.warn('⚠️ Background EPG fetch failed:', epgErr);
+          }
+        })();
+      }
+    } catch (dbErr) {
+      console.warn('⚠️ SQLite indexing failed (search may not work):', dbErr);
+    }
     
     return {
       live: mappedLive,
