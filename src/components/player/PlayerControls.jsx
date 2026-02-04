@@ -236,6 +236,13 @@ export const PlayerControls = ({
   onJumpToLive,
   // Stream info
   streamInfo = null, // { category: 'FR| SPORT', resolution: '1080p', codec: 'HEVC', fps: '50fps', bitrate: '8.5 Mbps' }
+  // Category navigation (shown when sidebar is hidden)
+  sidebarOpen = false,
+  currentCategory = null, // { name: 'FR| GÉNÉRAL', count: 25 }
+  prevCategory = null,    // { name: 'Sport', count: 12 }
+  nextCategory = null,    // { name: 'Cinéma', count: 8 }
+  onCategoryPrev,
+  onCategoryNext,
   // Volume display
   showVolumeGauge = false,
 }) => {
@@ -503,6 +510,119 @@ export const PlayerControls = ({
               {playing ? <Icons.Pause /> : <Icons.Play />}
             </div>
           </button>
+          
+          {/* Category navigation (only when sidebar is hidden) - horizontally scrollable */}
+          {isLive && !sidebarOpen && currentCategory && (
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '8px',
+              marginBottom: '4px',
+              width: '100%',
+              maxWidth: '100%',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              padding: '4px 0',
+            }}>
+              {/* Previous category */}
+              {prevCategory && (
+                <div
+                  onClick={onCategoryPrev}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: 0.5,
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s',
+                    flexShrink: 0,
+                    padding: '4px 8px',
+                    borderRadius: '8px',
+                  }}
+                >
+                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
+                    {prevCategory.name}
+                  </span>
+                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>
+                    ({prevCategory.count})
+                  </span>
+                </div>
+              )}
+              
+              {/* Button < */}
+              <button 
+                onClick={onCategoryPrev} 
+                style={{ 
+                  ...styles.btnSwitch, 
+                  fontSize: '16px',
+                  padding: '2px 6px',
+                  flexShrink: 0,
+                }}
+              >
+                ‹
+              </button>
+              
+              {/* Current category */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '6px',
+                padding: '4px 12px',
+                background: 'rgba(98, 37, 255, 0.2)',
+                borderRadius: '12px',
+                flexShrink: 0,
+              }}>
+                <span style={{ fontSize: '12px', color: 'white', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                  {currentCategory.name}
+                </span>
+                <span style={{ fontSize: '10px', color: '#a855f7' }}>
+                  ({currentCategory.count})
+                </span>
+              </div>
+              
+              {/* Button > */}
+              <button 
+                onClick={onCategoryNext} 
+                style={{ 
+                  ...styles.btnSwitch, 
+                  fontSize: '16px',
+                  padding: '2px 6px',
+                  flexShrink: 0,
+                }}
+              >
+                ›
+              </button>
+              
+              {/* Next category */}
+              {nextCategory && (
+                <div
+                  onClick={onCategoryNext}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: 0.5,
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s',
+                    flexShrink: 0,
+                    padding: '4px 8px',
+                    borderRadius: '8px',
+                  }}
+                >
+                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
+                    {nextCategory.name}
+                  </span>
+                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>
+                    ({nextCategory.count})
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Current channel logo + name - tap to show stream info */}
           {isLive && currentChannel && (
