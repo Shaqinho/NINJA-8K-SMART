@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 // ============================================================================
 // PLAYER CONTROLS - OTT Design
@@ -248,9 +248,6 @@ export const PlayerControls = ({
 }) => {
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
   
-  // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
-  const skipAmounts = useMemo(() => [10, 15, 30, 45, 60], []);
-  
   // Skip multiplier state
   const [skipBackCount, setSkipBackCount] = useState(0);
   const [skipForwardCount, setSkipForwardCount] = useState(0);
@@ -272,6 +269,9 @@ export const PlayerControls = ({
   
   // Handle skip back with multiplier
   const handleSkipBack = useCallback(() => {
+    // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
+    const skipAmounts = [10, 15, 30, 45, 60];
+    
     // Clear previous timer
     clearTimeout(skipBackTimerRef.current);
     
@@ -293,10 +293,13 @@ export const PlayerControls = ({
     skipBackTimerRef.current = setTimeout(() => {
       setSkipBackCount(0);
     }, 1000);
-  }, [skipBackCount, skipAmounts, isLive, onTimeshiftSeek, maxTimeshiftOffset, timeshiftOffset, onSeek, currentTime]);
+  }, [skipBackCount, isLive, onTimeshiftSeek, maxTimeshiftOffset, timeshiftOffset, onSeek, currentTime]);
   
   // Handle skip forward with multiplier
   const handleSkipForward = useCallback(() => {
+    // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
+    const skipAmounts = [10, 15, 30, 45, 60];
+    
     // Clear previous timer
     clearTimeout(skipForwardTimerRef.current);
     
@@ -318,7 +321,7 @@ export const PlayerControls = ({
     skipForwardTimerRef.current = setTimeout(() => {
       setSkipForwardCount(0);
     }, 1000);
-  }, [skipForwardCount, skipAmounts, isLive, onTimeshiftSeek, timeshiftOffset, onSeek, currentTime, duration]);
+  }, [skipForwardCount, isLive, onTimeshiftSeek, timeshiftOffset, onSeek, currentTime, duration]);
   
   // Cleanup timers
   useEffect(() => {
@@ -338,7 +341,7 @@ export const PlayerControls = ({
 
   // Format timeshift offset
   const formatOffset = (seconds) => {
-    if (seconds === 0) return '0:00';
+    if (seconds === 0) return 'LIVE';
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `-${m}:${s.toString().padStart(2, '0')}`;
@@ -419,41 +422,39 @@ export const PlayerControls = ({
         </button>
       )}
       
-      {/* Top Center (below logo): Volume Slider - ONLY visible during 2-finger gesture */}
-      {showVolumeGauge && (
-        <div 
-          style={{ 
-            position: 'absolute', 
-            top: '50px', 
-            left: '50%', 
-            transform: 'translateX(-50%)',
-          }}
-        >
-          <div style={styles.volumeGauge}>
-            <button
-              onClick={onMuteToggle}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            >
-              <div className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                {muted ? <Icons.VolumeMute /> : <Icons.Volume />}
-              </div>
-            </button>
-            <div 
-              style={styles.volumeBar}
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const percent = (e.clientX - rect.left) / rect.width;
-                onVolumeChange?.(Math.max(0, Math.min(1, percent)));
-              }}
-            >
-              <div style={{ ...styles.volumeLevel, width: `${muted ? 0 : volume * 100}%` }} />
+      {/* Top Center (below logo): Volume Slider */}
+      <div 
+        style={{ 
+          position: 'absolute', 
+          top: '50px', 
+          left: '50%', 
+          transform: 'translateX(-50%)',
+        }}
+      >
+        <div style={styles.volumeGauge}>
+          <button
+            onClick={onMuteToggle}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            <div className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.7)' }}>
+              {muted ? <Icons.VolumeMute /> : <Icons.Volume />}
             </div>
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', minWidth: '35px', textAlign: 'right' }}>
-              {muted ? '0%' : `${Math.round(volume * 100)}%`}
-            </span>
+          </button>
+          <div 
+            style={styles.volumeBar}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const percent = (e.clientX - rect.left) / rect.width;
+              onVolumeChange?.(Math.max(0, Math.min(1, percent)));
+            }}
+          >
+            <div style={{ ...styles.volumeLevel, width: `${muted ? 0 : volume * 100}%` }} />
           </div>
+          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', minWidth: '35px', textAlign: 'right' }}>
+            {muted ? '0%' : `${Math.round(volume * 100)}%`}
+          </span>
         </div>
-      )}
+      </div>
       
       {/* Top Right: PiP */}
       {onPiPToggle && (
@@ -626,7 +627,7 @@ export const PlayerControls = ({
             </div>
           )}
           
-          {/* Current channel logo centered above - tap to show stream info */}
+          {/* Current channel logo + name - tap to show stream info */}
           {isLive && currentChannel && (
             <div 
               onClick={handleCurrentChannelTap}
@@ -649,13 +650,16 @@ export const PlayerControls = ({
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
               )}
+              <span style={{ ...styles.channelName, ...styles.channelNameCurrent }}>
+                {currentChannel.name}
+              </span>
             </div>
           )}
         </div>
 
-        {/* ROW 2: Channel Navigation - prev / CURRENT / next on same line */}
+        {/* ROW 2: Channel Navigation (prev/next only) */}
         {isLive && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '12px' }}>
             {/* Previous channel - clickable */}
             {prevChannel && (
               <div
@@ -681,22 +685,8 @@ export const PlayerControls = ({
               ‹‹
             </button>
 
-            {/* CURRENT CHANNEL NAME - center */}
-            {currentChannel && (
-              <span 
-                onClick={handleCurrentChannelTap}
-                style={{ 
-                  ...styles.channelName, 
-                  ...styles.channelNameCurrent,
-                  cursor: 'pointer',
-                  padding: '4px 12px',
-                  minWidth: '120px',
-                  textAlign: 'center',
-                }}
-              >
-                {currentChannel.name}
-              </span>
-            )}
+            {/* Spacer for center alignment */}
+            <div style={{ width: '150px' }} />
 
             {/* Button >> */}
             <button onClick={onChannelNext} style={styles.btnSwitch} title="Next channel">
@@ -818,8 +808,8 @@ export const PlayerControls = ({
               )}
             </button>
 
-            {/* Timeshift bar - reduced width */}
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '400px' }}>
+            {/* Timeshift bar */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace', minWidth: '45px' }}>
                 {formatOffset(timeshiftOffset)}
               </span>

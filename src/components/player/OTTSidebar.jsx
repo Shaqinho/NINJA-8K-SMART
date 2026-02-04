@@ -300,37 +300,44 @@ const OTTSidebar = ({
         <div style={listStyle}>
           {!showChannels ? (
             // Categories list
-            categories.map((cat) => {
-              // Calculate real channel count
-              const channelCount = channels.filter(ch => String(ch.categoryId) === String(cat.category_id)).length;
-              
-              return (
-                <div
-                  key={cat.category_id}
-                  style={itemStyle(selectedCategory?.category_id === cat.category_id)}
-                  onClick={() => handleCategoryClick(cat)}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ 
-                      fontSize: '14px', 
-                      fontWeight: 500, 
-                      color: '#fff',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}>
-                      {cat.category_name}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#666' }}>
-                      {channelCount} chaînes
-                    </div>
-                  </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2">
-                    <path d="M9 18l6-6-6-6"/>
-                  </svg>
+            categories.map((cat) => (
+              <div
+                key={cat.category_id}
+                style={itemStyle(selectedCategory?.category_id === cat.category_id)}
+                onClick={() => handleCategoryClick(cat)}
+              >
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px',
+                }}>
+                  📁
                 </div>
-              );
-            })
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ 
+                    fontSize: '14px', 
+                    fontWeight: 500, 
+                    color: '#fff',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>
+                    {cat.category_name}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>
+                    {cat.count || 0} chaînes
+                  </div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </div>
+            ))
           ) : (
             // Channels list
             filteredChannels.map((channel) => (
