@@ -267,11 +267,11 @@ export const PlayerControls = ({
     }, 2000);
   }, []);
   
-  // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
-  const skipAmounts = [10, 15, 30, 45, 60];
-  
   // Handle skip back with multiplier
   const handleSkipBack = useCallback(() => {
+    // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
+    const skipAmounts = [10, 15, 30, 45, 60];
+    
     // Clear previous timer
     clearTimeout(skipBackTimerRef.current);
     
@@ -297,6 +297,9 @@ export const PlayerControls = ({
   
   // Handle skip forward with multiplier
   const handleSkipForward = useCallback(() => {
+    // Skip amounts based on tap count: 1=10s, 2=15s, 3=30s, 4=45s, 5=60s
+    const skipAmounts = [10, 15, 30, 45, 60];
+    
     // Clear previous timer
     clearTimeout(skipForwardTimerRef.current);
     

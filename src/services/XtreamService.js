@@ -329,14 +329,35 @@ export class XtreamService {
     const catMap = {};
     categories?.forEach(c => { catMap[c.category_id] = c.category_name; });
     return data.map(stream => ({
+      // Identifiants
       id: stream.stream_id,
+      num: stream.num,
       name: stream.name,
       type: 'live',
+      
+      // Catégorie
       category: catMap[stream.category_id] || 'Other',
       categoryId: stream.category_id,
+      categoryIds: stream.category_ids || [],
+      
+      // Médias
       logo: stream.stream_icon || null,
-      epgChannelId: stream.epg_channel_id,
       streamUrl: `${this.server}/live/${this.username}/${this.password}/${stream.stream_id}.ts`,
+      directSource: stream.direct_source || null,
+      customSid: stream.custom_sid || null,
+      
+      // EPG
+      epgChannelId: stream.epg_channel_id || null,
+      
+      // Catch Up / Replay
+      tvArchive: stream.tv_archive === 1,
+      tvArchiveDuration: stream.tv_archive_duration || 0,
+      
+      // Dates
+      added: stream.added || null,
+      
+      // Contenu adulte
+      isAdult: stream.is_adult === '1' || stream.is_adult === 1,
     }));
   }
 
@@ -345,17 +366,49 @@ export class XtreamService {
     const catMap = {};
     categories?.forEach(c => { catMap[c.category_id] = c.category_name; });
     return data.map(stream => ({
+      // Identifiants
       id: stream.stream_id,
+      num: stream.num,
       name: stream.name,
       type: 'vod',
+      
+      // Catégorie
       category: catMap[stream.category_id] || 'Other',
       categoryId: stream.category_id,
+      categoryIds: stream.category_ids || [],
+      
+      // Médias
       logo: stream.stream_icon || null,
+      containerExtension: stream.container_extension || 'mp4',
+      streamUrl: `${this.server}/movie/${this.username}/${this.password}/${stream.stream_id}.${stream.container_extension || 'mp4'}`,
+      directSource: stream.direct_source || null,
+      customSid: stream.custom_sid || null,
+      
+      // Métadonnées film
       rating: stream.rating || null,
+      rating5based: stream.rating_5based || null,
       year: stream.year || null,
       genre: stream.genre || null,
       plot: stream.plot || null,
-      streamUrl: `${this.server}/movie/${this.username}/${this.password}/${stream.stream_id}.mp4`,
+      cast: stream.cast || null,
+      director: stream.director || null,
+      duration: stream.duration || null,
+      durationSecs: stream.duration_secs || null,
+      releaseDate: stream.release_date || stream.releasedate || null,
+      
+      // Infos techniques vidéo
+      bitrate: stream.bitrate || null,
+      video: stream.video || null, // { codec, width, height }
+      audio: stream.audio || null, // { codec, channels }
+      
+      // TMDB
+      tmdbId: stream.tmdb_id || stream.tmdb || null,
+      
+      // Dates
+      added: stream.added || null,
+      
+      // Contenu adulte
+      isAdult: stream.is_adult === '1' || stream.is_adult === 1,
     }));
   }
 
@@ -364,16 +417,43 @@ export class XtreamService {
     const catMap = {};
     categories?.forEach(c => { catMap[c.category_id] = c.category_name; });
     return data.map(series => ({
+      // Identifiants
       id: series.series_id,
+      num: series.num,
       name: series.name,
       type: 'series',
+      
+      // Catégorie
       category: catMap[series.category_id] || 'Other',
       categoryId: series.category_id,
+      categoryIds: series.category_ids || [],
+      
+      // Médias
       logo: series.cover || null,
+      backdrop: series.backdrop_path || null,
+      
+      // Métadonnées série
       rating: series.rating || null,
+      rating5based: series.rating_5based || null,
       year: series.year || null,
       genre: series.genre || null,
       plot: series.plot || null,
+      cast: series.cast || null,
+      director: series.director || null,
+      releaseDate: series.release_date || series.releasedate || null,
+      lastModified: series.last_modified || null,
+      
+      // TMDB
+      tmdbId: series.tmdb_id || series.tmdb || null,
+      
+      // Episodes info
+      episodeRunTime: series.episode_run_time || null,
+      
+      // Dates
+      added: series.added || null,
+      
+      // Contenu adulte
+      isAdult: series.is_adult === '1' || series.is_adult === 1,
     }));
   }
 
