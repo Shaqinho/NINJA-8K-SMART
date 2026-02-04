@@ -57,19 +57,16 @@ const AppContent = () => {
     }
   }, [isVideoActive]);
 
-  // SQL ENGINE INIT
+  // SQL ENGINE INIT - Use NinjaLocalDB
   useEffect(() => {
     const initSql = async () => {
       try {
-        if (window.Capacitor) {
-          const { CapacitorSQLite, SQLiteConnection } = window.Capacitor.Plugins;
-          const sqlite = new SQLiteConnection(CapacitorSQLite);
-          const db = await sqlite.createConnection('ninja_epg', false, 'no-encryption', 1);
-          await db.open();
-          window.db = db;
-        }
+        const { openDatabase } = await import('./database/NinjaLocalDB');
+        const db = await openDatabase();
+        window.db = db;
+        console.log('✅ SQLite ready for search');
       } catch (err) {
-        console.error("❌ SQL Init Error:", err);
+        console.warn('⚠️ SQLite not available:', err.message);
       }
     };
     initSql();
