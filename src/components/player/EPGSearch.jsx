@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FixedSizeList as List } from 'react-window';
+import { searchChannelsByName } from '../db/ProgramQueries';
 
 // ============================================================================
 // EPG SEARCH - Search live channels and programs
@@ -91,39 +92,25 @@ const ChannelRow = ({ channel, onSelect }) => {
   );
 };
 
-const EPGSearch = ({ visible, onClose, onSelectChannel, xtreamService, channels: propsChannels }) => {
+const EPGSearch = ({ visible, onClose, onSelectChannel, channels: propsChannels }) => {
   const [query, setQuery] = useState('');
   const [countryFilter, setCountryFilter] = useState(null);
   const [results, setResults] = useState([]);
   const [channels, setChannels] = useState([]);
-  const [searchMode, setSearchMode] = useState('channels'); // 'channels' or 'epg'
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef(null);
 
-  // 1. Load channels from props or fetch
+  // 1. Load channels from props if available
   useEffect(() => {
     if (visible) {
       if (propsChannels && propsChannels.length > 0) {
         setChannels(propsChannels);
-      } else if (channels.length === 0 && xtreamService) {
-        const loadData = async () => {
-          setIsLoading(true);
-          try {
-            const live = await xtreamService.getLiveStreams();
-            const cats = await xtreamService.getLiveCategories();
-            setChannels(xtreamService.parseLiveStreams(live, cats));
-          } catch (err) {
-            console.error('Failed to load channels:', err);
-          }
-          setIsLoading(false);
-        };
-        loadData();
       }
       setTimeout(() => inputRef.current?.focus(), 200);
     }
-  }, [visible, xtreamService, propsChannels]);
+  }, [visible, propsChannels]);
 
-  // 2. Search logic - search channels by name (always works)
+  // 2. Search logic - search channels via SQL (fast!)
   useEffect(() => {
     if (!visible || !query.trim()) {
       setResults([]);
@@ -131,52 +118,49 @@ const EPGSearch = ({ visible, onClose, onSelectChannel, xtreamService, channels:
     }
 
     const performSearch = async () => {
-      const q = query.toLowerCase().trim();
+      const q = query.trim();
       
-      // First: Simple channel name search (always works)
-      const channelMatches = channels.filter(ch => {
-        const nameMatch = ch.name?.toLowerCase().includes(q);
-        const categoryMatch = ch.category?.toLowerCase().includes(q);
+      try {
+        // SQL search - ultra fast even with 47k channels
+        const langFilters = countryFilter ? [countryFilter] : [];
+        const sqlResults = await searchChannelsByName(q, langFilters, true, 100);
         
-        // Country filter
-        if (countryFilter) {
-          const prefix = ch.name?.substring(0, 3).toUpperCase();
-          if (!prefix.includes(countryFilter)) return false;
-        }
-        
-        return nameMatch || categoryMatch;
-      }).slice(0, 100);
-
-      // If we have SQL EPG data, also search programs
-      let epgMatches = [];
-      if (window.db && xtreamService && searchMode === 'epg') {
-        try {
-          const langs = countryFilter ? [countryFilter] : ['FR', 'BE', 'UK', 'US'];
-          const sqlRows = await xtreamService.searchProgramsSQL(window.db, q, langs);
-          const enriched = xtreamService.enrichSearchResults(sqlRows, channels);
-
-          const now = Math.floor(Date.now() / 1000);
-          epgMatches = enriched.map(item => ({
-            channel: item,
-            program: {
-              title: item.title,
-              description: item.description,
-              startTimestamp: item.start_time,
-              stopTimestamp: item.stop_time
+        if (sqlResults && sqlResults.length > 0) {
+          // Convert SQL results to display format
+          setResults(sqlResults.map(ch => ({
+            channel: {
+              id: ch.stream_id,
+              name: ch.name,
+              logo: ch.logo,
+              category: ch.category_name,
+              categoryId: ch.category_id,
+              streamUrl: ch.streamUrl, // May need to reconstruct
             },
-            isLive: item.stop_time > now && item.start_time < now,
-            progress: getProgress(item.start_time, item.stop_time)
-          }));
-        } catch (err) {
-          console.warn('EPG search failed:', err);
+            program: null,
+            isLive: true,
+            progress: 0
+          })));
+          return;
         }
+      } catch (err) {
+        console.warn('SQL search failed, falling back to memory:', err);
       }
 
-      // Combine results
-      if (searchMode === 'epg' && epgMatches.length > 0) {
-        setResults(epgMatches);
-      } else {
-        // Convert channel matches to result format
+      // Fallback: search in memory (if channels loaded from props)
+      if (channels.length > 0) {
+        const qLower = q.toLowerCase();
+        const channelMatches = channels.filter(ch => {
+          const nameMatch = ch.name?.toLowerCase().includes(qLower);
+          const categoryMatch = ch.category?.toLowerCase().includes(qLower);
+          
+          if (countryFilter) {
+            const prefix = ch.name?.substring(0, 3).toUpperCase();
+            if (!prefix.includes(countryFilter)) return false;
+          }
+          
+          return nameMatch || categoryMatch;
+        }).slice(0, 100);
+
         setResults(channelMatches.map(ch => ({
           channel: ch,
           program: null,
@@ -188,7 +172,7 @@ const EPGSearch = ({ visible, onClose, onSelectChannel, xtreamService, channels:
 
     const timer = setTimeout(performSearch, 300);
     return () => clearTimeout(timer);
-  }, [query, countryFilter, channels, xtreamService, visible, searchMode]);
+  }, [query, countryFilter, channels, channels.length, visible]);
 
   // Reset on close
   useEffect(() => {
@@ -252,18 +236,6 @@ const EPGSearch = ({ visible, onClose, onSelectChannel, xtreamService, channels:
 
       {/* Filters */}
       <div className="flex-shrink-0 flex gap-2 px-4 py-2 border-b border-white/5 overflow-x-auto">
-        {/* Search mode toggle */}
-        <button
-          onClick={() => setSearchMode(searchMode === 'channels' ? 'epg' : 'channels')}
-          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-            searchMode === 'epg' ? 'bg-[#6225ff] text-white' : 'bg-white/10 text-gray-400'
-          }`}
-        >
-          {searchMode === 'epg' ? '📺 EPG' : '📡 Channels'}
-        </button>
-        
-        <div className="w-px bg-white/10 mx-1" />
-        
         {/* Country filters */}
         {['FR', 'BE', 'UK', 'US', 'ES', 'DE'].map(country => (
           <button

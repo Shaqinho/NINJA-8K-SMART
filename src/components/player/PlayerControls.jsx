@@ -293,7 +293,7 @@ export const PlayerControls = ({
     skipBackTimerRef.current = setTimeout(() => {
       setSkipBackCount(0);
     }, 1000);
-  }, [skipBackCount, isLive, onTimeshiftSeek, maxTimeshiftOffset, timeshiftOffset, onSeek, currentTime]);
+  }, [skipBackCount, skipAmounts, isLive, onTimeshiftSeek, maxTimeshiftOffset, timeshiftOffset, onSeek, currentTime]);
   
   // Handle skip forward with multiplier
   const handleSkipForward = useCallback(() => {
@@ -318,7 +318,7 @@ export const PlayerControls = ({
     skipForwardTimerRef.current = setTimeout(() => {
       setSkipForwardCount(0);
     }, 1000);
-  }, [skipForwardCount, isLive, onTimeshiftSeek, timeshiftOffset, onSeek, currentTime, duration]);
+  }, [skipForwardCount, skipAmounts, isLive, onTimeshiftSeek, timeshiftOffset, onSeek, currentTime, duration]);
   
   // Cleanup timers
   useEffect(() => {
