@@ -82,8 +82,8 @@ export const searchProgramsByTitle = async (query, langFilters = [], includeVip 
   const now = Math.floor(Date.now() / 1000);
   let sql = `SELECT p.*, c.name as channel_name, c.logo as channel_logo, c.lang_prefix, c.category_name,
     CASE WHEN p.start_time <= ${now} AND p.end_time > ${now} THEN 1 ELSE 0 END as is_currently_live
-    FROM programs p INNER JOIN channels c ON p.stream_id = c.stream_id WHERE p.title_normalized LIKE ?`;
-  const params = [`%${q}%`];
+    FROM programs p INNER JOIN channels c ON p.stream_id = c.stream_id WHERE (p.title_normalized LIKE ? OR p.description LIKE ?)`;
+  const params = [`%${q}%`, `%${q}%`];
   if (langFilters.length) {
     const filters = includeVip && !langFilters.includes('VIP') ? [...langFilters, 'VIP'] : langFilters;
     sql += ` AND c.lang_prefix IN (${filters.map(() => '?').join(', ')})`;

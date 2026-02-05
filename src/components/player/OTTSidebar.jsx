@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { ninjaCentral, STORES } from '../../services/NinjaCentral';
+import { searchProgramsByTitle, getProgramsForChannel } from '../../services/NinjaLocalDB/ProgramQueries';
 
 // ============================================================================
 // OTT SIDEBAR - Composant autonome pour mode paysage/fullscreen
@@ -60,6 +61,168 @@ const TickerText = ({ children, style = {} }) => {
   );
 };
 
+// ========== NINJA KEYBOARD (Custom Alpha Compact + Draggable) ==========
+const KEYBOARD_ROWS = [
+  ['Q','W','E','R','T','Y','U','I','O','P'],
+  ['A','S','D','F','G','H','J','K','L'],
+  ['Z','X','C','V','B','N','M'],
+];
+
+const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClose, searchQuery }) => {
+  const dragRef = useRef(null);
+  const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+  const isDraggingRef = useRef(false);
+
+  const handleDragStart = useCallback((e) => {
+    const touch = e.touches?.[0] || e;
+    dragStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      posX: position.x,
+      posY: position.y,
+    };
+    isDraggingRef.current = true;
+  }, [position]);
+
+  const handleDragMove = useCallback((e) => {
+    if (!isDraggingRef.current) return;
+    e.preventDefault();
+    const touch = e.touches?.[0] || e;
+    const dx = touch.clientX - dragStartRef.current.x;
+    const dy = touch.clientY - dragStartRef.current.y;
+    onPositionChange({
+      x: Math.max(0, Math.min(window.innerWidth - 340, dragStartRef.current.posX + dx)),
+      y: Math.max(0, Math.min(window.innerHeight - 160, dragStartRef.current.posY + dy)),
+    });
+  }, [onPositionChange]);
+
+  const handleDragEnd = useCallback(() => {
+    isDraggingRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!isDraggingRef.current) return;
+    window.addEventListener('touchmove', handleDragMove, { passive: false });
+    window.addEventListener('touchend', handleDragEnd);
+    return () => {
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [handleDragMove, handleDragEnd]);
+
+  const keyStyle = {
+    minWidth: '28px',
+    height: '32px',
+    borderRadius: '5px',
+    border: 'none',
+    background: 'rgba(255,255,255,0.12)',
+    color: '#fff',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.1s',
+    WebkitTapHighlightColor: 'transparent',
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        zIndex: 10002,
+        background: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255,255,255,0.08)',
+        padding: '0',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        userSelect: 'none',
+        touchAction: 'none',
+      }}
+    >
+      {/* Drag Handle Bar */}
+      <div
+        ref={dragRef}
+        onTouchStart={handleDragStart}
+        onMouseDown={handleDragStart}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '6px 10px',
+          cursor: 'grab',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
+        {/* Drag indicator */}
+        <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+          <div style={{ width: '24px', height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.2)' }} />
+        </div>
+        {/* Search query preview */}
+        <div style={{ fontSize: '10px', color: '#888', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {searchQuery || '...'}
+        </div>
+        {/* Close button */}
+        <button onClick={onClose} style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Keys */}
+      <div style={{ padding: '6px 8px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {/* Row 1 - QWERTY */}
+        <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
+          {KEYBOARD_ROWS[0].map(key => (
+            <button key={key} onClick={() => onInput(key.toLowerCase())} style={keyStyle}>
+              {key}
+            </button>
+          ))}
+        </div>
+        {/* Row 2 - ASDF */}
+        <div style={{ display: 'flex', gap: '3px', justifyContent: 'center', paddingLeft: '12px', paddingRight: '12px' }}>
+          {KEYBOARD_ROWS[1].map(key => (
+            <button key={key} onClick={() => onInput(key.toLowerCase())} style={keyStyle}>
+              {key}
+            </button>
+          ))}
+        </div>
+        {/* Row 3 - ZXCV + Backspace */}
+        <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
+          {KEYBOARD_ROWS[2].map(key => (
+            <button key={key} onClick={() => onInput(key.toLowerCase())} style={keyStyle}>
+              {key}
+            </button>
+          ))}
+          <button onClick={onBackspace} style={{ ...keyStyle, minWidth: '42px', background: 'rgba(255,80,80,0.2)' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
+              <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>
+            </svg>
+          </button>
+        </div>
+        {/* Row 4 - Space + Numbers toggle */}
+        <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
+          <button onClick={() => onInput('0')} style={{ ...keyStyle, minWidth: '28px' }}>0</button>
+          <button onClick={() => onInput('1')} style={{ ...keyStyle, minWidth: '28px' }}>1</button>
+          <button onClick={() => onInput('2')} style={{ ...keyStyle, minWidth: '28px' }}>2</button>
+          <button onClick={() => onInput(' ')} style={{ ...keyStyle, flex: 1, minWidth: '100px', color: '#888' }}>
+            space
+          </button>
+          <button onClick={() => onInput('3')} style={{ ...keyStyle, minWidth: '28px' }}>3</button>
+          <button onClick={() => onInput('4')} style={{ ...keyStyle, minWidth: '28px' }}>4</button>
+          <button onClick={() => onInput('5')} style={{ ...keyStyle, minWidth: '28px' }}>5</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OTTSidebar = ({ 
   categories = [], 
   channels = [],
@@ -82,6 +245,10 @@ const OTTSidebar = ({
   const [categoryCounts, setCategoryCounts] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [programResults, setProgramResults] = useState([]);
+  const [programSearching, setProgramSearching] = useState(false);
+  const [showKeyboard, setShowKeyboard] = useState(false);
+  const [keyboardPos, setKeyboardPos] = useState({ x: 290, y: 60 });
   
   // Tab-specific data from NinjaCentral
   const [vodCategories, setVodCategories] = useState([]);
@@ -162,46 +329,35 @@ const OTTSidebar = ({
     ];
   }, [activeItems, favorites, recentIds]);
 
-  // ========== EPG LAZY-LOAD ==========
-  const loadEpgForItems = useCallback(async (items) => {
+  // ========== EPG BATCH LOAD (same method as Smart) ==========
+  const epgLoadedCategoriesRef = useRef(new Set());
+
+  const loadEpgForCategory = useCallback(async (categoryId, items) => {
     if (!xtreamService || activeTab !== 'live') return;
-    const toLoad = items.filter(item => {
-      const id = item.stream_id || item.id;
-      return id && epgData[id] === undefined && !epgLoadingRef.current.has(id);
-    }).slice(0, 25);
-    
-    if (toLoad.length === 0) return;
-    
-    toLoad.forEach(item => epgLoadingRef.current.add(item.stream_id || item.id));
-    
+    if (epgLoadedCategoriesRef.current.has(categoryId)) return;
+    if (items.length === 0) return;
+
+    epgLoadedCategoriesRef.current.add(categoryId);
+
     try {
-      const results = {};
-      const batches = [];
-      for (let i = 0; i < toLoad.length; i += 5) {
-        batches.push(toLoad.slice(i, i + 5));
-      }
-      for (const batch of batches) {
-        await Promise.all(batch.map(async (item) => {
-          const id = item.stream_id || item.id;
-          try {
-            const epg = await xtreamService.getShortEPG(id, 1);
-            const listings = epg?.epg_listings || [];
-            if (listings.length > 0) {
-              const title = listings[0].title ? atob(listings[0].title) : '';
-              results[id] = title;
-            } else {
-              results[id] = '';
-            }
-          } catch {
-            results[id] = '';
-          }
-        }));
-      }
-      setEpgData(prev => ({ ...prev, ...results }));
+      const streamIds = items.map(item => item.stream_id || item.id).filter(Boolean);
+      if (streamIds.length === 0) return;
+
+      const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
+      
+      // Convert to title strings for display
+      const formatted = {};
+      Object.entries(epgResults).forEach(([id, data]) => {
+        if (data?.epg_now) {
+          formatted[id] = data.epg_now;
+        }
+      });
+      
+      setEpgData(prev => ({ ...prev, ...formatted }));
     } catch (err) {
-      console.warn('EPG load error:', err);
+      console.warn('EPG batch load error:', err);
     }
-  }, [xtreamService, activeTab, epgData]);
+  }, [xtreamService, activeTab]);
 
   // ========== ACTIVE CATEGORIES WITH SYSTEM FOLDERS ==========
   const activeCategories = useMemo(() => {
@@ -324,6 +480,8 @@ const OTTSidebar = ({
     setCurrentCategory(null);
     setSearchQuery('');
     setSearchOpen(false);
+    setProgramResults([]);
+    setShowKeyboard(false);
     startHideTimer();
     onClose?.();
   }, [setSidebarOpen, startHideTimer, onClose]);
@@ -446,6 +604,8 @@ const OTTSidebar = ({
     setCurrentCategory(null);
     setSearchQuery('');
     setSearchOpen(false);
+    setProgramResults([]);
+    setShowKeyboard(false);
   }, []);
 
   // ========== FOLDER NAVIGATION (2-finger swipe from useGestures) ==========
@@ -506,12 +666,12 @@ const OTTSidebar = ({
     return items;
   }, [currentCategory, activeItems, searchQuery, favorites, recentIds, epgData]);
 
-  // Trigger EPG load when filtered items change
+  // Trigger EPG load when entering a category
   useEffect(() => {
-    if (activeTab === 'live' && showItems && filteredItems.length > 0) {
-      loadEpgForItems(filteredItems.slice(0, 25));
+    if (activeTab === 'live' && showItems && currentCategory && filteredItems.length > 0) {
+      loadEpgForCategory(currentCategory.category_id, filteredItems);
     }
-  }, [activeTab, showItems, filteredItems, loadEpgForItems]);
+  }, [activeTab, showItems, currentCategory, filteredItems, loadEpgForCategory]);
 
   // ========== LAZY-LOAD SERIES SEASONS FOR VISIBLE ITEMS ==========
   useEffect(() => {
@@ -524,6 +684,65 @@ const OTTSidebar = ({
     });
   }, [activeTab, showItems, filteredItems, xtreamService, seriesSeasons, loadSeriesSeasons]);
 
+  // ========== PROGRAM SEARCH (SQLite - title + description) ==========
+  const programSearchTimerRef = useRef(null);
+  
+  useEffect(() => {
+    // Only trigger program search in ALL folder on live tab
+    if (activeTab !== 'live' || !showItems || !currentCategory || currentCategory.category_id !== '__all__') {
+      setProgramResults([]);
+      return;
+    }
+    
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setProgramResults([]);
+      return;
+    }
+    
+    clearTimeout(programSearchTimerRef.current);
+    programSearchTimerRef.current = setTimeout(async () => {
+      setProgramSearching(true);
+      try {
+        const results = await searchProgramsByTitle(q, [], true, true, 50);
+        setProgramResults(results);
+      } catch (err) {
+        console.warn('Program search error:', err);
+        setProgramResults([]);
+      } finally {
+        setProgramSearching(false);
+      }
+    }, 300);
+    
+    return () => clearTimeout(programSearchTimerRef.current);
+  }, [searchQuery, activeTab, showItems, currentCategory]);
+
+  // Handle program result click → find channel in NinjaCentral and select
+  const handleProgramClick = useCallback((program) => {
+    const streamId = program.stream_id;
+    // Find the channel in the live channels list
+    const channel = channels.find(ch => 
+      (ch.stream_id || ch.id) === streamId || 
+      String(ch.stream_id || ch.id) === String(streamId)
+    );
+    if (channel) {
+      onChannelSelect?.(channel);
+    }
+  }, [channels, onChannelSelect]);
+
+  // ========== KEYBOARD HANDLERS ==========
+  const handleKeyboardInput = useCallback((char) => {
+    setSearchQuery(prev => prev + char);
+  }, []);
+
+  const handleKeyboardBackspace = useCallback(() => {
+    setSearchQuery(prev => prev.slice(0, -1));
+  }, []);
+
+  const handleKeyboardClose = useCallback(() => {
+    setShowKeyboard(false);
+  }, []);
+
   // ========== TAB SWITCH ==========
   const handleTabSwitch = useCallback((tabId) => {
     setActiveTab(tabId);
@@ -531,6 +750,8 @@ const OTTSidebar = ({
     setCurrentCategory(null);
     setSearchQuery('');
     setSearchOpen(false);
+    setProgramResults([]);
+    setShowKeyboard(false);
   }, []);
 
   // ========== VIRTUALIZED CATEGORY ROW ==========
@@ -783,6 +1004,103 @@ const OTTSidebar = ({
     );
   }, [filteredItems, seriesSeasons, handleItemClick]);
 
+  // ========== VIRTUALIZED PROGRAM RESULT ROW ==========
+  const ProgramRow = useCallback(({ index, style }) => {
+    const prog = programResults[index];
+    if (!prog) return null;
+    
+    const now = Math.floor(Date.now() / 1000);
+    const isLive = prog.start_time <= now && prog.end_time > now;
+    const isFuture = prog.start_time > now;
+    const minutesUntil = isFuture ? Math.round((prog.start_time - now) / 60) : 0;
+    
+    const startTime = prog.start_formatted ? prog.start_formatted.split(' ')[1]?.substring(0, 5) : '';
+    const endTime = prog.end_formatted ? prog.end_formatted.split(' ')[1]?.substring(0, 5) : '';
+    
+    return (
+      <div
+        style={{
+          ...style,
+          padding: '4px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          cursor: 'pointer',
+          background: isLive ? 'rgba(98, 37, 255, 0.15)' : 'transparent',
+          borderLeft: isLive ? '3px solid #6225ff' : '3px solid transparent',
+        }}
+        onClick={() => handleProgramClick(prog)}
+      >
+        {/* Channel logo */}
+        <div style={{
+          width: '40px',
+          height: '25px',
+          borderRadius: '3px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}>
+          {prog.channel_logo ? (
+            <img src={prog.channel_logo} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+              onError={(e) => { e.target.style.display = 'none'; }} />
+          ) : (
+            <span style={{ fontSize: '7px', color: '#555' }}>TV</span>
+          )}
+        </div>
+        
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {/* LIVE badge or time */}
+            {isLive ? (
+              <span style={{
+                fontSize: '7px', fontWeight: 700, color: '#fff',
+                background: '#e53e3e', borderRadius: '2px',
+                padding: '1px 4px', flexShrink: 0,
+              }}>LIVE</span>
+            ) : isFuture ? (
+              <span style={{
+                fontSize: '7px', fontWeight: 600, color: '#a78bfa',
+                background: 'rgba(167,139,250,0.15)', borderRadius: '2px',
+                padding: '1px 4px', flexShrink: 0,
+              }}>{minutesUntil < 60 ? `${minutesUntil}min` : `${startTime}`}</span>
+            ) : null}
+            <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
+              {prog.title}
+            </TickerText>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '8px', color: '#888', flexShrink: 0 }}>
+              {prog.channel_name}
+            </span>
+            {startTime && endTime && (
+              <span style={{ fontSize: '7px', color: '#666' }}>
+                {startTime}–{endTime}
+              </span>
+            )}
+          </div>
+          {/* Progress bar for live programs */}
+          {isLive && prog.progress > 0 && (
+            <div style={{
+              height: '2px', borderRadius: '1px',
+              background: 'rgba(255,255,255,0.1)',
+              marginTop: '2px', width: '100%',
+            }}>
+              <div style={{
+                height: '100%', borderRadius: '1px',
+                background: '#6225ff',
+                width: `${prog.progress}%`,
+                transition: 'width 0.3s',
+              }} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }, [programResults, handleProgramClick]);
+
   // ========== CHOOSE ROW RENDERER ==========
   const ItemRow = useMemo(() => {
     if (activeTab === 'movies') return MovieRow;
@@ -952,6 +1270,17 @@ const OTTSidebar = ({
             >
               {CategoryRow}
             </List>
+          ) : programResults.length > 0 ? (
+            /* Program search results from SQLite */
+            <List
+              height={listHeight}
+              itemCount={programResults.length}
+              itemSize={52}
+              width="100%"
+              overscanCount={10}
+            >
+              {ProgramRow}
+            </List>
           ) : (
             <List
               height={listHeight}
@@ -984,8 +1313,10 @@ const OTTSidebar = ({
               ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search in folder..."
+              readOnly
+              onFocus={() => setShowKeyboard(true)}
+              onClick={() => setShowKeyboard(true)}
+              placeholder={currentCategory?.category_id === '__all__' && activeTab === 'live' ? "Search channels & programs..." : "Search in folder..."}
               style={{
                 flex: 1,
                 background: 'transparent',
@@ -994,8 +1325,8 @@ const OTTSidebar = ({
                 color: '#fff',
                 fontSize: '11px',
                 padding: 0,
+                caretColor: '#6225ff',
               }}
-              autoFocus
             />
             {searchQuery && (
               <button
@@ -1014,11 +1345,14 @@ const OTTSidebar = ({
         {showItems && (
           <button
             onClick={() => {
-              setSearchOpen(prev => !prev);
               if (!searchOpen) {
-                setTimeout(() => searchInputRef.current?.focus(), 100);
+                setSearchOpen(true);
+                setShowKeyboard(true);
               } else {
+                setSearchOpen(false);
+                setShowKeyboard(false);
                 setSearchQuery('');
+                setProgramResults([]);
               }
             }}
             style={{
@@ -1044,6 +1378,18 @@ const OTTSidebar = ({
           </button>
         )}
       </div>
+
+      {/* ========== NINJA KEYBOARD (Custom Alpha Compact) ========== */}
+      {showKeyboard && searchOpen && (
+        <NinjaKeyboard
+          position={keyboardPos}
+          onPositionChange={setKeyboardPos}
+          onInput={handleKeyboardInput}
+          onBackspace={handleKeyboardBackspace}
+          onClose={handleKeyboardClose}
+          searchQuery={searchQuery}
+        />
+      )}
 
       {/* Ticker animation */}
       <style>{`
