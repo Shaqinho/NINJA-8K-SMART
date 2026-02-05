@@ -142,6 +142,14 @@ const OTTSidebar = ({
     });
   }, []);
 
+  // ========== ACTIVE ITEMS BASED ON TAB ==========
+  const activeItems = useMemo(() => {
+    if (activeTab === 'live') return channels;
+    if (activeTab === 'movies') return vodItems;
+    if (activeTab === 'series') return seriesItems;
+    return [];
+  }, [activeTab, channels, vodItems, seriesItems]);
+
   // ========== SYSTEM FOLDERS ==========
   const systemFolders = useMemo(() => {
     const totalCount = activeItems.length;
@@ -195,13 +203,6 @@ const OTTSidebar = ({
     }
   }, [xtreamService, activeTab, epgData]);
 
-  // Trigger EPG load when filtered items change
-  useEffect(() => {
-    if (activeTab === 'live' && showItems && filteredItems.length > 0) {
-      loadEpgForItems(filteredItems.slice(0, 25));
-    }
-  }, [activeTab, showItems, filteredItems, loadEpgForItems]);
-
   // ========== ACTIVE CATEGORIES WITH SYSTEM FOLDERS ==========
   const activeCategories = useMemo(() => {
     let cats = [];
@@ -210,13 +211,6 @@ const OTTSidebar = ({
     else if (activeTab === 'series') cats = seriesCategories;
     return [...systemFolders, ...cats];
   }, [activeTab, categories, vodCategories, seriesCategories, systemFolders]);
-
-  const activeItems = useMemo(() => {
-    if (activeTab === 'live') return channels;
-    if (activeTab === 'movies') return vodItems;
-    if (activeTab === 'series') return seriesItems;
-    return [];
-  }, [activeTab, channels, vodItems, seriesItems]);
 
   // ========== LOAD DATA FROM NINJACENTRAL ==========
   useEffect(() => {
@@ -511,6 +505,13 @@ const OTTSidebar = ({
     
     return items;
   }, [currentCategory, activeItems, searchQuery, favorites, recentIds, epgData]);
+
+  // Trigger EPG load when filtered items change
+  useEffect(() => {
+    if (activeTab === 'live' && showItems && filteredItems.length > 0) {
+      loadEpgForItems(filteredItems.slice(0, 25));
+    }
+  }, [activeTab, showItems, filteredItems, loadEpgForItems]);
 
   // ========== LAZY-LOAD SERIES SEASONS FOR VISIBLE ITEMS ==========
   useEffect(() => {

@@ -1693,6 +1693,7 @@ const Hub = ({ onBack, onPlay }) => {
       if (lastTouchDistance.current > 0) {
         if (dist < lastTouchDistance.current - 30) { 
           setIsTransitioning(true);
+          ScreenOrientation.lock({ orientation: 'landscape' }).catch(() => {});
           setTimeout(() => {
             setViewMode('ott'); 
             setIsTransitioning(false);
@@ -1701,6 +1702,7 @@ const Hub = ({ onBack, onPlay }) => {
         }
         else if (dist > lastTouchDistance.current + 30) { 
           setIsTransitioning(true);
+          ScreenOrientation.unlock().catch(() => {});
           setTimeout(() => {
             setViewMode('hub'); 
             setIsTransitioning(false);
@@ -1879,7 +1881,7 @@ const Hub = ({ onBack, onPlay }) => {
           onLoadMoreCategories={handleLoadMoreCategories}
           isLandscape={isLandscape}
           isTransitioning={isTransitioning}
-          onSwitchToOtt={() => { setIsTransitioning(true); setTimeout(() => { setViewMode('ott'); setIsTransitioning(false); }, 800); }}
+          onSwitchToOtt={() => { setIsTransitioning(true); ScreenOrientation.lock({ orientation: 'landscape' }).catch(() => {}); setTimeout(() => { setViewMode('ott'); setIsTransitioning(false); }, 800); }}
         />
         <OttView 
           activeTab={activeTab} 
@@ -1902,7 +1904,7 @@ const Hub = ({ onBack, onPlay }) => {
           isPortrait={isPortrait}
           isTransitioning={isTransitioning}
           zoomLevel={ZOOM_LEVELS[zoomIndex]}
-          onSwitchToHub={() => { setIsTransitioning(true); setTimeout(() => { setViewMode('hub'); setIsTransitioning(false); }, 800); }}
+          onSwitchToHub={() => { setIsTransitioning(true); ScreenOrientation.unlock().catch(() => {}); setTimeout(() => { setViewMode('hub'); setIsTransitioning(false); }, 800); }}
         />
       </div>
       
