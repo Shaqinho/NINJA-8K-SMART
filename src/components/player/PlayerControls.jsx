@@ -112,16 +112,14 @@ const styles = {
   },
   // Channel logo
   channelLogo: {
-    maxWidth: '400px',
-    maxHeight: '40px',
-    width: 'auto',
-    height: '40px',
+    width: '100px',
+    height: '25px',
     objectFit: 'contain',
+    background: 'transparent',
   },
   channelLogoSmall: {
-    maxWidth: '200px',
-    maxHeight: '28px',
-    height: '28px',
+    width: '80px',
+    height: '20px',
   },
   // Channel name
   channelName: {
@@ -137,31 +135,6 @@ const styles = {
     fontWeight: '600',
     color: 'white',
     maxWidth: '150px',
-  },
-  // Volume gauge
-  volumeGauge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    background: 'rgba(0,0,0,0.6)',
-    padding: '10px 16px',
-    borderRadius: '25px',
-    backdropFilter: 'blur(10px)',
-    transition: 'all 0.3s ease',
-  },
-  volumeBar: {
-    width: '120px',
-    height: '4px',
-    background: 'rgba(255,255,255,0.2)',
-    borderRadius: '2px',
-    overflow: 'hidden',
-    cursor: 'pointer',
-  },
-  volumeLevel: {
-    height: '100%',
-    background: 'linear-gradient(90deg, #6225ff, #a855f7)',
-    borderRadius: '2px',
-    transition: 'width 0.15s ease',
   },
   // Timeshift
   timeshift: {
@@ -239,15 +212,6 @@ export const PlayerControls = ({
   onJumpToLive,
   // Stream info
   streamInfo = null, // { category: 'FR| SPORT', resolution: '1080p', codec: 'HEVC', fps: '50fps', bitrate: '8.5 Mbps' }
-  // Category navigation (shown when sidebar is hidden)
-  sidebarOpen = false,
-  currentCategory = null, // { name: 'FR| GÉNÉRAL', count: 25 }
-  prevCategory = null,    // { name: 'Sport', count: 12 }
-  nextCategory = null,    // { name: 'Cinéma', count: 8 }
-  onCategoryPrev,
-  onCategoryNext,
-  // Volume display
-  showVolumeGauge = false,
 }) => {
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
   
@@ -419,40 +383,6 @@ export const PlayerControls = ({
         </button>
       )}
       
-      {/* Top Center (below logo): Volume Slider */}
-      <div 
-        style={{ 
-          position: 'absolute', 
-          top: '50px', 
-          left: '50%', 
-          transform: 'translateX(-50%)',
-        }}
-      >
-        <div style={styles.volumeGauge}>
-          <button
-            onClick={onMuteToggle}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          >
-            <div className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.7)' }}>
-              {muted ? <Icons.VolumeMute /> : <Icons.Volume />}
-            </div>
-          </button>
-          <div 
-            style={styles.volumeBar}
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const percent = (e.clientX - rect.left) / rect.width;
-              onVolumeChange?.(Math.max(0, Math.min(1, percent)));
-            }}
-          >
-            <div style={{ ...styles.volumeLevel, width: `${muted ? 0 : volume * 100}%` }} />
-          </div>
-          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', minWidth: '35px', textAlign: 'right' }}>
-            {muted ? '0%' : `${Math.round(volume * 100)}%`}
-          </span>
-        </div>
-      </div>
-      
       {/* Top Right: PiP */}
       {onPiPToggle && (
         <button
@@ -465,17 +395,6 @@ export const PlayerControls = ({
       )}
 
       {/* ========== MIDDLE ROW ========== */}
-      
-      {/* Middle Left: Search EPG */}
-      {isLive && onSearchEPG && (
-        <button
-          onClick={onSearchEPG}
-          style={{ ...styles.cornerBtn, position: 'absolute', bottom: '180px', left: '20px' }}
-          title="Search EPG"
-        >
-          <div className="w-5 h-5"><Icons.Search /></div>
-        </button>
-      )}
       
       {/* Middle Right: Exit Fullscreen */}
       {onFullscreenToggle && (
@@ -499,8 +418,8 @@ export const PlayerControls = ({
           background: 'linear-gradient(transparent, rgba(0,0,0,0.95))',
         }}
       >
-        {/* ROW 1: Play/Pause + Current Channel Logo + Name (centered) */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '15px', gap: '8px' }}>
+        {/* ROW 1: Play/Pause centered */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
           <button
             onClick={onPlayPause}
             style={styles.btnPlay}
@@ -510,151 +429,9 @@ export const PlayerControls = ({
               {playing ? <Icons.Pause /> : <Icons.Play />}
             </div>
           </button>
-          
-          {/* Category navigation (only when sidebar is hidden) - horizontally scrollable */}
-          {isLive && !sidebarOpen && currentCategory && (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              gap: '8px',
-              marginBottom: '4px',
-              width: '100%',
-              maxWidth: '100%',
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              WebkitOverflowScrolling: 'touch',
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-              padding: '4px 0',
-            }}>
-              {/* Previous category */}
-              {prevCategory && (
-                <div
-                  onClick={onCategoryPrev}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    opacity: 0.5,
-                    cursor: 'pointer',
-                    transition: 'opacity 0.2s',
-                    flexShrink: 0,
-                    padding: '4px 8px',
-                    borderRadius: '8px',
-                  }}
-                >
-                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
-                    {prevCategory.name}
-                  </span>
-                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>
-                    ({prevCategory.count})
-                  </span>
-                </div>
-              )}
-              
-              {/* Button < */}
-              <button 
-                onClick={onCategoryPrev} 
-                style={{ 
-                  ...styles.btnSwitch, 
-                  fontSize: '16px',
-                  padding: '2px 6px',
-                  flexShrink: 0,
-                }}
-              >
-                ‹
-              </button>
-              
-              {/* Current category */}
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '6px',
-                padding: '4px 12px',
-                background: 'rgba(98, 37, 255, 0.2)',
-                borderRadius: '12px',
-                flexShrink: 0,
-              }}>
-                <span style={{ fontSize: '12px', color: 'white', fontWeight: '600', whiteSpace: 'nowrap' }}>
-                  {currentCategory.name}
-                </span>
-                <span style={{ fontSize: '10px', color: '#a855f7' }}>
-                  ({currentCategory.count})
-                </span>
-              </div>
-              
-              {/* Button > */}
-              <button 
-                onClick={onCategoryNext} 
-                style={{ 
-                  ...styles.btnSwitch, 
-                  fontSize: '16px',
-                  padding: '2px 6px',
-                  flexShrink: 0,
-                }}
-              >
-                ›
-              </button>
-              
-              {/* Next category */}
-              {nextCategory && (
-                <div
-                  onClick={onCategoryNext}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    opacity: 0.5,
-                    cursor: 'pointer',
-                    transition: 'opacity 0.2s',
-                    flexShrink: 0,
-                    padding: '4px 8px',
-                    borderRadius: '8px',
-                  }}
-                >
-                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
-                    {nextCategory.name}
-                  </span>
-                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>
-                    ({nextCategory.count})
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Current channel logo + name - tap to show stream info */}
-          {isLive && currentChannel && (
-            <div 
-              onClick={handleCurrentChannelTap}
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                gap: '4px',
-                cursor: 'pointer',
-                padding: '8px',
-                borderRadius: '8px',
-                transition: 'background 0.2s',
-              }}
-            >
-              {currentChannel.logo && (
-                <img
-                  src={currentChannel.logo}
-                  alt=""
-                  style={styles.channelLogo}
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              )}
-              <span style={{ ...styles.channelName, ...styles.channelNameCurrent }}>
-                {currentChannel.name}
-              </span>
-            </div>
-          )}
         </div>
-
-        {/* ROW 2: Channel Navigation (prev/next only) */}
+          
+        {/* ROW 2: Channel Navigation (prev + current + next on same line) */}
         {isLive && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '12px' }}>
             {/* Previous channel - clickable */}
@@ -682,8 +459,34 @@ export const PlayerControls = ({
               ‹‹
             </button>
 
-            {/* Spacer for center alignment */}
-            <div style={{ width: '150px' }} />
+            {/* Current channel (center) */}
+            {currentChannel && (
+              <div 
+                onClick={handleCurrentChannelTap}
+                style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center', 
+                  gap: '4px',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '8px',
+                  transition: 'background 0.2s',
+                }}
+              >
+                {currentChannel.logo && (
+                  <img
+                    src={currentChannel.logo}
+                    alt=""
+                    style={styles.channelLogo}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                )}
+                <span style={{ ...styles.channelName, ...styles.channelNameCurrent }}>
+                  {currentChannel.name}
+                </span>
+              </div>
+            )}
 
             {/* Button >> */}
             <button onClick={onChannelNext} style={styles.btnSwitch} title="Next channel">

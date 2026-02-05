@@ -8,7 +8,6 @@ import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
 import OTTSidebar from './OTTSidebar';
-import { PiPMiniPlayer } from './PiPManager';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -178,6 +177,12 @@ const Player = memo(({
   }, [muted, volume]);
 
   const toggleFullscreen = useCallback(async () => {
+    // If in Smart fullscreen (landscape mode), exit by toggling play off
+    if (isSmartFullscreen) {
+      onTogglePlay?.();
+      return;
+    }
+    
     if (!containerRef.current) return;
     try {
       if (!document.fullscreenElement) {
@@ -200,7 +205,7 @@ const Player = memo(({
     } catch (err) {
       console.error('Fullscreen error:', err);
     }
-  }, []);
+  }, [isSmartFullscreen, onTogglePlay]);
 
   useEffect(() => {
     const handleFullscreenChange = async () => {
@@ -266,38 +271,58 @@ const Player = memo(({
     }
   }, [onMultiGridToggle]);
 
-  // PiP toggle - exit fullscreen and show mini player
+  // PiP toggle - use native Picture-in-Picture API
   const handlePiPToggle = useCallback(async () => {
-    if (isPiP) {
-      // Exit PiP - go back to normal
-      setIsPiP(false);
-    } else {
-      // Enter PiP - exit fullscreen first
+    try {
+      // Check if already in PiP
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPiP(false);
+        return;
+      }
+
+      // Get the video element
+      const video = videoRef.current?.getVideoElement?.();
+      if (!video) {
+        console.warn('PiP: No video element available');
+        return;
+      }
+
+      // Check if PiP is supported
+      if (!document.pictureInPictureEnabled) {
+        console.warn('PiP: Not supported in this browser');
+        return;
+      }
+
+      // Exit Smart fullscreen first if needed
+      if (isSmartFullscreen) {
+        onTogglePlay?.();
+      }
+
+      // Exit document fullscreen if needed
       if (document.fullscreenElement) {
         await document.exitFullscreen();
         setIsFullscreen(false);
-        try {
-          await ScreenOrientation.unlock();
-        } catch (e) {}
+        try { await ScreenOrientation.unlock(); } catch (e) {}
       }
-      setIsPiP(true);
-    }
-  }, [isPiP]);
 
-  // Expand from PiP to fullscreen
-  const handlePiPExpand = useCallback(async () => {
-    setIsPiP(false);
-    // Go to fullscreen
-    if (containerRef.current && !document.fullscreenElement) {
-      try {
-        await containerRef.current.requestFullscreen();
-        setIsFullscreen(true);
-        await ScreenOrientation.lock({ orientation: 'landscape' });
-      } catch (e) {
-        console.log('Fullscreen error:', e);
-      }
+      // Enter native PiP
+      await video.requestPictureInPicture();
+      setIsPiP(true);
+    } catch (err) {
+      console.error('PiP error:', err);
     }
-  }, []);
+  }, [isSmartFullscreen, onTogglePlay]);
+
+  // Listen for PiP exit (user closes the PiP window)
+  useEffect(() => {
+    const video = videoRef.current?.getVideoElement?.();
+    if (!video) return;
+
+    const handleLeavePiP = () => setIsPiP(false);
+    video.addEventListener('leavepictureinpicture', handleLeavePiP);
+    return () => video.removeEventListener('leavepictureinpicture', handleLeavePiP);
+  }, [channel]);
 
   void onMultiGridAdd;
 
@@ -532,15 +557,6 @@ const Player = memo(({
         />
       )}
 
-      {/* PiP Mini Player - Fixed bottom right when in PiP mode */}
-      <PiPMiniPlayer
-        visible={isPiP}
-        channelName={channel?.name}
-        channelLogo={channel?.logo}
-        isPlaying={isPlaying}
-        onPlayPause={onTogglePlay}
-        onExpand={handlePiPExpand}
-      />
     </div>
   );
 });
