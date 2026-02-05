@@ -88,6 +88,8 @@ export const useGestures = (containerRef, callbacks = {}) => {
     fingerCountRef.current = fingerCount;
 
     if (fingerCount === 2 || fingerCount === 3) {
+      e.preventDefault();
+      e.stopPropagation();
       gestureActiveRef.current = true;
       
       const center = getTouchCenter(e.touches);
@@ -211,7 +213,11 @@ export const useGestures = (containerRef, callbacks = {}) => {
     }
   }, [touchStartY, touchStartX, initialPinchDistance, initialVolume, getTouchDistance, getTouchCenter, callbacks]);
 
-  const handleTouchEnd = useCallback(() => {
+  const handleTouchEnd = useCallback((e) => {
+    if (gestureActiveRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     gestureActiveRef.current = false;
     fingerCountRef.current = 0;
     setTouchStartY(null);

@@ -126,6 +126,13 @@ const Player = memo(({
     }
   }, [isFullscreen, isSmartFullscreen]);
 
+  // Sync volume prop to video element
+  useEffect(() => {
+    if (videoRef.current && volume !== undefined) {
+      videoRef.current.setVolume(volume);
+    }
+  }, [volume]);
+
   const handleStateChange = useCallback((state) => {
     setIsLoading(state === 'buffering');
   }, []);
@@ -274,28 +281,16 @@ const Player = memo(({
     }
   }, [onMultiGridToggle]);
 
-  // PiP toggle - use native Picture-in-Picture API
-  // PiP toggle - exit fullscreen and show mini player
+  // PiP toggle - just toggle mini player without affecting fullscreen/orientation
   const handlePiPToggle = useCallback(async () => {
     if (isPiP) {
       // Exit PiP - go back to normal
       setIsPiP(false);
     } else {
-      // Enter PiP - exit fullscreen first
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-        setIsFullscreen(false);
-        try {
-          await ScreenOrientation.unlock();
-        } catch (e) {}
-      }
-      // Exit Smart fullscreen if needed
-      if (isSmartFullscreen) {
-        onTogglePlay?.();
-      }
+      // Enter PiP - just show mini player
       setIsPiP(true);
     }
-  }, [isPiP, isSmartFullscreen, onTogglePlay]);
+  }, [isPiP]);
 
   // Expand from PiP to fullscreen
   const handlePiPExpand = useCallback(async () => {

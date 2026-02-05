@@ -46,7 +46,7 @@ const TabNav = ({ activeTab, setActiveTab, onLongPress, reloadingTab }) => {
   };
 
   return (
-    <div className="flex" style={{ background: '#000000' }}>
+    <div className="flex" style={{ background: 'transparent' }}>
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -686,35 +686,35 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
         />
       </div>
 
-      {/* Tabs */}
+      {/* Tabs + Content wrapper — particles cover both */}
       {!(isLandscape && isPlaying) && (
-        <div className="flex-shrink-0 z-20" style={{ background: '#000000' }}>
-          <TabNav 
-            activeTab={activeTab} 
-            setActiveTab={(tab) => {
-              setActiveTab(tab);
-              setSelectedCategory(null);
-            }}
-            onLongPress={handleTabLongPress}
-            reloadingTab={reloadingTab}
-          />
-        </div>
-      )}
-
-      {/* Content */}
-      {!(isLandscape && isPlaying) && (
-        <div 
-          ref={contentListRef}
-          className="flex-1 overflow-hidden relative"
-          style={{ background: '#000000' }}
-        >
-          {particleTheme !== 'off' && !isPlaying && (
+        <div className="flex-1 flex flex-col overflow-hidden relative" style={{ background: '#000000' }}>
+          {/* Particles — covers tabs + content */}
+          {particleTheme !== 'off' && (
             <div className="absolute inset-0 pointer-events-none z-0">
               <ParticleThemes containerRef={contentListRef} theme={particleTheme} />
             </div>
           )}
-          
-          <div className="relative z-10 h-full overflow-hidden">
+
+          {/* Tabs — transparent so particles show through */}
+          <div className="flex-shrink-0 z-20" style={{ background: 'transparent' }}>
+            <TabNav 
+              activeTab={activeTab} 
+              setActiveTab={(tab) => {
+                setActiveTab(tab);
+                setSelectedCategory(null);
+              }}
+              onLongPress={handleTabLongPress}
+              reloadingTab={reloadingTab}
+            />
+          </div>
+
+          {/* Content */}
+          <div 
+            ref={contentListRef}
+            className="flex-1 overflow-hidden relative"
+          >
+            <div className="relative z-10 h-full overflow-hidden">
             {selectedCategory ? (
               <div className="flex flex-col h-full overflow-hidden">
                 <div className="px-4 py-3 flex items-center gap-2 flex-shrink-0" style={{ background: 'transparent' }}>
@@ -771,6 +771,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
               </div>
             )}
           </div>
+        </div>
         </div>
       )}
 
