@@ -16,30 +16,52 @@ export const insertChannels = async (channels) => {
   return channels.length;
 };
 
-// Insert Programs (bulk for multiple channels)
+// Clean expired programs (end_time < now)
+export const cleanExpiredPrograms = async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const result = await executeSql('DELETE FROM programs WHERE end_time < ? AND end_time IS NOT NULL', [now]);
+  console.log(`🧹 Cleaned expired programs (before ${now})`);
+  return result;
+};
+
+// Insert Programs (bulk for multiple channels) - Single Transaction
 export const insertProgramsBatch = async (epgData) => {
   if (!epgData || !Object.keys(epgData).length) return 0;
   const db = getDatabase();
   const now = Math.floor(Date.now() / 1000);
-  const statements = [];
   let total = 0;
 
-  for (const [streamId, programs] of Object.entries(epgData)) {
-    if (!programs?.length) continue;
-    statements.push({ statement: 'DELETE FROM programs WHERE stream_id = ?', values: [parseInt(streamId)] });
-    for (const prog of programs) {
-      const startTime = prog.startTimestamp || Math.floor(new Date(prog.start).getTime() / 1000);
-      const endTime = prog.stopTimestamp || prog.endTimestamp || Math.floor(new Date(prog.end).getTime() / 1000);
-      const isLive = (startTime <= now && endTime > now) ? 1 : 0;
-      statements.push({
-        statement: `INSERT INTO programs (stream_id, title, title_normalized, description, start_time, end_time, start_formatted, end_formatted, is_live) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        values: [parseInt(streamId), prog.title || 'Sans titre', normalizeText(prog.title), prog.description || '', startTime, endTime || null, prog.start || '', prog.end || '', isLive],
-      });
-      total++;
+  // Single transaction for all inserts - crucial for Capacitor/SQLite perf
+  try {
+    await db.execute('BEGIN TRANSACTION');
+
+    for (const [streamId, programs] of Object.entries(epgData)) {
+      if (!programs?.length) continue;
+
+      // Clear old programs for this channel
+      await db.run('DELETE FROM programs WHERE stream_id = ?', [parseInt(streamId)]);
+
+      for (const prog of programs) {
+        const startTime = prog.startTimestamp || (prog.start ? Math.floor(new Date(prog.start).getTime() / 1000) : null);
+        const endTime = prog.stopTimestamp || prog.endTimestamp || (prog.end ? Math.floor(new Date(prog.end).getTime() / 1000) : null);
+        const isLive = (startTime && endTime && startTime <= now && endTime > now) ? 1 : 0;
+
+        await db.run(
+          `INSERT INTO programs (stream_id, title, title_normalized, description, start_time, end_time, start_formatted, end_formatted, is_live) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [parseInt(streamId), prog.title || 'Sans titre', normalizeText(prog.title), prog.description || '', startTime, endTime || null, prog.start || '', prog.end || '', isLive]
+        );
+        total++;
+      }
     }
+
+    await db.execute('COMMIT');
+    console.log(`✅ ${total} programs inserted (single transaction)`);
+  } catch (txErr) {
+    try { await db.execute('ROLLBACK'); } catch (rbErr) { /* rollback best effort */ }
+    console.error('❌ insertProgramsBatch transaction failed:', txErr);
+    throw txErr;
   }
-  if (statements.length) await db.executeSet(statements);
-  console.log(`✅ ${total} programs inserted`);
+
   return total;
 };
 
@@ -131,5 +153,5 @@ export const isSyncNeeded = async (syncKey, maxAgeSeconds = 900) => {
   return (Math.floor(Date.now() / 1000) - status.last_sync) > maxAgeSeconds;
 };
 
-const ProgramQueriesExports = { insertChannels, insertProgramsBatch, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
+const ProgramQueriesExports = { insertChannels, insertProgramsBatch, cleanExpiredPrograms, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
 export default ProgramQueriesExports;

@@ -8,7 +8,7 @@ import { ActivationBlock } from './ActivationBlock';
 import { PlaylistForm } from './PlaylistForm';
 import ParticleThemes from './ParticleThemes';
 import { openDatabase } from '../database/NinjaLocalDB';
-import { insertChannels, insertProgramsBatch } from '../database/ProgramQueries';
+import { insertChannels, insertProgramsBatch, cleanExpiredPrograms } from '../database/ProgramQueries';
 
 // ============================================================================
 // URL NORMALIZER - Auto-add http/https
@@ -188,38 +188,100 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
         await insertChannels(mappedLive);
         console.log(`✅ Indexed ${mappedLive.length} live channels for search`);
         
-        // Fetch EPG in background (first 500 channels for speed)
-        const channelsToFetch = mappedLive.slice(0, 500);
-        const streamIds = channelsToFetch.map(ch => ch.id);
-        
-        // Don't block - fetch EPG in background
-        (async () => {
+        // ============================================================
+        // BACKGROUND EPG SYNC - Gaming Style (Cercle 2)
+        // Batching 20ch max, 1000ms pause, vrais timestamps serveur
+        // ============================================================
+        const epgAbortController = new AbortController();
+        window.__epgAbortController = epgAbortController;
+        window.__epgSyncProgress = 0;
+
+        const startEpgBackgroundSync = async (allChannels, signal) => {
+          const BATCH_SIZE = 20;
+          const BATCH_DELAY = 1000;
+          const streamIds = allChannels.map(ch => ch.id || ch.stream_id).filter(Boolean);
+          const totalBatches = Math.ceil(streamIds.length / BATCH_SIZE);
+          let batchesDone = 0;
+
+          // Clean expired programs before starting
           try {
-            console.log(`🔄 Fetching EPG for ${streamIds.length} channels in background...`);
-            const epgData = await service.getShortEPGBatch(streamIds, 4, 20);
-            
-            // Convert to format expected by insertProgramsBatch
-            const epgForInsert = {};
-            Object.entries(epgData).forEach(([streamId, data]) => {
-              if (data.epg_now) {
-                epgForInsert[streamId] = [{
-                  title: data.epg_now,
-                  start: data.epg_start,
-                  end: data.epg_end,
-                  startTimestamp: Math.floor(Date.now() / 1000) - (data.progress / 100 * 3600),
-                  stopTimestamp: Math.floor(Date.now() / 1000) + ((100 - data.progress) / 100 * 3600),
-                }];
-              }
-            });
-            
-            if (Object.keys(epgForInsert).length > 0) {
-              await insertProgramsBatch(epgForInsert);
-              console.log(`✅ EPG indexed for ${Object.keys(epgForInsert).length} channels`);
-            }
-          } catch (epgErr) {
-            console.warn('⚠️ Background EPG fetch failed:', epgErr);
+            await cleanExpiredPrograms();
+          } catch (cleanErr) {
+            console.warn('⚠️ EPG cleanup skipped:', cleanErr);
           }
-        })();
+
+          for (let i = 0; i < streamIds.length; i += BATCH_SIZE) {
+            if (signal.aborted) {
+              console.log('🛑 EPG sync aborted');
+              return;
+            }
+
+            const batchIds = streamIds.slice(i, i + BATCH_SIZE);
+
+            try {
+              // Fetch real EPG data from server (getShortEPG per channel returns real start/stop)
+              const epgResults = await service.getShortEPGBatch(batchIds, 2, 20);
+
+              if (signal.aborted) return;
+
+              // Build insert payload with REAL server timestamps
+              const epgForInsert = {};
+              Object.entries(epgResults).forEach(([streamId, data]) => {
+                const programs = [];
+                // Current program
+                if (data.epg_now) {
+                  programs.push({
+                    title: data.epg_now,
+                    start: data.epg_start || '',
+                    end: data.epg_end || '',
+                    startTimestamp: data.epg_start_timestamp || null,
+                    stopTimestamp: data.epg_end_timestamp || null,
+                    description: data.epg_description || '',
+                  });
+                }
+                // Next program(s) if available
+                if (data.epg_next) {
+                  programs.push({
+                    title: data.epg_next,
+                    start: data.epg_next_start || '',
+                    end: data.epg_next_end || '',
+                    startTimestamp: data.epg_next_start_timestamp || null,
+                    stopTimestamp: data.epg_next_end_timestamp || null,
+                    description: data.epg_next_description || '',
+                  });
+                }
+                if (programs.length > 0) {
+                  epgForInsert[streamId] = programs;
+                }
+              });
+
+              if (Object.keys(epgForInsert).length > 0) {
+                await insertProgramsBatch(epgForInsert);
+              }
+            } catch (batchErr) {
+              console.warn(`⚠️ EPG batch ${Math.floor(i / BATCH_SIZE) + 1} failed:`, batchErr);
+              // Continue with next batch - don't break the whole sync
+            }
+
+            batchesDone++;
+            window.__epgSyncProgress = Math.round((batchesDone / totalBatches) * 100);
+
+            // Real pause between batches (not on last batch)
+            if (i + BATCH_SIZE < streamIds.length && !signal.aborted) {
+              await new Promise(r => setTimeout(r, BATCH_DELAY));
+            }
+          }
+
+          window.__epgSyncProgress = 100;
+          console.log(`✅ EPG background sync complete: ${streamIds.length} channels indexed`);
+        };
+
+        // Launch in background - non-blocking
+        startEpgBackgroundSync(mappedLive, epgAbortController.signal).catch(err => {
+          if (!epgAbortController.signal.aborted) {
+            console.warn('⚠️ Background EPG sync failed:', err);
+          }
+        });
       }
     } catch (dbErr) {
       console.warn('⚠️ SQLite indexing failed (search may not work):', dbErr);

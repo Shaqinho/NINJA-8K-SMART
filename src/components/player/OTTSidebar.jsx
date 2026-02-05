@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { ninjaCentral, STORES } from '../../services/NinjaCentral';
-import { searchProgramsByTitle, getProgramsForChannel } from '../../database/ProgramQueries';
+import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
 
 // ============================================================================
 // OTT SIDEBAR - Composant autonome pour mode paysage/fullscreen
@@ -261,6 +261,12 @@ const OTTSidebar = ({
   const [epgData, setEpgData] = useState({});
   const epgLoadingRef = useRef(new Set());
   
+  // ========== CERCLE 1 - SQLite EPG + On-demand fetch ==========
+  const [sqliteEpg, setSqliteEpg] = useState({}); // { streamId: { title, progress } }
+  const circle1FetchingRef = useRef(new Set()); // IDs currently being fetched
+  const circle1ErrorCacheRef = useRef(new Map()); // ID → timestamp (TTL 60s)
+  const [epgSyncProgress, setEpgSyncProgress] = useState(0);
+  
   // Favorites (persisted in localStorage)
   const [favorites, setFavorites] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ninja_favorites') || '{}'); } catch { return {}; }
@@ -331,6 +337,109 @@ const OTTSidebar = ({
 
   // ========== EPG BATCH LOAD (same method as Smart) ==========
   const epgLoadedCategoriesRef = useRef(new Set());
+
+  // ========== SYNC PROGRESS POLLING ==========
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const progress = window.__epgSyncProgress || 0;
+      setEpgSyncProgress(prev => prev !== progress ? progress : prev);
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ========== CERCLE 1: SQLite READ for visible channels ==========
+  const loadSqliteEpgForItems = useCallback(async (items) => {
+    if (!items?.length || activeTab !== 'live') return;
+    const now = Math.floor(Date.now() / 1000);
+    const ERROR_TTL = 60000; // 60s cache for failed fetches
+    const newEpg = {};
+    const needsFetch = []; // IDs that are empty in SQLite and need network
+
+    for (const item of items) {
+      const streamId = item.stream_id || item.id;
+      if (!streamId) continue;
+
+      try {
+        const programs = await getProgramsForChannel(streamId, true);
+        if (programs.length > 0) {
+          const current = programs.find(p => p.is_currently_live) || programs[0];
+          newEpg[streamId] = {
+            title: current.title,
+            progress: current.progress || 0,
+            start_time: current.start_time,
+            end_time: current.end_time,
+          };
+        } else {
+          // SQLite empty → candidate for Cercle 1 fetch
+          const errorTs = circle1ErrorCacheRef.current.get(streamId);
+          const isCoolingDown = errorTs && (Date.now() - errorTs < ERROR_TTL);
+          const isFetching = circle1FetchingRef.current.has(streamId);
+          if (!isCoolingDown && !isFetching) {
+            needsFetch.push(streamId);
+          }
+        }
+      } catch {
+        // SQLite not ready yet, skip silently
+      }
+    }
+
+    if (Object.keys(newEpg).length > 0) {
+      setSqliteEpg(prev => ({ ...prev, ...newEpg }));
+    }
+
+    // Cercle 1: On-demand fetch for missing channels (batch)
+    if (needsFetch.length > 0 && xtreamService) {
+      // Mark as fetching
+      needsFetch.forEach(id => circle1FetchingRef.current.add(id));
+
+      // Fire and forget - don't block rendering
+      (async () => {
+        try {
+          const epgResults = await xtreamService.getShortEPGBatch(needsFetch, 2, 20);
+          const epgForInsert = {};
+          Object.entries(epgResults).forEach(([sid, data]) => {
+            if (data.epg_now) {
+              epgForInsert[sid] = [{
+                title: data.epg_now,
+                start: data.epg_start || '',
+                end: data.epg_end || '',
+                startTimestamp: data.epg_start_timestamp || null,
+                stopTimestamp: data.epg_end_timestamp || null,
+                description: data.epg_description || '',
+              }];
+            }
+          });
+          if (Object.keys(epgForInsert).length > 0) {
+            await insertProgramsBatch(epgForInsert);
+            // Re-read from SQLite to update UI
+            const updatedEpg = {};
+            for (const sid of Object.keys(epgForInsert)) {
+              try {
+                const progs = await getProgramsForChannel(parseInt(sid), true);
+                if (progs.length > 0) {
+                  const cur = progs.find(p => p.is_currently_live) || progs[0];
+                  updatedEpg[sid] = {
+                    title: cur.title,
+                    progress: cur.progress || 0,
+                    start_time: cur.start_time,
+                    end_time: cur.end_time,
+                  };
+                }
+              } catch { /* skip */ }
+            }
+            if (Object.keys(updatedEpg).length > 0) {
+              setSqliteEpg(prev => ({ ...prev, ...updatedEpg }));
+            }
+          }
+        } catch {
+          // Mark all as errored with TTL
+          needsFetch.forEach(id => circle1ErrorCacheRef.current.set(id, Date.now()));
+        } finally {
+          needsFetch.forEach(id => circle1FetchingRef.current.delete(id));
+        }
+      })();
+    }
+  }, [activeTab, xtreamService]);
 
   const loadEpgForCategory = useCallback(async (categoryId, items) => {
     if (!xtreamService || activeTab !== 'live') return;
@@ -664,6 +773,16 @@ const OTTSidebar = ({
     }
   }, [activeTab, showItems, currentCategory, filteredItems, loadEpgForCategory]);
 
+  // ========== CERCLE 1: Trigger SQLite EPG read for visible items ==========
+  useEffect(() => {
+    if (activeTab !== 'live' || !showItems || !filteredItems.length) return;
+    // Debounce to avoid hammering SQLite during fast scrolling
+    const timer = setTimeout(() => {
+      loadSqliteEpgForItems(filteredItems.slice(0, 50)); // First 50 visible
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [filteredItems, activeTab, showItems, loadSqliteEpgForItems]);
+
   // ========== LAZY-LOAD SERIES SEASONS FOR VISIBLE ITEMS ==========
   useEffect(() => {
     if (activeTab !== 'series' || !showItems || !xtreamService) return;
@@ -792,13 +911,19 @@ const OTTSidebar = ({
     );
   }, [activeCategories, selectedCategory, getCategoryCount, getCountLabel, handleCategoryClick]);
 
-  // ========== VIRTUALIZED LIVE ROW ==========
+  // ========== VIRTUALIZED LIVE ROW (SQLite-first, Cercle 1) ==========
   const LiveRow = useCallback(({ index, style }) => {
     const channel = filteredItems[index];
     if (!channel) return null;
     const isActive = selectedChannel?.id === channel.id;
     const channelId = channel.stream_id || channel.id;
     const isFav = favorites[channelId];
+    
+    // Priority: SQLite (sqliteEpg) > network cache (epgData) > channel prop
+    const sqlite = sqliteEpg[channelId];
+    const network = epgData[channelId];
+    const epgTitle = sqlite?.title || network?.epg_now || channel.epg_now || null;
+    const epgProgress = sqlite?.progress || network?.progress || 0;
     
     return (
       <div
@@ -846,10 +971,25 @@ const OTTSidebar = ({
           <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
             {channel.name}
           </TickerText>
-          {(epgData[channel.stream_id || channel.id]?.epg_now || channel.epg_now) && (
+          {/* EPG under channel name (vertical layout) */}
+          {epgTitle && (
             <TickerText style={{ fontSize: '8px', color: '#888' }}>
-              {epgData[channel.stream_id || channel.id]?.epg_now || channel.epg_now}
+              {epgTitle}
             </TickerText>
+          )}
+          {/* Mini progress bar for live program */}
+          {epgTitle && epgProgress > 0 && (
+            <div style={{
+              height: '1.5px', borderRadius: '1px',
+              background: 'rgba(255,255,255,0.08)',
+              marginTop: '2px', width: '100%',
+            }}>
+              <div style={{
+                height: '100%', borderRadius: '1px',
+                background: '#6225ff',
+                width: `${Math.min(100, epgProgress)}%`,
+              }} />
+            </div>
           )}
         </div>
         {isFav && (
@@ -869,7 +1009,7 @@ const OTTSidebar = ({
         )}
       </div>
     );
-  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchEnd, favorites, epgData]);
+  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchEnd, favorites, epgData, sqliteEpg]);
 
   // ========== VIRTUALIZED MOVIE ROW ==========
   const MovieRow = useCallback(({ index, style }) => {
@@ -1367,6 +1507,27 @@ const OTTSidebar = ({
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
           </button>
+        )}
+
+        {/* ========== EPG SYNC PROGRESS BAR (2px, bottom) ========== */}
+        {epgSyncProgress > 0 && epgSyncProgress < 100 && (
+          <div style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '2px',
+            background: 'rgba(255,255,255,0.05)',
+            zIndex: 11,
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${epgSyncProgress}%`,
+              background: '#6225ff',
+              borderRadius: '0 1px 1px 0',
+              transition: 'width 0.5s ease-out',
+            }} />
+          </div>
         )}
       </div>
 
