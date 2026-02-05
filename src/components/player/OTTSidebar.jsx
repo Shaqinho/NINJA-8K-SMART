@@ -344,16 +344,7 @@ const OTTSidebar = ({
       if (streamIds.length === 0) return;
 
       const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
-      
-      // Convert to title strings for display
-      const formatted = {};
-      Object.entries(epgResults).forEach(([id, data]) => {
-        if (data?.epg_now) {
-          formatted[id] = data.epg_now;
-        }
-      });
-      
-      setEpgData(prev => ({ ...prev, ...formatted }));
+      setEpgData(prev => ({ ...prev, ...epgResults }));
     } catch (err) {
       console.warn('EPG batch load error:', err);
     }
@@ -658,7 +649,7 @@ const OTTSidebar = ({
       const q = searchQuery.toLowerCase().trim();
       items = items.filter(item => {
         const name = (item.name || '').toLowerCase();
-        const epg = (epgData[item.stream_id || item.id] || item.epg_now || '').toLowerCase();
+        const epg = (epgData[item.stream_id || item.id]?.epg_now || item.epg_now || '').toLowerCase();
         return name.includes(q) || epg.includes(q);
       });
     }
@@ -855,9 +846,9 @@ const OTTSidebar = ({
           <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
             {channel.name}
           </TickerText>
-          {(epgData[channel.stream_id || channel.id] || channel.epg_now) && (
+          {(epgData[channel.stream_id || channel.id]?.epg_now || channel.epg_now) && (
             <TickerText style={{ fontSize: '8px', color: '#888' }}>
-              {epgData[channel.stream_id || channel.id] || channel.epg_now}
+              {epgData[channel.stream_id || channel.id]?.epg_now || channel.epg_now}
             </TickerText>
           )}
         </div>

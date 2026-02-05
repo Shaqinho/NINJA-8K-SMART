@@ -431,7 +431,7 @@ export const PlayerControls = ({
         </button>
       )}
       
-      {/* Top Right: PiP */}
+      {/* Top Right: PiP - mini player only */}
       {onPiPToggle && (
         <button
           onClick={onPiPToggle}
@@ -444,7 +444,7 @@ export const PlayerControls = ({
 
       {/* ========== MIDDLE ROW ========== */}
       
-      {/* Middle Right: Exit Fullscreen */}
+      {/* Middle Right: Exit Fullscreen (portrait + exit) */}
       {onFullscreenToggle && (
         <button
           onClick={onFullscreenToggle}
@@ -509,15 +509,15 @@ export const PlayerControls = ({
               ‹‹
             </button>
 
-            {/* Current channel (center) */}
+            {/* Current channel (center) - logo left of name */}
             {currentChannel && (
               <div 
                 onClick={handleCurrentChannelTap}
                 style={{ 
                   display: 'flex', 
-                  flexDirection: 'column', 
+                  flexDirection: 'row', 
                   alignItems: 'center', 
-                  gap: '4px',
+                  gap: '8px',
                   cursor: 'pointer',
                   padding: '4px 8px',
                   borderRadius: '8px',
@@ -662,11 +662,9 @@ export const PlayerControls = ({
               )}
             </button>
 
-            {/* Timeshift bar */}
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace', minWidth: '45px' }}>
-                {formatOffset(timeshiftOffset)}
-              </span>
+            {/* Timeshift bar - 70% width centered */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '70%', position: 'relative' }}>
               <div
                 style={{
                   ...styles.timeshift,
@@ -689,6 +687,7 @@ export const PlayerControls = ({
                 </div>
                 {/* LIVE marker - green */}
                 <div style={styles.timeshiftLiveMarker} />
+              </div>
               </div>
             </div>
 
