@@ -8,6 +8,7 @@ import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
 import OTTSidebar from './OTTSidebar';
+import { PiPMiniPlayer } from './PiPManager';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -272,57 +273,42 @@ const Player = memo(({
   }, [onMultiGridToggle]);
 
   // PiP toggle - use native Picture-in-Picture API
+  // PiP toggle - exit fullscreen and show mini player
   const handlePiPToggle = useCallback(async () => {
-    try {
-      // Check if already in PiP
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-        setIsPiP(false);
-        return;
-      }
-
-      // Get the video element
-      const video = videoRef.current?.getVideoElement?.();
-      if (!video) {
-        console.warn('PiP: No video element available');
-        return;
-      }
-
-      // Check if PiP is supported
-      if (!document.pictureInPictureEnabled) {
-        console.warn('PiP: Not supported in this browser');
-        return;
-      }
-
-      // Exit Smart fullscreen first if needed
-      if (isSmartFullscreen) {
-        onTogglePlay?.();
-      }
-
-      // Exit document fullscreen if needed
+    if (isPiP) {
+      // Exit PiP - go back to normal
+      setIsPiP(false);
+    } else {
+      // Enter PiP - exit fullscreen first
       if (document.fullscreenElement) {
         await document.exitFullscreen();
         setIsFullscreen(false);
-        try { await ScreenOrientation.unlock(); } catch (e) {}
+        try {
+          await ScreenOrientation.unlock();
+        } catch (e) {}
       }
-
-      // Enter native PiP
-      await video.requestPictureInPicture();
+      // Exit Smart fullscreen if needed
+      if (isSmartFullscreen) {
+        onTogglePlay?.();
+      }
       setIsPiP(true);
-    } catch (err) {
-      console.error('PiP error:', err);
     }
-  }, [isSmartFullscreen, onTogglePlay]);
+  }, [isPiP, isSmartFullscreen, onTogglePlay]);
 
-  // Listen for PiP exit (user closes the PiP window)
-  useEffect(() => {
-    const video = videoRef.current?.getVideoElement?.();
-    if (!video) return;
-
-    const handleLeavePiP = () => setIsPiP(false);
-    video.addEventListener('leavepictureinpicture', handleLeavePiP);
-    return () => video.removeEventListener('leavepictureinpicture', handleLeavePiP);
-  }, [channel]);
+  // Expand from PiP to fullscreen
+  const handlePiPExpand = useCallback(async () => {
+    setIsPiP(false);
+    // Go to fullscreen
+    if (containerRef.current && !document.fullscreenElement) {
+      try {
+        await containerRef.current.requestFullscreen();
+        setIsFullscreen(true);
+        await ScreenOrientation.lock({ orientation: 'landscape' });
+      } catch (e) {
+        console.log('Fullscreen error:', e);
+      }
+    }
+  }, []);
 
   void onMultiGridAdd;
 
@@ -557,6 +543,15 @@ const Player = memo(({
         />
       )}
 
+      {/* PiP Mini Player */}
+      <PiPMiniPlayer
+        visible={isPiP}
+        channelName={channel?.name}
+        channelLogo={channel?.logo}
+        isPlaying={isPlaying}
+        onPlayPause={onTogglePlay}
+        onExpand={handlePiPExpand}
+      />
     </div>
   );
 });

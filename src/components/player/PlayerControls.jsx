@@ -1,4 +1,41 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import SettingsOverlay from './SettingsOverlay';
+
+// TickerText - auto-scroll text that overflows its container
+const TickerText = ({ children, style = {} }) => {
+  const containerRef = useRef(null);
+  const textRef = useRef(null);
+  const [shouldScroll, setShouldScroll] = useState(false);
+
+  useEffect(() => {
+    if (containerRef.current && textRef.current) {
+      setShouldScroll(textRef.current.scrollWidth > containerRef.current.clientWidth);
+    }
+  }, [children]);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        overflow: 'hidden',
+        ...style,
+      }}
+    >
+      <div
+        ref={textRef}
+        style={{
+          display: 'inline-block',
+          whiteSpace: 'nowrap',
+          animation: shouldScroll ? 'pcTicker 8s linear infinite' : 'none',
+          paddingRight: shouldScroll ? '40px' : '0',
+        }}
+      >
+        {children}
+        {shouldScroll && <span style={{ paddingLeft: '40px' }}>{children}</span>}
+      </div>
+    </div>
+  );
+};
 
 // ============================================================================
 // PLAYER CONTROLS - OTT Design
@@ -128,13 +165,13 @@ const styles = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    maxWidth: '100px',
+    maxWidth: '140px',
   },
   channelNameCurrent: {
     fontSize: '13px',
     fontWeight: '600',
     color: 'white',
-    maxWidth: '150px',
+    maxWidth: '180px',
   },
   // Timeshift
   timeshift: {
@@ -214,6 +251,7 @@ export const PlayerControls = ({
   streamInfo = null, // { category: 'FR| SPORT', resolution: '1080p', codec: 'HEVC', fps: '50fps', bitrate: '8.5 Mbps' }
 }) => {
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
+  const [showSettingsOverlay, setShowSettingsOverlay] = useState(false);
   
   // Skip multiplier state
   const [skipBackCount, setSkipBackCount] = useState(0);
@@ -351,8 +389,9 @@ export const PlayerControls = ({
     >
       {/* ========== TOP ROW ========== */}
       
-      {/* Top Center: Logo NINJA 8K */}
-      <div
+      {/* Top Center: Logo NINJA 8K - clickable toggle SettingsOverlay */}
+      <button
+        onClick={() => setShowSettingsOverlay(!showSettingsOverlay)}
         style={{
           position: 'absolute',
           top: '15px',
@@ -361,7 +400,13 @@ export const PlayerControls = ({
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
-          opacity: 1,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '6px 12px',
+          borderRadius: '8px',
+          zIndex: 10001,
+          animation: 'logoPulse 2.5s ease-in-out infinite',
         }}
       >
         <span style={{ fontSize: '14px', fontWeight: '900', color: 'white', letterSpacing: '-0.5px' }}>
@@ -370,7 +415,7 @@ export const PlayerControls = ({
         <span style={{ fontSize: '14px', fontWeight: '900', color: '#6225ff', letterSpacing: '-0.5px' }}>
           8K
         </span>
-      </div>
+      </button>
       
       {/* Top Left: MultiGrid */}
       {hasMultiGrid && onMultiGridToggle && (
@@ -450,7 +495,9 @@ export const PlayerControls = ({
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 )}
-                <span style={styles.channelName}>{prevChannel.name}</span>
+                <TickerText style={{ maxWidth: '140px' }}>
+                  <span style={styles.channelName}>{prevChannel.name}</span>
+                </TickerText>
               </div>
             )}
 
@@ -482,9 +529,11 @@ export const PlayerControls = ({
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 )}
-                <span style={{ ...styles.channelName, ...styles.channelNameCurrent }}>
-                  {currentChannel.name}
-                </span>
+                <TickerText style={{ maxWidth: '180px' }}>
+                  <span style={{ ...styles.channelName, ...styles.channelNameCurrent }}>
+                    {currentChannel.name}
+                  </span>
+                </TickerText>
               </div>
             )}
 
@@ -501,7 +550,6 @@ export const PlayerControls = ({
                 role="button"
                 tabIndex={0}
               >
-                <span style={styles.channelName}>{nextChannel.name}</span>
                 {nextChannel.logo && (
                   <img
                     src={nextChannel.logo}
@@ -510,6 +558,9 @@ export const PlayerControls = ({
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 )}
+                <TickerText style={{ maxWidth: '140px' }}>
+                  <span style={styles.channelName}>{nextChannel.name}</span>
+                </TickerText>
               </div>
             )}
           </div>
@@ -703,6 +754,24 @@ export const PlayerControls = ({
           </div>
         )}
       </div>
+
+      {/* SettingsOverlay */}
+      <SettingsOverlay
+        visible={showSettingsOverlay}
+        onClose={() => setShowSettingsOverlay(false)}
+      />
+
+      {/* Keyframes */}
+      <style>{`
+        @keyframes pcTicker {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        @keyframes logoPulse {
+          0%, 100% { opacity: 0.85; filter: drop-shadow(0 0 0px transparent); }
+          50% { opacity: 1; filter: drop-shadow(0 0 8px rgba(98, 37, 255, 0.6)); }
+        }
+      `}</style>
     </div>
   );
 };
