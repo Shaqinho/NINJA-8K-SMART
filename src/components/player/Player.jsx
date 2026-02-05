@@ -29,6 +29,8 @@ const Player = memo(({
   showMultiGrid = false,
   onMultiGridToggle,
   isSmartFullscreen = false,
+  volume: externalVolume,
+  onVolumeChange: externalVolumeChange,
   ottSidebarOpen = false,
   onOttSidebarChange,
 }) => {
@@ -37,7 +39,7 @@ const Player = memo(({
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const volume = externalVolume !== undefined ? externalVolume : 1;
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -57,10 +59,6 @@ const Player = memo(({
 
   const actualMultiGridItems = multiGridItems.length > 0 ? multiGridItems : internalMultiGridItems;
   const actualShowMultiGrid = showMultiGrid !== undefined ? showMultiGrid : internalShowMultiGrid;
-
-  const [touchStartY, setTouchStartY] = useState(null);
-  const [initialPinchDistance, setInitialPinchDistance] = useState(null);
-  const [initialVolume, setInitialVolume] = useState(1);
 
   const [isInvertedGravity, setIsInvertedGravity] = useState(false);
 
@@ -159,12 +157,12 @@ const Player = memo(({
   }, []);
 
   const handleVolumeChange = useCallback((vol) => {
-    setVolume(vol);
+    if (externalVolumeChange) externalVolumeChange(vol);
     setMuted(vol === 0);
     if (videoRef.current) {
       videoRef.current.setVolume(vol);
     }
-  }, []);
+  }, [externalVolumeChange]);
 
   const handleMuteToggle = useCallback(() => {
     const newMuted = !muted;
@@ -234,52 +232,6 @@ const Player = memo(({
       window.removeEventListener('orientationchange', handleOrientationChange);
       window.removeEventListener('resize', handleOrientationChange);
     };
-  }, []);
-
-  const getTouchDistance = (touches) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  const handleTouchStart = useCallback((e) => {
-    if (e.touches.length === 2) {
-      const avgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      setTouchStartY(avgY);
-      setInitialVolume(volume);
-      setInitialPinchDistance(getTouchDistance(e.touches));
-    }
-  }, [volume]);
-
-  const handleTouchMove = useCallback((e) => {
-    if (e.touches.length === 2 && touchStartY !== null && initialPinchDistance !== null) {
-      e.preventDefault();
-
-      const currentDistance = getTouchDistance(e.touches);
-      const distanceChange = currentDistance - initialPinchDistance;
-
-      if (Math.abs(distanceChange) > 50) {
-        if (distanceChange > 0 && !isFullscreen) {
-          toggleFullscreen();
-          setInitialPinchDistance(null);
-        } else if (distanceChange < 0 && isFullscreen) {
-          toggleFullscreen();
-          setInitialPinchDistance(null);
-        }
-      } else {
-        const avgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        const deltaY = touchStartY - avgY;
-        const volumeChange = deltaY / 200;
-        const newVolume = Math.max(0, Math.min(1, initialVolume + volumeChange));
-        handleVolumeChange(newVolume);
-      }
-    }
-  }, [touchStartY, initialPinchDistance, initialVolume, isFullscreen, toggleFullscreen, handleVolumeChange]);
-
-  const handleTouchEnd = useCallback(() => {
-    setTouchStartY(null);
-    setInitialPinchDistance(null);
   }, []);
 
   const handleMultiGridToggle = useCallback(() => {
@@ -434,10 +386,6 @@ const Player = memo(({
       {/* Video Player - CRITICAL: Pass isFullScreen prop */}
       <div
         className="absolute inset-0"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        style={{ touchAction: 'none' }}
       >
         {src ? (
           <VideoPlayer
@@ -488,18 +436,6 @@ const Player = memo(({
           </div>
         </div>
       )}
-
-      {/* Volume indicator during gesture */}
-      {touchStartY !== null && (
-        <div className="absolute top-4 right-4 px-3 py-2 rounded-lg bg-transparent flex items-center gap-2 pointer-events-none">
-          <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-          </svg>
-          <span className="text-white font-bold">{Math.round(volume * 100)}%</span>
-        </div>
-      )}
-
 
 
       {/* Controls */}

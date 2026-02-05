@@ -173,6 +173,9 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const [reloadingTab, setReloadingTab] = useState(null);
   const contentListRef = useRef(null);
   const playerContainerRef = useRef(null);
+  const smartRef = useRef(null);
+  const volumeTimerRef = useRef(null);
+  const [showVolumeGauge, setShowVolumeGauge] = useState(false);
   
   const [epgData, setEpgData] = useState({});
   const [epgLoading, setEpgLoading] = useState(false);
@@ -283,7 +286,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const [ottSidebarOpen, setOttSidebarOpen] = useState(false);
 
   // Gestures
-  const gestures = useGestures(playerContainerRef, {
+  const gestures = useGestures(smartRef, {
     onSpread: () => setIsPlaying(true),
     onPinch: () => {
       setIsPlaying(false);
@@ -296,10 +299,18 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
         }
       }, 300);
     },
-    onVolumeChange: (vol) => setVolume(vol),
+    onVolumeChange: (vol) => {
+      setVolume(vol);
+      setShowVolumeGauge(true);
+      clearTimeout(volumeTimerRef.current);
+      volumeTimerRef.current = setTimeout(() => setShowVolumeGauge(false), 1500);
+    },
     // 3-finger gestures for OTT sidebar
     onOTTOpen: () => setOttSidebarOpen(true),
     onOTTClose: () => setOttSidebarOpen(false),
+    // 2-finger swipe for folder navigation
+    onFolderPrev: () => window.__ottFolderPrev?.(),
+    onFolderNext: () => window.__ottFolderNext?.(),
   });
 
   const xtreamService = useMemo(() => {
@@ -586,7 +597,62 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden" style={containerStyle}>
+    <div ref={smartRef} className="fixed inset-0 flex flex-col overflow-hidden" style={containerStyle}>
+      {/* Vertical Volume Gauge */}
+      {showVolumeGauge && (
+        <div
+          className="fixed z-[10003] pointer-events-none"
+          style={{
+            right: '20px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+          }}
+        >
+          <div style={{
+            width: '36px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px 0',
+            borderRadius: '18px',
+            background: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(10px)',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              {volume > 0 && <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
+              {volume > 0.5 && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
+            </svg>
+            <div style={{
+              width: '4px',
+              height: '120px',
+              borderRadius: '2px',
+              background: 'rgba(255,255,255,0.2)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                position: 'absolute',
+                bottom: 0,
+                width: '100%',
+                height: `${Math.round(volume * 100)}%`,
+                borderRadius: '2px',
+                background: '#6225ff',
+                transition: 'height 0.1s ease-out',
+              }} />
+            </div>
+            <span style={{
+              color: '#fff',
+              fontSize: '10px',
+              fontWeight: 700,
+            }}>
+              {Math.round(volume * 100)}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Player Area */}
       <div 
         ref={playerContainerRef}
