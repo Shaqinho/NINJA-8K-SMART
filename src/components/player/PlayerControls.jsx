@@ -341,14 +341,6 @@ export const PlayerControls = ({
   
   const isAtLive = timeshiftOffset === 0;
 
-  // Format timeshift offset
-  const formatOffset = (seconds) => {
-    if (seconds === 0) return 'LIVE';
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `-${m}:${s.toString().padStart(2, '0')}`;
-  };
-
   // ===========================================
   // MINIMAL MODE (Small player - not fullscreen)
   // ===========================================

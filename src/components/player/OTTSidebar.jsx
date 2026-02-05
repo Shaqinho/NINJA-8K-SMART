@@ -246,7 +246,7 @@ const OTTSidebar = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [programResults, setProgramResults] = useState([]);
-  const [programSearching, setProgramSearching] = useState(false);
+  const [, setProgramSearching] = useState(false);
   const [showKeyboard, setShowKeyboard] = useState(false);
   const [keyboardPos, setKeyboardPos] = useState({ x: 290, y: 60 });
   
@@ -259,7 +259,6 @@ const OTTSidebar = ({
   
   // EPG lazy-load
   const [epgData, setEpgData] = useState({});
-  const epgLoadingRef = useRef(new Set());
   
   // ========== CERCLE 1 - SQLite EPG + On-demand fetch ==========
   const [sqliteEpg, setSqliteEpg] = useState({}); // { streamId: { title, progress } }
@@ -350,7 +349,6 @@ const OTTSidebar = ({
   // ========== CERCLE 1: SQLite READ for visible channels ==========
   const loadSqliteEpgForItems = useCallback(async (items) => {
     if (!items?.length || activeTab !== 'live') return;
-    const now = Math.floor(Date.now() / 1000);
     const ERROR_TTL = 60000; // 60s cache for failed fetches
     const newEpg = {};
     const needsFetch = []; // IDs that are empty in SQLite and need network
