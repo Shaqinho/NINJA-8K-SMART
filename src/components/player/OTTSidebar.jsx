@@ -90,6 +90,25 @@ const OTTSidebar = ({
   const [seriesItems, setSeriesItems] = useState([]);
   const [seriesSeasons, setSeriesSeasons] = useState({});
   
+  // EPG lazy-load
+  const [epgData, setEpgData] = useState({});
+  const epgLoadingRef = useRef(new Set());
+  
+  // Favorites (persisted in localStorage)
+  const [favorites, setFavorites] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ninja_favorites') || '{}'); } catch { return {}; }
+  });
+  
+  // Recent channels
+  const [recentIds, setRecentIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ninja_recent') || '[]'); } catch { return []; }
+  });
+  
+  // Long press / triple tap for favorites
+  const itemLongPressRef = useRef(null);
+  const itemTapCountRef = useRef(0);
+  const itemTapTimerRef = useRef(null);
+  
   // Use external control if provided, otherwise internal
   const isSidebarOpen = externalIsOpen !== undefined ? externalIsOpen : internalSidebarOpen;
   const setSidebarOpen = externalOnToggle || setInternalSidebarOpen;
@@ -103,13 +122,94 @@ const OTTSidebar = ({
   const listRef = useRef(null);
   const searchInputRef = useRef(null);
 
-  // ========== ACTIVE CATEGORIES & ITEMS BASED ON TAB ==========
+  // ========== FAVORITES ==========
+  const toggleFavorite = useCallback((itemId) => {
+    setFavorites(prev => {
+      const next = { ...prev };
+      if (next[itemId]) delete next[itemId];
+      else next[itemId] = true;
+      localStorage.setItem('ninja_favorites', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // ========== RECENT TRACKER ==========
+  const addRecent = useCallback((itemId) => {
+    setRecentIds(prev => {
+      const next = [itemId, ...prev.filter(id => id !== itemId)].slice(0, 50);
+      localStorage.setItem('ninja_recent', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // ========== SYSTEM FOLDERS ==========
+  const systemFolders = useMemo(() => {
+    const totalCount = activeItems.length;
+    const favCount = activeItems.filter(item => favorites[item.stream_id || item.id || item.series_id]).length;
+    const recentCount = activeItems.filter(item => recentIds.includes(item.stream_id || item.id || item.series_id)).length;
+    return [
+      { category_id: '__all__', category_name: 'ALL', count: totalCount, isSystem: true },
+      { category_id: '__favorites__', category_name: 'FAVORITES', count: favCount, isSystem: true },
+      { category_id: '__recent__', category_name: 'RECENT', count: recentCount, isSystem: true },
+    ];
+  }, [activeItems, favorites, recentIds]);
+
+  // ========== EPG LAZY-LOAD ==========
+  const loadEpgForItems = useCallback(async (items) => {
+    if (!xtreamService || activeTab !== 'live') return;
+    const toLoad = items.filter(item => {
+      const id = item.stream_id || item.id;
+      return id && epgData[id] === undefined && !epgLoadingRef.current.has(id);
+    }).slice(0, 25);
+    
+    if (toLoad.length === 0) return;
+    
+    toLoad.forEach(item => epgLoadingRef.current.add(item.stream_id || item.id));
+    
+    try {
+      const results = {};
+      const batches = [];
+      for (let i = 0; i < toLoad.length; i += 5) {
+        batches.push(toLoad.slice(i, i + 5));
+      }
+      for (const batch of batches) {
+        await Promise.all(batch.map(async (item) => {
+          const id = item.stream_id || item.id;
+          try {
+            const epg = await xtreamService.getShortEPG(id, 1);
+            const listings = epg?.epg_listings || [];
+            if (listings.length > 0) {
+              const title = listings[0].title ? atob(listings[0].title) : '';
+              results[id] = title;
+            } else {
+              results[id] = '';
+            }
+          } catch {
+            results[id] = '';
+          }
+        }));
+      }
+      setEpgData(prev => ({ ...prev, ...results }));
+    } catch (err) {
+      console.warn('EPG load error:', err);
+    }
+  }, [xtreamService, activeTab, epgData]);
+
+  // Trigger EPG load when filtered items change
+  useEffect(() => {
+    if (activeTab === 'live' && showItems && filteredItems.length > 0) {
+      loadEpgForItems(filteredItems.slice(0, 25));
+    }
+  }, [activeTab, showItems, filteredItems, loadEpgForItems]);
+
+  // ========== ACTIVE CATEGORIES WITH SYSTEM FOLDERS ==========
   const activeCategories = useMemo(() => {
-    if (activeTab === 'live') return categories;
-    if (activeTab === 'movies') return vodCategories;
-    if (activeTab === 'series') return seriesCategories;
-    return [];
-  }, [activeTab, categories, vodCategories, seriesCategories]);
+    let cats = [];
+    if (activeTab === 'live') cats = categories;
+    else if (activeTab === 'movies') cats = vodCategories;
+    else if (activeTab === 'series') cats = seriesCategories;
+    return [...systemFolders, ...cats];
+  }, [activeTab, categories, vodCategories, seriesCategories, systemFolders]);
 
   const activeItems = useMemo(() => {
     if (activeTab === 'live') return channels;
@@ -307,9 +407,45 @@ const OTTSidebar = ({
   }, [onCategorySelect]);
   
   const handleItemClick = useCallback((item) => {
+    const itemId = item.stream_id || item.id || item.series_id;
+    
+    // Triple-tap detection
+    itemTapCountRef.current += 1;
+    clearTimeout(itemTapTimerRef.current);
+    
+    if (itemTapCountRef.current >= 3) {
+      toggleFavorite(itemId);
+      itemTapCountRef.current = 0;
+      return;
+    }
+    
+    itemTapTimerRef.current = setTimeout(() => {
+      itemTapCountRef.current = 0;
+    }, 500);
+    
+    // Track recent
+    addRecent(itemId);
+    
+    // Select channel
     onChannelSelect?.(item);
     // Sidebar stays open
-  }, [onChannelSelect]);
+  }, [onChannelSelect, toggleFavorite, addRecent]);
+
+  // Long press on item = toggle favorite
+  const handleItemTouchStart = useCallback((item) => {
+    const itemId = item.stream_id || item.id || item.series_id;
+    itemLongPressRef.current = setTimeout(() => {
+      toggleFavorite(itemId);
+      itemLongPressRef.current = null;
+    }, 3000);
+  }, [toggleFavorite]);
+
+  const handleItemTouchEnd = useCallback(() => {
+    if (itemLongPressRef.current) {
+      clearTimeout(itemLongPressRef.current);
+      itemLongPressRef.current = null;
+    }
+  }, []);
   
   const handleBackToCategories = useCallback(() => {
     setShowItems(false);
@@ -351,19 +487,30 @@ const OTTSidebar = ({
   // ========== FILTERED DATA ==========
   const filteredItems = useMemo(() => {
     if (!currentCategory) return [];
-    let items = activeItems.filter(item => String(item.categoryId) === String(currentCategory.category_id));
+    
+    let items;
+    if (currentCategory.category_id === '__all__') {
+      items = [...activeItems];
+    } else if (currentCategory.category_id === '__favorites__') {
+      items = activeItems.filter(item => favorites[item.stream_id || item.id || item.series_id]);
+    } else if (currentCategory.category_id === '__recent__') {
+      const recentMap = new Map(activeItems.map(item => [item.stream_id || item.id || item.series_id, item]));
+      items = recentIds.map(id => recentMap.get(id)).filter(Boolean);
+    } else {
+      items = activeItems.filter(item => String(item.categoryId) === String(currentCategory.category_id));
+    }
     
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       items = items.filter(item => {
         const name = (item.name || '').toLowerCase();
-        const epg = (item.epg_now || '').toLowerCase();
+        const epg = (epgData[item.stream_id || item.id] || item.epg_now || '').toLowerCase();
         return name.includes(q) || epg.includes(q);
       });
     }
     
     return items;
-  }, [currentCategory, activeItems, searchQuery]);
+  }, [currentCategory, activeItems, searchQuery, favorites, recentIds, epgData]);
 
   // ========== LAZY-LOAD SERIES SEASONS FOR VISIBLE ITEMS ==========
   useEffect(() => {
@@ -390,7 +537,12 @@ const OTTSidebar = ({
     const cat = activeCategories[index];
     if (!cat) return null;
     const isActive = selectedCategory?.category_id === cat.category_id;
-    const count = getCategoryCount(cat.category_id);
+    const count = cat.isSystem ? (cat.count || 0) : getCategoryCount(cat.category_id);
+    
+    const systemIcon = cat.category_id === '__all__' ? '📋' 
+      : cat.category_id === '__favorites__' ? '⭐' 
+      : cat.category_id === '__recent__' ? '🕐' 
+      : null;
     
     return (
       <div
@@ -406,8 +558,11 @@ const OTTSidebar = ({
         }}
         onClick={() => handleCategoryClick(cat)}
       >
+        {systemIcon && (
+          <span style={{ fontSize: '12px', flexShrink: 0 }}>{systemIcon}</span>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <TickerText style={{ fontSize: '11px', fontWeight: 500, color: '#fff' }}>
+          <TickerText style={{ fontSize: '11px', fontWeight: cat.isSystem ? 700 : 500, color: cat.isSystem ? '#a855f7' : '#fff' }}>
             {cat.category_name}
           </TickerText>
           <div style={{ fontSize: '9px', color: '#666' }}>
@@ -426,6 +581,8 @@ const OTTSidebar = ({
     const channel = filteredItems[index];
     if (!channel) return null;
     const isActive = selectedChannel?.id === channel.id;
+    const channelId = channel.stream_id || channel.id;
+    const isFav = favorites[channelId];
     
     return (
       <div
@@ -440,12 +597,17 @@ const OTTSidebar = ({
           borderLeft: isActive ? '3px solid #6225ff' : '3px solid transparent',
         }}
         onClick={() => handleItemClick(channel)}
+        onTouchStart={() => handleItemTouchStart(channel)}
+        onTouchEnd={handleItemTouchEnd}
+        onMouseDown={() => handleItemTouchStart(channel)}
+        onMouseUp={handleItemTouchEnd}
+        onMouseLeave={handleItemTouchEnd}
       >
         <div style={{
-          width: '100px',
+          width: '75px',
           height: '25px',
           borderRadius: '4px',
-          background: 'rgba(255,255,255,0.08)',
+          background: 'transparent',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -468,12 +630,15 @@ const OTTSidebar = ({
           <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
             {channel.name}
           </TickerText>
-          {channel.epg_now && (
+          {(epgData[channel.stream_id || channel.id] || channel.epg_now) && (
             <TickerText style={{ fontSize: '8px', color: '#888' }}>
-              {channel.epg_now}
+              {epgData[channel.stream_id || channel.id] || channel.epg_now}
             </TickerText>
           )}
         </div>
+        {isFav && (
+          <span style={{ fontSize: '10px', flexShrink: 0, color: '#f59e0b' }}>⭐</span>
+        )}
         {isActive && (
           <div style={{
             width: '6px',
@@ -486,7 +651,7 @@ const OTTSidebar = ({
         )}
       </div>
     );
-  }, [filteredItems, selectedChannel, handleItemClick]);
+  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchEnd, favorites, epgData]);
 
   // ========== VIRTUALIZED MOVIE ROW ==========
   const MovieRow = useCallback(({ index, style }) => {
@@ -513,10 +678,10 @@ const OTTSidebar = ({
         onClick={() => handleItemClick(movie)}
       >
         <div style={{
-          width: '100px',
+          width: '75px',
           height: '25px',
           borderRadius: '4px',
-          background: 'rgba(255,255,255,0.08)',
+          background: 'transparent',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -576,10 +741,10 @@ const OTTSidebar = ({
         onClick={() => handleItemClick(series)}
       >
         <div style={{
-          width: '100px',
+          width: '75px',
           height: '25px',
           borderRadius: '4px',
-          background: 'rgba(255,255,255,0.08)',
+          background: 'transparent',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

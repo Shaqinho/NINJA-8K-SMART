@@ -249,6 +249,9 @@ export const PlayerControls = ({
   onJumpToLive,
   // Stream info
   streamInfo = null, // { category: 'FR| SPORT', resolution: '1080p', codec: 'HEVC', fps: '50fps', bitrate: '8.5 Mbps' }
+  // Settings overlay
+  xtreamService,
+  onServers,
 }) => {
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
   const [showSettingsOverlay, setShowSettingsOverlay] = useState(false);
@@ -759,6 +762,8 @@ export const PlayerControls = ({
       <SettingsOverlay
         visible={showSettingsOverlay}
         onClose={() => setShowSettingsOverlay(false)}
+        xtreamService={xtreamService}
+        onServers={onServers}
       />
 
       {/* Keyframes */}

@@ -33,6 +33,8 @@ const Player = memo(({
   onVolumeChange: externalVolumeChange,
   ottSidebarOpen = false,
   onOttSidebarChange,
+  xtreamService,
+  onServers,
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -491,6 +493,9 @@ const Player = memo(({
           sidebarOpen={ottSidebarOpen}
           // Stream info (TODO: get from VideoPlayer when available)
           streamInfo={null}
+          // Settings overlay
+          xtreamService={xtreamService}
+          onServers={onServers}
         />
       </div>
 

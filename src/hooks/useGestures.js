@@ -143,11 +143,11 @@ export const useGestures = (containerRef, callbacks = {}) => {
       // SWIPE detection - horizontal movement > 60px, dominant axis
       else if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
         if (deltaX > 0) {
-          // Swipe Right = Next folder
-          callbacks.onFolderNext?.();
-        } else {
-          // Swipe Left = Previous folder
+          // Swipe Right = Previous folder
           callbacks.onFolderPrev?.();
+        } else {
+          // Swipe Left = Next folder
+          callbacks.onFolderNext?.();
         }
 
         // Reset
