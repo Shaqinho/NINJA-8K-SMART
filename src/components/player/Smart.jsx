@@ -12,6 +12,7 @@ import { usePlaylistContext } from '../context/PlaylistContext';
 import { XtreamService } from '../services/XtreamService';
 import { useGestures } from '../hooks/useGestures';
 import { ninjaCentral, STORES } from '../services/NinjaCentral';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
 
 // ============================================================================
 // TAB NAVIGATION - With Long Press to Reload
@@ -287,9 +288,19 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
 
   // Gestures
   const gestures = useGestures(smartRef, {
-    onSpread: () => setIsPlaying(true),
+    onSpread: () => {
+      if (selectedItem) setIsPlaying(true);
+    },
     onPinch: () => {
-      setIsPlaying(false);
+      // If in landscape fullscreen, just exit to portrait (video keeps playing)
+      // If already in portrait, stop playing
+      if (isLandscape && isPlaying) {
+        // Force portrait - video stays playing above tabs
+        // ScreenOrientation.unlock() will trigger resize → isLandscape = false
+        try { ScreenOrientation.unlock(); } catch (e) {}
+      } else {
+        setIsPlaying(false);
+      }
       // Force recalcul après que le layout soit stable
       setTimeout(() => {
         if (contentListRef.current) {
@@ -668,7 +679,14 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
           channels={liveChannels}
           categories={apiCategories}
           isPlaying={isPlaying}
-          onTogglePlay={() => setIsPlaying(!isPlaying)}
+          onTogglePlay={() => {
+            if (isLandscape && isPlaying) {
+              // Exit landscape → portrait, keep playing
+              try { ScreenOrientation.unlock(); } catch (e) {}
+            } else {
+              setIsPlaying(!isPlaying);
+            }
+          }}
           onChannelChange={handleChannelChange}
           isLive={activeTab === 'live'}
           onSearchEPG={handleOpenEPGSearch}

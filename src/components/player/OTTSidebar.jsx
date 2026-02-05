@@ -539,10 +539,13 @@ const OTTSidebar = ({
     const isActive = selectedCategory?.category_id === cat.category_id;
     const count = cat.isSystem ? (cat.count || 0) : getCategoryCount(cat.category_id);
     
-    const systemIcon = cat.category_id === '__all__' ? '📋' 
-      : cat.category_id === '__favorites__' ? '⭐' 
-      : cat.category_id === '__recent__' ? '🕐' 
-      : null;
+    const systemIcon = cat.category_id === '__all__' ? (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    ) : cat.category_id === '__favorites__' ? (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    ) : cat.category_id === '__recent__' ? (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    ) : null;
     
     return (
       <div
@@ -637,7 +640,9 @@ const OTTSidebar = ({
           )}
         </div>
         {isFav && (
-          <span style={{ fontSize: '10px', flexShrink: 0, color: '#f59e0b' }}>⭐</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b" stroke="none" style={{ flexShrink: 0 }}>
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
         )}
         {isActive && (
           <div style={{
@@ -697,7 +702,7 @@ const OTTSidebar = ({
               onError={(e) => { e.target.style.display = 'none'; }}
             />
           ) : (
-            <span style={{ fontSize: '8px', color: '#555' }}>🎬</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
           )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -760,7 +765,7 @@ const OTTSidebar = ({
               onError={(e) => { e.target.style.display = 'none'; }}
             />
           ) : (
-            <span style={{ fontSize: '8px', color: '#555' }}>📺</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
           )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
