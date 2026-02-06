@@ -190,8 +190,6 @@ export const PlayerControls = ({
   visible = true,
   // Channel navigation
   currentChannel,
-  prevChannel,
-  nextChannel,
   onChannelPrev,
   onChannelNext,
   // Timeshift
@@ -461,25 +459,6 @@ export const PlayerControls = ({
         {/* ROW 2: Channel Navigation (prev + current + next on same line) */}
         {isLive && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '12px' }}>
-            {/* Previous channel - clickable */}
-            {prevChannel && (
-              <div
-                onClick={onChannelPrev}
-                style={styles.channelInfo}
-                role="button"
-                tabIndex={0}
-              >
-                {prevChannel.logo && (
-                  <img
-                    src={prevChannel.logo}
-                    alt=""
-                    style={{ ...styles.channelLogo, ...styles.channelLogoSmall }}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                )}
-                <span style={{ ...styles.channelName, display: 'block', maxWidth: 'min(140px, 20vw)' }}>{prevChannel.name}</span>
-              </div>
-            )}
 
             {/* Button << */}
             <button onClick={onChannelPrev} style={styles.btnSwitch} title="Previous channel">
@@ -496,6 +475,9 @@ export const PlayerControls = ({
                   gap: '8px',
                   padding: '4px 8px',
                   borderRadius: '8px',
+                  flex: 1,
+                  justifyContent: 'center',
+                  minWidth: 0,
                 }}
               >
                 {currentChannel.logo && (
@@ -506,7 +488,7 @@ export const PlayerControls = ({
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 )}
-                <span style={{ ...styles.channelName, ...styles.channelNameCurrent, display: 'block', maxWidth: 'min(200px, 30vw)' }}>
+                <span style={{ ...styles.channelName, ...styles.channelNameCurrent, display: 'block', maxWidth: '50vw' }}>
                     {currentChannel.name}
                   </span>
               </div>
@@ -517,25 +499,6 @@ export const PlayerControls = ({
               ››
             </button>
 
-            {/* Next channel - clickable */}
-            {nextChannel && (
-              <div
-                onClick={onChannelNext}
-                style={styles.channelInfo}
-                role="button"
-                tabIndex={0}
-              >
-                {nextChannel.logo && (
-                  <img
-                    src={nextChannel.logo}
-                    alt=""
-                    style={{ ...styles.channelLogo, ...styles.channelLogoSmall }}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                )}
-                <span style={{ ...styles.channelName, display: 'block', maxWidth: 'min(140px, 20vw)' }}>{nextChannel.name}</span>
-              </div>
-            )}
           </div>
         )}
 

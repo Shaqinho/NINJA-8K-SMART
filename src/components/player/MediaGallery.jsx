@@ -18,7 +18,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
   const gridRef = useRef(null);
 
   // Grid layout
-  const COLUMN_COUNT = 3;
+  const COLUMN_COUNT = 6;
   const ITEM_WIDTH = Math.floor((window.innerWidth - 280) / COLUMN_COUNT);
   const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.5); // Poster ratio
   const ROW_COUNT = Math.ceil(items.length / COLUMN_COUNT);

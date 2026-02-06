@@ -116,11 +116,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
     <div style={{ 
       display: 'flex', 
       flexDirection: 'column', 
-      height: '100%', 
-      background: 'rgba(255, 255, 255, 0.10)',
-      backdropFilter: 'blur(25px) saturate(150%)',
-      WebkitBackdropFilter: 'blur(25px) saturate(150%)',
-      borderLeft: '1px solid rgba(255,255,255,0.1)'
+      height: '100%',
     }}>
       
       <div style={{ padding: '25px 20px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
