@@ -1576,7 +1576,7 @@ const OTTSidebar = ({
           )}
         </div>
 
-        {/* Search Bar (compact, bottom) */}
+        {/* Bottom toolbar (compact, icons only) */}
         {showItems && (
           <div style={{
             height: '36px',
@@ -1588,6 +1588,7 @@ const OTTSidebar = ({
             flexShrink: 0,
             background: 'rgba(0,0,0,0.5)',
           }}>
+            {/* Search toggle */}
             <button
               onClick={() => {
                 if (!searchOpen) {
@@ -1602,11 +1603,11 @@ const OTTSidebar = ({
               }}
               style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', display: 'flex', flexShrink: 0 }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchOpen ? '#6225ff' : '#888'} strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchOpen ? '#6225ff' : '#555'} strokeWidth="2">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
             </button>
-            {searchOpen ? (
+            {searchOpen && (
               <>
                 <input
                   ref={searchInputRef}
@@ -1630,8 +1631,6 @@ const OTTSidebar = ({
                   </button>
                 )}
               </>
-            ) : (
-              <span style={{ fontSize: '10px', color: '#555' }}>Search...</span>
             )}
           </div>
         )}
