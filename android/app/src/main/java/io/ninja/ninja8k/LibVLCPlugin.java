@@ -276,6 +276,64 @@ public class LibVLCPlugin extends Plugin {
         });
     }
 
+    @PluginMethod
+    public void getAudioTracks(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (mediaPlayer == null) {
+                    call.reject("Player not initialized");
+                    return;
+                }
+                MediaPlayer.TrackDescription[] tracks = mediaPlayer.getAudioTracks();
+                JSObject result = new JSObject();
+                result.put("count", tracks != null ? tracks.length - 1 : 0); // -1 for "Disable" track
+                com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
+                if (tracks != null) {
+                    for (MediaPlayer.TrackDescription t : tracks) {
+                        if (t.id == -1) continue; // Skip "Disable" option
+                        JSObject track = new JSObject();
+                        track.put("id", t.id);
+                        track.put("name", t.name);
+                        arr.put(track);
+                    }
+                }
+                result.put("tracks", arr);
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject("getAudioTracks failed: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void getSubtitleTracks(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (mediaPlayer == null) {
+                    call.reject("Player not initialized");
+                    return;
+                }
+                MediaPlayer.TrackDescription[] tracks = mediaPlayer.getSpuTracks();
+                JSObject result = new JSObject();
+                result.put("count", tracks != null ? tracks.length - 1 : 0); // -1 for "Disable" track
+                com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
+                if (tracks != null) {
+                    for (MediaPlayer.TrackDescription t : tracks) {
+                        if (t.id == -1) continue; // Skip "Disable" option
+                        JSObject track = new JSObject();
+                        track.put("id", t.id);
+                        track.put("name", t.name);
+                        arr.put(track);
+                    }
+                }
+                result.put("tracks", arr);
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject("getSubtitleTracks failed: " + e.getMessage());
+            }
+        });
+    }
+
     private void cleanup() {
         if (mediaPlayer != null) {
             mediaPlayer.stop();

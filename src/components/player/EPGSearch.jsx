@@ -18,6 +18,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onClose }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [, setLoading] = useState(false);
   const [syncOptions, setSyncOptions] = useState({ includeDesc: false, includeTime: true });
+  const [startTimeFilter, setStartTimeFilter] = useState(null); // null = off, number = hour (18, 19, 20, 21...)
 
   const searchTimerRef = useRef(null);
 
@@ -33,16 +34,26 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onClose }) => {
       const categoryIds = presets.flatMap(p => p.categoryIds);
       if (!categoryIds.length) return;
 
-      const data = q.length >= 2 
+      let data = q.length >= 2 
         ? await searchProgramsByCategories(q, categoryIds, 150)
         : await getNowByCategories(categoryIds, 150);
+      
+      // Filter by start time if active
+      if (startTimeFilter !== null && data.length) {
+        data = data.filter(p => {
+          if (!p.start_time) return false;
+          const hour = new Date(p.start_time * 1000).getHours();
+          return hour >= startTimeFilter && hour < startTimeFilter + 2;
+        });
+      }
+      
       setResults(data);
     } catch (err) {
       console.error("EPG Search Error:", err);
     } finally {
       setLoading(false);
     }
-  }, [presets]);
+  }, [presets, startTimeFilter]);
 
   useEffect(() => {
     clearTimeout(searchTimerRef.current);
@@ -138,8 +149,19 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onClose }) => {
               />
               <span style={{ fontSize: '9px', color: '#aaa', fontWeight: 800 }}>PROFOND</span>
             </label>
-            <button style={{ background: 'rgba(98, 37, 255, 0.2)', border: '1px solid #6225ff', borderRadius: '4px', color: '#fff', fontSize: '9px', fontWeight: 800, padding: '4px 12px' }}>
-              START À...
+            <button 
+              onClick={() => {
+                if (startTimeFilter === null) setStartTimeFilter(20);
+                else if (startTimeFilter >= 24) setStartTimeFilter(null);
+                else setStartTimeFilter(startTimeFilter + 2);
+              }}
+              style={{ 
+                background: startTimeFilter !== null ? 'rgba(98, 37, 255, 0.4)' : 'rgba(98, 37, 255, 0.2)', 
+                border: '1px solid #6225ff', borderRadius: '4px', color: '#fff', fontSize: '9px', fontWeight: 800, padding: '4px 12px',
+                cursor: 'pointer',
+              }}
+            >
+              {startTimeFilter !== null ? `${startTimeFilter}h-${startTimeFilter + 2}h` : 'START À...'}
             </button>
           </div>
           <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{results.length} MATCHES</div>

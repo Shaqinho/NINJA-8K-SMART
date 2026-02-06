@@ -140,6 +140,30 @@ export const libVLC = {
   },
 
   /**
+   * Get audio tracks { count, tracks: [{ id, name }] }
+   */
+  async getAudioTracks() {
+    try {
+      return await Native.getAudioTracks();
+    } catch (e) {
+      console.error('[LibVLC] GetAudioTracks failed:', e);
+      return { count: 0, tracks: [] };
+    }
+  },
+
+  /**
+   * Get subtitle tracks { count, tracks: [{ id, name }] }
+   */
+  async getSubtitleTracks() {
+    try {
+      return await Native.getSubtitleTracks();
+    } catch (e) {
+      console.error('[LibVLC] GetSubtitleTracks failed:', e);
+      return { count: 0, tracks: [] };
+    }
+  },
+
+  /**
    * Destroy player and release resources
    */
   async destroy() {

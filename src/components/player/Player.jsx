@@ -8,6 +8,7 @@ import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
 import OTTSidebar from './OTTSidebar';
 import EPGSearch from './EPGSearch';
+import MediaGallery from './MediaGallery';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -38,6 +39,7 @@ const Player = memo(({
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const sidebarRef = useRef(null);
+  const [sidebarTab, setSidebarTab] = useState('live');
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -503,17 +505,18 @@ const Player = memo(({
           onChannelSelect={onChannelChange}
           isOpen={ottSidebarOpen}
           onToggle={onOttSidebarChange}
+          onTabChange={setSidebarTab}
           xtreamService={xtreamService}
         />
       )}
 
-      {/* EPG Search - Right panel glassmorphic, accolé à OTTSidebar */}
-      {(isFullscreen || isSmartFullscreen) && isLive && ottSidebarOpen && (
+      {/* Right panel — slide from RIGHT (porte d'ascenseur) */}
+      {(isFullscreen || isSmartFullscreen) && isLive && (
         <div style={{
           position: 'absolute',
           top: 0,
           bottom: 0,
-          left: '300px',
+          left: '280px',
           right: 0,
           background: 'rgba(255, 255, 255, 0.03)',
           backdropFilter: 'blur(25px) saturate(150%)',
@@ -523,14 +526,30 @@ const Player = memo(({
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          transform: ottSidebarOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          pointerEvents: ottSidebarOpen ? 'auto' : 'none',
         }}>
-          <EPGSearch
-            xtreamService={xtreamService}
-            onChannelSelect={(ch) => {
-              onChannelChange?.(ch);
-              sidebarRef.current?.scrollToChannel(ch.stream_id);
-            }}
-          />
+          {sidebarTab === 'live' ? (
+            <EPGSearch
+              xtreamService={xtreamService}
+              onChannelSelect={(ch) => {
+                onChannelChange?.(ch);
+                sidebarRef.current?.scrollToChannel(ch.stream_id);
+              }}
+            />
+          ) : (
+            <MediaGallery
+              items={sidebarRef.current?.getFilteredItems() || []}
+              type={sidebarTab}
+              xtreamService={xtreamService}
+              videoRef={videoRef}
+              onItemSelect={(item) => {
+                onChannelChange?.(item);
+                sidebarRef.current?.scrollToChannel(item.stream_id || item.id);
+              }}
+            />
+          )}
         </div>
       )}
 

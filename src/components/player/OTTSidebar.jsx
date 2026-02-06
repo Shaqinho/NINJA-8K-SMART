@@ -291,6 +291,7 @@ const OTTSidebar = forwardRef(({
   onClose,
   isOpen: externalIsOpen,
   onToggle: externalOnToggle,
+  onTabChange,
   xtreamService,
 }, ref) => {
   // States
@@ -886,8 +887,10 @@ const OTTSidebar = forwardRef(({
         clearTimeout(focusTimerRef.current);
         focusTimerRef.current = setTimeout(() => setFocusedStreamId(null), 2000);
       }
-    }
-  }), [filteredItems]);
+    },
+    getActiveTab: () => activeTab,
+    getFilteredItems: () => filteredItems,
+  }), [filteredItems, activeTab]);
 
   // Trigger EPG load when entering a category
   useEffect(() => {
@@ -985,7 +988,8 @@ const OTTSidebar = forwardRef(({
     setSearchOpen(false);
     setProgramResults([]);
     setShowKeyboard(false);
-  }, []);
+    onTabChange?.(tabId);
+  }, [onTabChange]);
 
   // ========== VIRTUALIZED CATEGORY ROW ==========
   const CategoryRow = useCallback(({ index, style }) => {

@@ -42,7 +42,42 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
         if (videoRef.current) videoRef.current.volume = vol;
       }
     },
-    getVideoElement: () => videoRef.current
+    getVideoElement: () => videoRef.current,
+
+    /**
+     * Probe stream: play 3s silently, extract audio/subtitle tracks, then pause
+     * Returns { audioTracks: [{ id, name }], subtitleTracks: [{ id, name }] }
+     */
+    probeStream: async (url) => {
+      try {
+        if (useNative) {
+          await libVLC.setVolume(0);
+          await libVLC.play(url);
+          await new Promise(r => setTimeout(r, 3000));
+          const audio = await libVLC.getAudioTracks();
+          const subs = await libVLC.getSubtitleTracks();
+          await libVLC.pause();
+          await libVLC.setVolume(0.5);
+          return {
+            audioTracks: audio?.tracks || [],
+            subtitleTracks: subs?.tracks || [],
+          };
+        }
+        return { audioTracks: [], subtitleTracks: [] };
+      } catch (e) {
+        console.error('[VideoPlayer] probeStream failed:', e);
+        return { audioTracks: [], subtitleTracks: [] };
+      }
+    },
+
+    getAudioTracks: async () => {
+      if (useNative) return await libVLC.getAudioTracks();
+      return { count: 0, tracks: [] };
+    },
+    getSubtitleTracks: async () => {
+      if (useNative) return await libVLC.getSubtitleTracks();
+      return { count: 0, tracks: [] };
+    },
   }));
 
   // Position update on resize + ResizeObserver pour exit FS
