@@ -215,8 +215,8 @@ const styles = {
   },
 };
 
-// Skip amounts: 1x=10s, 2x=15s, 3x=30s, 4x=45s, 5x=60s
-const skipAmounts = [10, 15, 30, 45, 60];
+// Skip amounts: 1x=5s, 2x=15s, 3x=30s
+const skipAmounts = [5, 15, 30];
 
 export const PlayerControls = ({
   playing,
@@ -252,11 +252,15 @@ export const PlayerControls = ({
   // Settings overlay
   xtreamService,
   onServers,
+  onTapDismiss,
 }) => {
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
   const [showSettingsOverlay, setShowSettingsOverlay] = useState(false);
+  const [isDraggingTimeline, setIsDraggingTimeline] = useState(false);
+  const timelineRef = useRef(null);
+  const vodTimelineRef = useRef(null);
   
-  // Skip multiplier state
+  // Skip state (simple: 1st=5s, 2nd=15s, 3rd=30s, reset after 1.5s)
   const [skipBackCount, setSkipBackCount] = useState(0);
   const [skipForwardCount, setSkipForwardCount] = useState(0);
   const skipBackTimerRef = useRef(null);
@@ -275,54 +279,36 @@ export const PlayerControls = ({
     }, 2000);
   }, []);
   
-  // Handle skip back with multiplier
+  // Skip back: 5s → 15s → 30s
   const handleSkipBack = useCallback(() => {
-    // Clear previous timer
     clearTimeout(skipBackTimerRef.current);
-    
-    // Increment count (max 5)
-    const newCount = Math.min(skipBackCount + 1, 5);
+    const newCount = Math.min(skipBackCount + 1, 3);
     setSkipBackCount(newCount);
-    
-    // Get skip amount
     const skipAmount = skipAmounts[newCount - 1];
     
-    // Apply skip
     if (isLive && onTimeshiftSeek) {
       onTimeshiftSeek(Math.min(maxTimeshiftOffset, timeshiftOffset + skipAmount));
     } else if (onSeek && currentTime !== undefined) {
       onSeek(Math.max(0, currentTime - skipAmount));
     }
     
-    // Reset count after 1s of inactivity
-    skipBackTimerRef.current = setTimeout(() => {
-      setSkipBackCount(0);
-    }, 1000);
+    skipBackTimerRef.current = setTimeout(() => setSkipBackCount(0), 1500);
   }, [skipBackCount, isLive, onTimeshiftSeek, maxTimeshiftOffset, timeshiftOffset, onSeek, currentTime]);
   
-  // Handle skip forward with multiplier
+  // Skip forward: 5s → 15s → 30s
   const handleSkipForward = useCallback(() => {
-    // Clear previous timer
     clearTimeout(skipForwardTimerRef.current);
-    
-    // Increment count (max 5)
-    const newCount = Math.min(skipForwardCount + 1, 5);
+    const newCount = Math.min(skipForwardCount + 1, 3);
     setSkipForwardCount(newCount);
-    
-    // Get skip amount
     const skipAmount = skipAmounts[newCount - 1];
     
-    // Apply skip
     if (isLive && onTimeshiftSeek) {
       onTimeshiftSeek(Math.max(0, timeshiftOffset - skipAmount));
     } else if (onSeek && duration !== undefined) {
       onSeek(Math.min(duration, currentTime + skipAmount));
     }
     
-    // Reset count after 1s of inactivity
-    skipForwardTimerRef.current = setTimeout(() => {
-      setSkipForwardCount(0);
-    }, 1000);
+    skipForwardTimerRef.current = setTimeout(() => setSkipForwardCount(0), 1500);
   }, [skipForwardCount, isLive, onTimeshiftSeek, timeshiftOffset, onSeek, currentTime, duration]);
   
   // Cleanup timers
@@ -333,6 +319,105 @@ export const PlayerControls = ({
       clearTimeout(streamInfoTimerRef.current);
     };
   }, []);
+
+  // ========== TIMELINE DRAG (Live Timeshift) ==========
+  const handleTimelineTouchStart = useCallback((e) => {
+    e.stopPropagation();
+    setIsDraggingTimeline(true);
+    setIsHoveringTimeshift(true);
+    const touch = e.touches?.[0] || e;
+    const rect = timelineRef.current?.getBoundingClientRect();
+    if (rect) {
+      const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+      const newOffset = maxTimeshiftOffset * (1 - percent);
+      onTimeshiftSeek?.(Math.max(0, Math.round(newOffset)));
+    }
+  }, [maxTimeshiftOffset, onTimeshiftSeek]);
+
+  const handleTimelineTouchMove = useCallback((e) => {
+    if (!isDraggingTimeline) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const touch = e.touches?.[0] || e;
+    const rect = timelineRef.current?.getBoundingClientRect();
+    if (rect) {
+      const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+      const newOffset = maxTimeshiftOffset * (1 - percent);
+      onTimeshiftSeek?.(Math.max(0, Math.round(newOffset)));
+    }
+  }, [isDraggingTimeline, maxTimeshiftOffset, onTimeshiftSeek]);
+
+  const handleTimelineTouchEnd = useCallback((e) => {
+    e?.stopPropagation();
+    setIsDraggingTimeline(false);
+    setIsHoveringTimeshift(false);
+  }, []);
+
+  // ========== TIMELINE DRAG (VOD Seekbar) ==========
+  const handleVodTouchStart = useCallback((e) => {
+    e.stopPropagation();
+    setIsDraggingTimeline(true);
+    setIsHoveringTimeshift(true);
+    const touch = e.touches?.[0] || e;
+    const rect = vodTimelineRef.current?.getBoundingClientRect();
+    if (rect && duration > 0) {
+      const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+      onSeek?.(percent * duration);
+    }
+  }, [duration, onSeek]);
+
+  const handleVodTouchMove = useCallback((e) => {
+    if (!isDraggingTimeline) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const touch = e.touches?.[0] || e;
+    const rect = vodTimelineRef.current?.getBoundingClientRect();
+    if (rect && duration > 0) {
+      const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+      onSeek?.(percent * duration);
+    }
+  }, [isDraggingTimeline, duration, onSeek]);
+
+  const handleVodTouchEnd = useCallback((e) => {
+    e?.stopPropagation();
+    setIsDraggingTimeline(false);
+    setIsHoveringTimeshift(false);
+  }, []);
+
+  // Global touchmove/touchend for drag (in case finger leaves the bar)
+  useEffect(() => {
+    if (!isDraggingTimeline) return;
+    const handleGlobalMove = (e) => {
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      // Check which timeline is active
+      if (timelineRef.current) {
+        const rect = timelineRef.current.getBoundingClientRect();
+        const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+        if (isLive) {
+          const newOffset = maxTimeshiftOffset * (1 - percent);
+          onTimeshiftSeek?.(Math.max(0, Math.round(newOffset)));
+        }
+      }
+      if (vodTimelineRef.current) {
+        const rect = vodTimelineRef.current.getBoundingClientRect();
+        const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+        if (!isLive && duration > 0) {
+          onSeek?.(percent * duration);
+        }
+      }
+    };
+    const handleGlobalEnd = () => {
+      setIsDraggingTimeline(false);
+      setIsHoveringTimeshift(false);
+    };
+    window.addEventListener('touchmove', handleGlobalMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalEnd);
+    return () => {
+      window.removeEventListener('touchmove', handleGlobalMove);
+      window.removeEventListener('touchend', handleGlobalEnd);
+    };
+  }, [isDraggingTimeline, isLive, maxTimeshiftOffset, onTimeshiftSeek, duration, onSeek]);
   
   // Calculate timeshift progress (100% = live, 0% = max offset)
   const timeshiftProgress = maxTimeshiftOffset > 0 
@@ -381,6 +466,13 @@ export const PlayerControls = ({
     <div
       className={`absolute inset-0 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       style={{ pointerEvents: visible ? 'auto' : 'none' }}
+      onClick={(e) => {
+        // Tap on empty area = dismiss controls
+        if (e.target === e.currentTarget && onPlayPause) {
+          // Don't actually play/pause, just signal parent to hide controls
+          onTapDismiss?.();
+        }
+      }}
     >
       {/* ========== TOP ROW ========== */}
       
@@ -623,95 +715,70 @@ export const PlayerControls = ({
         {/* ROW 3: < Timeshift > with LIVE marker */}
         {isLive && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            {/* Skip Back < with multiplier */}
+            {/* Skip Back < */}
             <button
               onClick={handleSkipBack}
               style={{
                 ...styles.btnEdge,
                 color: skipBackCount > 0 ? 'white' : 'rgba(255,255,255,0.4)',
-                position: 'relative',
               }}
-              title={`Skip back ${skipAmounts[Math.max(0, skipBackCount - 1)] || 10}s`}
             >
               ‹
-              {skipBackCount > 0 && (
-                <span style={{
-                  position: 'absolute',
-                  top: '-5px',
-                  right: '-5px',
-                  fontSize: '9px',
-                  background: 'linear-gradient(135deg, #6225ff, #a855f7)',
-                  borderRadius: '50%',
-                  width: '16px',
-                  height: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: '700',
-                }}>
-                  {skipBackCount}
-                </span>
-              )}
             </button>
 
             {/* Timeshift bar - 70% width centered */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ width: '70%', position: 'relative' }}>
+              {/* Touch zone élargie (44px) pour faciliter le tap et drag */}
+              <div
+                ref={timelineRef}
+                style={{
+                  position: 'relative',
+                  padding: '20px 0',
+                  margin: '-20px 0',
+                  cursor: 'pointer',
+                  touchAction: 'none',
+                }}
+                onTouchStart={handleTimelineTouchStart}
+                onTouchMove={handleTimelineTouchMove}
+                onTouchEnd={handleTimelineTouchEnd}
+                onClick={(e) => {
+                  const rect = timelineRef.current?.getBoundingClientRect();
+                  if (rect) {
+                    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const newOffset = maxTimeshiftOffset * (1 - percent);
+                    onTimeshiftSeek?.(Math.max(0, Math.round(newOffset)));
+                  }
+                }}
+              >
               <div
                 style={{
                   ...styles.timeshift,
-                  height: isHoveringTimeshift ? '6px' : '4px',
-                }}
-                onMouseEnter={() => setIsHoveringTimeshift(true)}
-                onMouseLeave={() => setIsHoveringTimeshift(false)}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const percent = (e.clientX - rect.left) / rect.width;
-                  const newOffset = maxTimeshiftOffset * (1 - percent);
-                  onTimeshiftSeek?.(Math.max(0, Math.round(newOffset)));
+                  height: (isHoveringTimeshift || isDraggingTimeline) ? '6px' : '4px',
                 }}
               >
                 <div style={{ ...styles.timeshiftProgress, width: `${timeshiftProgress}%` }}>
                   <div style={{ 
                     ...styles.timeshiftHandle, 
-                    opacity: isHoveringTimeshift ? 1 : 0 
+                    opacity: 1,
                   }} />
                 </div>
                 {/* LIVE marker - green */}
                 <div style={styles.timeshiftLiveMarker} />
               </div>
               </div>
+              </div>
             </div>
 
-            {/* Skip Forward > with multiplier */}
+            {/* Skip Forward > */}
             <button
               onClick={handleSkipForward}
               style={{
                 ...styles.btnEdge,
                 color: skipForwardCount > 0 ? '#22c55e' : (isAtLive ? '#22c55e' : 'rgba(255,255,255,0.4)'),
-                position: 'relative',
               }}
-              title={isAtLive ? 'At LIVE' : `Skip forward ${skipAmounts[Math.max(0, skipForwardCount - 1)] || 10}s`}
             >
               ›
-              {skipForwardCount > 0 && !isAtLive && (
-                <span style={{
-                  position: 'absolute',
-                  top: '-5px',
-                  left: '-5px',
-                  fontSize: '9px',
-                  background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                  borderRadius: '50%',
-                  width: '16px',
-                  height: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: '700',
-                }}>
-                  {skipForwardCount}
-                </span>
-              )}
             </button>
           </div>
         )}
@@ -722,25 +789,41 @@ export const PlayerControls = ({
             <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace', minWidth: '45px' }}>
               {formatTime(currentTime)}
             </span>
+            {/* Touch zone élargie (44px) pour faciliter le tap et drag */}
+            <div
+              ref={vodTimelineRef}
+              style={{
+                flex: 1,
+                position: 'relative',
+                padding: '20px 0',
+                margin: '-20px 0',
+                cursor: 'pointer',
+                touchAction: 'none',
+              }}
+              onTouchStart={handleVodTouchStart}
+              onTouchMove={handleVodTouchMove}
+              onTouchEnd={handleVodTouchEnd}
+              onClick={(e) => {
+                const rect = vodTimelineRef.current?.getBoundingClientRect();
+                if (rect && duration > 0) {
+                  const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  onSeek?.(percent * duration);
+                }
+              }}
+            >
             <div
               style={{
                 ...styles.timeshift,
-                height: isHoveringTimeshift ? '6px' : '4px',
-              }}
-              onMouseEnter={() => setIsHoveringTimeshift(true)}
-              onMouseLeave={() => setIsHoveringTimeshift(false)}
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const percent = (e.clientX - rect.left) / rect.width;
-                onSeek?.(percent * duration);
+                height: (isHoveringTimeshift || isDraggingTimeline) ? '6px' : '4px',
               }}
             >
               <div style={{ ...styles.timeshiftProgress, width: `${(currentTime / duration) * 100}%` }}>
                 <div style={{ 
                   ...styles.timeshiftHandle, 
-                  opacity: isHoveringTimeshift ? 1 : 0 
+                  opacity: 1,
                 }} />
               </div>
+            </div>
             </div>
             <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace', minWidth: '45px', textAlign: 'right' }}>
               {formatTime(duration)}
