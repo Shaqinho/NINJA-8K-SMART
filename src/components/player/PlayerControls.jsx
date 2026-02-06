@@ -333,6 +333,11 @@ export const PlayerControls = ({
     : 100;
 
   // ===========================================
+  // OTT SIDEBAR OPEN - Hide controls completely
+  // ===========================================
+  if (sidebarOpen) return null;
+
+  // ===========================================
   // MINIMAL MODE (Small player - not fullscreen)
   // ===========================================
   if (!fullscreen) {
@@ -408,9 +413,36 @@ export const PlayerControls = ({
           8K
         </span>
       </button>
+
+      {/* Top Right: Play/Pause */}
+      <button
+        onClick={onPlayPause}
+        style={{
+          position: 'absolute',
+          top: '12px',
+          right: '16px',
+          ...styles.cornerBtn,
+          zIndex: 10001,
+        }}
+        title={playing ? 'Pause' : 'Play'}
+      >
+        <div className="w-5 h-5 text-white">
+          {playing ? <Icons.Pause /> : <Icons.Play />}
+        </div>
+      </button>
       
-      
-      {/* ========== MIDDLE ROW ========== */}
+      {/* ========== MIDDLE TAP ZONE (tap to dismiss) ========== */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '60px',
+          left: 0,
+          right: 0,
+          bottom: '180px',
+          zIndex: 10000,
+        }}
+        onClick={() => onTapDismiss?.()}
+      />
 
       {/* ========== BOTTOM CONTROLS ========== */}
       <div
@@ -423,20 +455,7 @@ export const PlayerControls = ({
           background: 'linear-gradient(transparent, rgba(0,0,0,0.95))',
         }}
       >
-        {/* ROW 1: Play/Pause centered */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
-          <button
-            onClick={onPlayPause}
-            style={styles.btnPlay}
-            title={playing ? 'Pause' : 'Play'}
-          >
-            <div className="w-8 h-8 text-white">
-              {playing ? <Icons.Pause /> : <Icons.Play />}
-            </div>
-          </button>
-        </div>
-          
-        {/* ROW 2: Channel Navigation */}
+        {/* ROW 1: Channel Navigation */}
         {isLive && (
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -479,7 +498,7 @@ export const PlayerControls = ({
 
             {/* Timeshift bar */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: '60%', position: 'relative' }}>
+              <div style={{ width: '35%', position: 'relative' }}>
               {/* Touch zone élargie (44px) pour faciliter le tap et drag */}
               <div
                 ref={timelineRef}
