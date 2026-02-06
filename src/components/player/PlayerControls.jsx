@@ -513,9 +513,7 @@ export const PlayerControls = ({
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 )}
-                <TickerText style={{ maxWidth: '140px' }}>
-                  <span style={styles.channelName}>{prevChannel.name}</span>
-                </TickerText>
+                <span style={{ ...styles.channelName, display: 'block', maxWidth: 'min(140px, 20vw)' }}>{prevChannel.name}</span>
               </div>
             )}
 
@@ -544,11 +542,9 @@ export const PlayerControls = ({
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 )}
-                <TickerText style={{ maxWidth: '180px' }}>
-                  <span style={{ ...styles.channelName, ...styles.channelNameCurrent }}>
+                <span style={{ ...styles.channelName, ...styles.channelNameCurrent, display: 'block', maxWidth: 'min(200px, 30vw)' }}>
                     {currentChannel.name}
                   </span>
-                </TickerText>
               </div>
             )}
 
@@ -573,9 +569,7 @@ export const PlayerControls = ({
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 )}
-                <TickerText style={{ maxWidth: '140px' }}>
-                  <span style={styles.channelName}>{nextChannel.name}</span>
-                </TickerText>
+                <span style={{ ...styles.channelName, display: 'block', maxWidth: 'min(140px, 20vw)' }}>{nextChannel.name}</span>
               </div>
             )}
           </div>
