@@ -397,8 +397,6 @@ export const PlayerControls = ({
   const timeshiftProgress = maxTimeshiftOffset > 0 
     ? ((maxTimeshiftOffset - timeshiftOffset) / maxTimeshiftOffset) * 100 
     : 100;
-  
-  const isAtLive = timeshiftOffset === 0;
 
   // ===========================================
   // MINIMAL MODE (Small player - not fullscreen)
