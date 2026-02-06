@@ -707,12 +707,8 @@ const OTTSidebar = ({
   }, []);
   
   const handleSidebarTouchEnd = useCallback((e) => {
-    const deltaX = e.changedTouches[0].clientX - swipeStartRef.current.x;
-    if (deltaX < -50) {
-      // Swipe left always closes sidebar — never goes back to parent
-      closeSidebar();
-    }
-  }, [closeSidebar]);
+    // Logique de swipe gauche supprimée pour éviter les fermetures accidentelles
+  }, []);
   
   // ========== CATEGORY/ITEM SELECTION ==========
   const handleCategoryClick = useCallback((category) => {

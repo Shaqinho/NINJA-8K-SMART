@@ -250,49 +250,19 @@ export const PlayerControls = ({
   const timelineRef = useRef(null);
   const vodTimelineRef = useRef(null);
   
-  // Skip state (simple: 1st=5s, 2nd=15s, 3rd=30s, reset after 1.5s)
-  const [skipBackCount, setSkipBackCount] = useState(0);
-  const [skipForwardCount, setSkipForwardCount] = useState(0);
-  const skipBackTimerRef = useRef(null);
-  const skipForwardTimerRef = useRef(null);
-  
-  // Skip back: 5s → 15s → 30s
-  const handleSkipBack = useCallback(() => {
-    clearTimeout(skipBackTimerRef.current);
-    const newCount = Math.min(skipBackCount + 1, 3);
-    setSkipBackCount(newCount);
-    const skipAmount = skipAmounts[newCount - 1];
-    
+  // Fix : Saut de 15 secondes fixe pour < et >
+  const handleSkip = useCallback((direction) => {
+    const amount = 15;
     if (isLive && onTimeshiftSeek) {
-      onTimeshiftSeek(Math.min(maxTimeshiftOffset, timeshiftOffset + skipAmount));
-    } else if (onSeek && currentTime !== undefined) {
-      onSeek(Math.max(0, currentTime - skipAmount));
+      onTimeshiftSeek(direction === 'back' ? Math.min(maxTimeshiftOffset, timeshiftOffset + amount) : Math.max(0, timeshiftOffset - amount));
+    } else if (onSeek) {
+      onSeek(direction === 'back' ? Math.max(0, currentTime - amount) : Math.min(duration, currentTime + amount));
     }
-    
-    skipBackTimerRef.current = setTimeout(() => setSkipBackCount(0), 1500);
-  }, [skipBackCount, isLive, onTimeshiftSeek, maxTimeshiftOffset, timeshiftOffset, onSeek, currentTime]);
-  
-  // Skip forward: 5s → 15s → 30s
-  const handleSkipForward = useCallback(() => {
-    clearTimeout(skipForwardTimerRef.current);
-    const newCount = Math.min(skipForwardCount + 1, 3);
-    setSkipForwardCount(newCount);
-    const skipAmount = skipAmounts[newCount - 1];
-    
-    if (isLive && onTimeshiftSeek) {
-      onTimeshiftSeek(Math.max(0, timeshiftOffset - skipAmount));
-    } else if (onSeek && duration !== undefined) {
-      onSeek(Math.min(duration, currentTime + skipAmount));
-    }
-    
-    skipForwardTimerRef.current = setTimeout(() => setSkipForwardCount(0), 1500);
-  }, [skipForwardCount, isLive, onTimeshiftSeek, timeshiftOffset, onSeek, currentTime, duration]);
+  }, [isLive, onTimeshiftSeek, maxTimeshiftOffset, timeshiftOffset, onSeek, currentTime, duration]);
   
   // Cleanup timers
   useEffect(() => {
     return () => {
-      clearTimeout(skipBackTimerRef.current);
-      clearTimeout(skipForwardTimerRef.current);
     };
   }, []);
 
@@ -406,29 +376,27 @@ export const PlayerControls = ({
   if (!fullscreen) {
     return (
       <div
-        className={`absolute bottom-0 left-0 right-0 p-3 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`absolute top-0 left-0 right-0 p-3 flex justify-between z-50 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
-        <div className="flex items-center justify-between">
-          {/* Left: Play/Pause */}
-          <button
-            onClick={onPlayPause}
-            style={{ ...styles.btnPlay, filter: 'drop-shadow(0 0 4px rgba(0,0,0,1))' }}
-          >
-            <div className="w-6 h-6 text-white">
-              {playing ? <Icons.Pause /> : <Icons.Play />}
-            </div>
-          </button>
+        {/* Left: Play/Pause */}
+        <button
+          onClick={onPlayPause}
+          style={{ ...styles.btnPlay, filter: 'drop-shadow(0 0 4px rgba(0,0,0,1))' }}
+        >
+          <div className="w-5 h-5 text-white">
+            {playing ? <Icons.Pause /> : <Icons.Play />}
+          </div>
+        </button>
 
-          {/* Right: Fullscreen */}
-          <button
-            onClick={onFullscreenToggle}
-            style={{ ...styles.btnPlay, filter: 'drop-shadow(0 0 4px rgba(0,0,0,1))' }}
-          >
-            <div className="w-5 h-5 text-white">
-              <Icons.Fullscreen />
-            </div>
-          </button>
-        </div>
+        {/* Right: Fullscreen */}
+        <button
+          onClick={onFullscreenToggle}
+          style={{ ...styles.btnPlay, filter: 'drop-shadow(0 0 4px rgba(0,0,0,1))' }}
+        >
+          <div className="w-5 h-5 text-white">
+            <Icons.Fullscreen />
+          </div>
+        </button>
       </div>
     );
   }
@@ -618,10 +586,10 @@ export const PlayerControls = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             {/* Skip Back < */}
             <button
-              onClick={handleSkipBack}
+              onClick={() => handleSkip('back')}
               style={{
                 ...styles.btnEdge,
-                color: skipBackCount > 0 ? 'white' : 'rgba(255,255,255,0.4)',
+                color: 'white',
                 padding: '8px 4px',
               }}
             >
@@ -630,7 +598,7 @@ export const PlayerControls = ({
 
             {/* Timeshift bar - 90% width centered */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: '75%', position: 'relative' }}>
+              <div style={{ width: '60%', position: 'relative' }}>
               {/* Touch zone élargie (44px) pour faciliter le tap et drag */}
               <div
                 ref={timelineRef}
@@ -672,10 +640,10 @@ export const PlayerControls = ({
 
             {/* Skip Forward > */}
             <button
-              onClick={handleSkipForward}
+              onClick={() => handleSkip('forward')}
               style={{
                 ...styles.btnEdge,
-                color: skipForwardCount > 0 ? 'white' : 'rgba(255,255,255,0.4)',
+                color: 'white',
                 padding: '8px 4px',
               }}
             >
