@@ -3,13 +3,14 @@ import { ninjaCentral, STORES } from '../../services/NinjaCentral';
 import EPGPresets from './EPGPresets';
 
 // ============================================================================
-// SETTINGS OVERLAY - App settings panel over player
+// SETTINGS OVERLAY - Right Panel (elevator door)
 // 
-// 95% screen, centered, video continues playing behind
-// Opened/closed via NINJA 8K logo toggle in PlayerControls
+// Slides in from right, fills remaining screen space
+// If OTTSidebar open: starts at 300px from left
+// If OTTSidebar closed: full screen
+// No modals, no overlays, no radius, no circles
 // ============================================================================
 
-// Icons for buttons
 const Icons = {
   All: () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -58,7 +59,7 @@ const Icons = {
   ),
 };
 
-const SettingsOverlay = ({ visible, onClose, xtreamService, onServers, onChannelSelect }) => {
+const SettingsOverlay = ({ visible, onClose, xtreamService, onServers, onChannelSelect, sidebarOpen }) => {
   const [reloading, setReloading] = useState(null);
   const [showEPGPresets, setShowEPGPresets] = useState(false);
 
@@ -114,6 +115,8 @@ const SettingsOverlay = ({ visible, onClose, xtreamService, onServers, onChannel
 
   if (!visible) return null;
 
+  const leftOffset = sidebarOpen ? 300 : 0;
+
   const btnStyle = (disabled = false) => ({
     width: '64px',
     height: '64px',
@@ -124,7 +127,7 @@ const SettingsOverlay = ({ visible, onClose, xtreamService, onServers, onChannel
     gap: '4px',
     background: 'rgba(255, 255, 255, 0.06)',
     border: '1px solid rgba(255, 255, 255, 0.08)',
-    borderRadius: '12px',
+    borderRadius: '0',
     cursor: disabled ? 'not-allowed' : 'pointer',
     color: disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.8)',
     transition: 'all 0.2s',
@@ -162,33 +165,30 @@ const SettingsOverlay = ({ visible, onClose, xtreamService, onServers, onChannel
     <div
       style={{
         position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: '95%',
-        height: '95%',
-        background: 'rgba(0, 0, 0, 0.85)',
+        top: 0,
+        left: leftOffset + 'px',
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.92)',
         backdropFilter: 'blur(20px)',
-        borderRadius: '16px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
         zIndex: 10000,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        transition: 'left 0.3s ease',
       }}
     >
-      {/* Close button */}
+      {/* Close button — simple X, no circle */}
       <button
         onClick={onClose}
         style={{
           position: 'absolute',
           top: '12px',
           right: '12px',
-          background: 'rgba(255, 255, 255, 0.1)',
+          background: 'none',
           border: 'none',
-          borderRadius: '50%',
-          width: '32px',
-          height: '32px',
+          width: '28px',
+          height: '28px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -196,7 +196,7 @@ const SettingsOverlay = ({ visible, onClose, xtreamService, onServers, onChannel
           zIndex: 1,
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
@@ -278,7 +278,7 @@ const SettingsOverlay = ({ visible, onClose, xtreamService, onServers, onChannel
 
       </div>
 
-      {/* EPG Presets Panel */}
+      {/* EPG Presets — renders inside the panel, not as overlay */}
       {showEPGPresets && (
         <EPGPresets
           onClose={() => setShowEPGPresets(false)}

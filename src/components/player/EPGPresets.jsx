@@ -618,8 +618,8 @@ const EPGPresets = ({ onClose, xtreamService, onChannelSelect }) => {
           {view === 'list' ? 'EPG Presets' : view === 'editor' ? (editingPreset ? 'Edit Preset' : 'New Preset') : ''}
         </div>
         <button onClick={view === 'list' ? onClose : () => setView('list')}
-          style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+          style={{ background: 'none', border: 'none', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>

@@ -91,6 +91,9 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
   const [layout, setLayout] = useState(detectDefaultLayout);
   const [pressedKey, setPressedKey] = useState(null);
   const pressTimerRef = useRef(null);
+  const canvasRef = useRef(null);
+  const particlesRef = useRef([]);
+  const animFrameRef = useRef(null);
 
   const handleDragStart = useCallback((e) => {
     const touch = e.touches?.[0] || e;
@@ -122,6 +125,63 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
     };
   }, [handleDragMove, handleDragEnd]);
 
+  // Particles animation
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width = canvas.offsetWidth;
+    const H = canvas.height = canvas.offsetHeight;
+
+    // Init particles
+    if (particlesRef.current.length === 0) {
+      for (let i = 0; i < 35; i++) {
+        particlesRef.current.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          vx: (Math.random() - 0.5) * 0.4,
+          vy: (Math.random() - 0.5) * 0.4,
+          r: Math.random() * 2 + 0.5,
+          a: Math.random() * 0.4 + 0.1,
+          color: Math.random() > 0.5 ? '98,37,255' : '160,32,240',
+        });
+      }
+    }
+
+    const animate = () => {
+      ctx.clearRect(0, 0, W, H);
+      const ps = particlesRef.current;
+      for (let i = 0; i < ps.length; i++) {
+        const p = ps[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > W) p.vx *= -1;
+        if (p.y < 0 || p.y > H) p.vy *= -1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${p.color},${p.a})`;
+        ctx.fill();
+        // Connect nearby particles
+        for (let j = i + 1; j < ps.length; j++) {
+          const dx = ps[j].x - p.x;
+          const dy = ps[j].y - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 60) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(ps[j].x, ps[j].y);
+            ctx.strokeStyle = `rgba(98,37,255,${0.08 * (1 - dist / 60)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+      animFrameRef.current = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => cancelAnimationFrame(animFrameRef.current);
+  }, []);
+
   useEffect(() => () => clearTimeout(pressTimerRef.current), []);
 
   const handleKeyPress = useCallback((char, keyId) => {
@@ -141,17 +201,26 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
   const currentLayout = LAYOUTS[layout];
 
   const keyBase = {
-    minWidth: '30px', height: '34px', borderRadius: '6px', border: 'none',
+    minWidth: '30px', height: '34px', border: 'none',
     color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     WebkitTapHighlightColor: 'transparent', position: 'relative', padding: 0,
+    borderRadius: '0',
   };
 
   const getKeyStyle = (keyId) => ({
     ...keyBase,
-    background: pressedKey === keyId ? '#6225ff' : 'rgba(255,255,255,0.12)',
+    background: pressedKey === keyId
+      ? 'rgba(98,37,255,0.8)'
+      : 'rgba(255,255,255,0.06)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    border: pressedKey === keyId
+      ? '1px solid rgba(98,37,255,0.6)'
+      : '1px solid rgba(255,255,255,0.08)',
     transform: pressedKey === keyId ? 'scale(1.05)' : 'scale(1)',
-    transition: 'background 0.08s, transform 0.08s',
+    transition: 'all 0.08s',
+    boxShadow: pressedKey === keyId ? '0 0 12px rgba(98,37,255,0.4)' : 'none',
   });
 
   const ZoomPopup = ({ keyId, children }) => {
@@ -159,10 +228,10 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
     return (
       <div style={{
         position: 'absolute', bottom: '110%', left: '50%', transform: 'translateX(-50%)',
-        background: '#6225ff', color: '#fff', fontSize: '18px', fontWeight: 700,
-        borderRadius: '8px', padding: '4px 10px', minWidth: '32px', textAlign: 'center',
+        background: 'linear-gradient(135deg, #6225ff, #a020f0)', color: '#fff', fontSize: '18px', fontWeight: 700,
+        padding: '4px 10px', minWidth: '32px', textAlign: 'center',
         boxShadow: '0 4px 16px rgba(98,37,255,0.5)', pointerEvents: 'none', zIndex: 10,
-        whiteSpace: 'nowrap',
+        whiteSpace: 'nowrap', borderRadius: '0',
       }}>
         {children}
       </div>
@@ -172,35 +241,44 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
   return (
     <div style={{
       position: 'fixed', left: `${position.x}px`, top: `${position.y}px`, zIndex: 10002,
-      background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-      borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.6)', userSelect: 'none', touchAction: 'none',
-      display: 'flex', flexDirection: 'column',
+      background: 'rgba(10,0,20,0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+      border: '1px solid rgba(98,37,255,0.15)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(98,37,255,0.08)',
+      userSelect: 'none', touchAction: 'none',
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      borderRadius: '0',
     }}>
+      {/* Particles canvas */}
+      <canvas ref={canvasRef} style={{
+        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+        pointerEvents: 'none', zIndex: 0,
+      }} />
+
       {/* Drag Handle */}
       <div ref={dragRef} onTouchStart={handleDragStart} onMouseDown={handleDragStart}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '5px 10px', cursor: 'grab', borderBottom: '1px solid rgba(255,255,255,0.06)',
+          padding: '5px 10px', cursor: 'grab',
+          borderBottom: '1px solid rgba(98,37,255,0.1)',
+          position: 'relative', zIndex: 1,
         }}>
-        <div style={{ width: '24px', height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.2)' }} />
-        <div style={{ fontSize: '10px', color: '#888', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ width: '24px', height: '3px', background: 'rgba(98,37,255,0.4)' }} />
+        <div style={{ fontSize: '10px', color: '#a78bfa', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {searchQuery || '...'}
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {/* Layout toggle */}
           <button onClick={() => setLayout(l => l === 'qwerty' ? 'azerty' : 'qwerty')}
-            style={{ background: 'rgba(98,37,255,0.2)', border: '1px solid rgba(98,37,255,0.3)', borderRadius: '4px', padding: '2px 6px', color: '#a78bfa', fontSize: '9px', fontWeight: 700, cursor: 'pointer' }}>
+            style={{ background: 'rgba(98,37,255,0.2)', border: '1px solid rgba(98,37,255,0.3)', padding: '2px 6px', color: '#a78bfa', fontSize: '9px', fontWeight: 700, cursor: 'pointer', borderRadius: '0' }}>
             {layout === 'qwerty' ? 'QWE' : 'AZE'}
           </button>
           <button onClick={onClose} style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
       </div>
 
       {/* Main content: Keys left + Special right */}
-      <div style={{ display: 'flex', gap: '6px', padding: '6px 8px 8px' }}>
+      <div style={{ display: 'flex', gap: '6px', padding: '6px 8px 8px', position: 'relative', zIndex: 1 }}>
         {/* Left: Main keyboard */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {/* Numbers row */}
@@ -236,7 +314,7 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
                 {key}
               </button>
             ))}
-            <button onClick={handleBackspacePress} style={{ ...getKeyStyle('⌫'), minWidth: '42px', background: pressedKey === '⌫' ? '#ef4444' : 'rgba(255,80,80,0.2)' }}>
+            <button onClick={handleBackspacePress} style={{ ...getKeyStyle('⌫'), minWidth: '42px', background: pressedKey === '⌫' ? 'rgba(239,68,68,0.6)' : 'rgba(255,80,80,0.1)', border: '1px solid rgba(255,80,80,0.15)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
                 <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>
               </svg>
@@ -244,7 +322,7 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
           </div>
           {/* Space row */}
           <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
-            <button onClick={() => handleKeyPress(' ', 'space')} style={{ ...getKeyStyle('space'), flex: 1, minWidth: '160px', color: '#888' }}>
+            <button onClick={() => handleKeyPress(' ', 'space')} style={{ ...getKeyStyle('space'), flex: 1, minWidth: '160px', color: '#666' }}>
               <ZoomPopup keyId="space">␣</ZoomPopup>
               space
             </button>
@@ -252,7 +330,7 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
         </div>
 
         {/* Right: Special chars + shortcuts */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '6px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid rgba(98,37,255,0.1)', paddingLeft: '6px' }}>
           {/* Special characters in 3-column grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px' }}>
             {SPECIAL_CHARS.map(ch => (
@@ -268,7 +346,9 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
               <button key={sc} onClick={() => handleKeyPress(sc, `sc_${sc}`)}
                 style={{
                   ...getKeyStyle(`sc_${sc}`), minWidth: '80px', fontSize: '8px', fontWeight: 600,
-                  color: '#a78bfa', background: pressedKey === `sc_${sc}` ? '#6225ff' : 'rgba(98,37,255,0.12)',
+                  color: '#a78bfa',
+                  background: pressedKey === `sc_${sc}` ? 'rgba(98,37,255,0.8)' : 'rgba(98,37,255,0.08)',
+                  border: '1px solid rgba(98,37,255,0.15)',
                   padding: '0 4px', whiteSpace: 'nowrap',
                 }}>
                 {sc}

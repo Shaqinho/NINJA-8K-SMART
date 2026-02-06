@@ -241,6 +241,8 @@ export const PlayerControls = ({
   xtreamService,
   onServers,
   onTapDismiss,
+  // Sidebar state
+  sidebarOpen = false,
 }) => {
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
   const [showSettingsOverlay, setShowSettingsOverlay] = useState(false);
@@ -737,6 +739,7 @@ export const PlayerControls = ({
         onClose={() => setShowSettingsOverlay(false)}
         xtreamService={xtreamService}
         onServers={onServers}
+        sidebarOpen={sidebarOpen}
       />
 
       {/* Keyframes */}
