@@ -55,8 +55,6 @@ const Player = memo(({
   const [multiGridActiveIndex, setMultiGridActiveIndex] = useState(0);
   const [multiGridSize, setMultiGridSize] = useState(2);
 
-  const [isPiP, setIsPiP] = useState(false);
-
   const actualMultiGridItems = multiGridItems.length > 0 ? multiGridItems : internalMultiGridItems;
   const actualShowMultiGrid = showMultiGrid !== undefined ? showMultiGrid : internalShowMultiGrid;
 
@@ -279,32 +277,6 @@ const Player = memo(({
     }
   }, [onMultiGridToggle]);
 
-  // PiP toggle - just toggle mini player without affecting fullscreen/orientation
-  const handlePiPToggle = useCallback(async () => {
-    if (isPiP) {
-      // Exit PiP - go back to normal
-      setIsPiP(false);
-    } else {
-      // Enter PiP - just show mini player
-      setIsPiP(true);
-    }
-  }, [isPiP]);
-
-  // Expand from PiP to fullscreen
-  const handlePiPExpand = useCallback(async () => {
-    setIsPiP(false);
-    // Go to fullscreen
-    if (containerRef.current && !document.fullscreenElement) {
-      try {
-        await containerRef.current.requestFullscreen();
-        setIsFullscreen(true);
-        await ScreenOrientation.lock({ orientation: 'landscape' });
-      } catch (e) {
-        console.log('Fullscreen error:', e);
-      }
-    }
-  }, []);
-
   void onMultiGridAdd;
 
   const renderMultiGridVideo = useCallback((item, index) => {
@@ -458,7 +430,6 @@ const Player = memo(({
           onVolumeChange={handleVolumeChange}
           onMuteToggle={handleMuteToggle}
           onFullscreenToggle={toggleFullscreen}
-          onPiPToggle={handlePiPToggle}
           fullscreen={isFullscreen}
           onSearchEPG={onSearchEPG}
           onMultiGridToggle={actualMultiGridItems.length > 0 ? handleMultiGridToggle : undefined}
