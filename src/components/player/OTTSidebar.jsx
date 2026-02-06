@@ -536,7 +536,8 @@ const OTTSidebar = forwardRef(({
       const streamIds = items.map(item => item.stream_id || item.id).filter(Boolean);
       if (streamIds.length === 0) return;
 
-      const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
+      // limit=1 for fast fetch (current program only), concurrency=50
+      const epgResults = await xtreamService.getShortEPGBatch(streamIds, 1, 50);
       setEpgData(prev => ({ ...prev, ...epgResults }));
     } catch (err) {
       console.warn('EPG batch load error:', err);
@@ -1459,13 +1460,18 @@ const OTTSidebar = forwardRef(({
               {/* EPG force fetch button */}
               {activeTab === 'live' && (
                 <button
-                  onClick={async () => {
+                  ref={(el) => { if (el) el.__forceEpgBtn = true; }}
+                  onClick={async (e) => {
                     if (!xtreamService || !filteredItems.length) return;
-                    const btn = document.activeElement;
-                    if (btn) btn.textContent = 'LOADING...';
+                    const btn = e.currentTarget;
+                    const originalText = btn.textContent;
+                    btn.textContent = 'LOADING...';
                     try {
                       const streamIds = filteredItems.map(item => item.stream_id || item.id).filter(Boolean);
-                      if (streamIds.length === 0) return;
+                      if (streamIds.length === 0) {
+                        btn.textContent = originalText;
+                        return;
+                      }
                       console.log('[EPG Force] Fetching for', streamIds.length, 'channels');
                       
                       const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 50);
@@ -1473,40 +1479,13 @@ const OTTSidebar = forwardRef(({
                       
                       if (epgResults && Object.keys(epgResults).length > 0) {
                         setEpgData(prev => ({ ...prev, ...epgResults }));
-                        
-                        const epgForInsert = {};
-                        const newSqliteUpdate = {};
-                        
-                        Object.entries(epgResults).forEach(([sid, data]) => {
-                          const title = data.epg_now || data.title || (data.epg_listings?.[0]?.title) || null;
-                          if (title) {
-                            epgForInsert[sid] = [{
-                              title,
-                              start: data.epg_start || '',
-                              end: data.epg_end || '',
-                              startTimestamp: data.epg_start_timestamp || null,
-                              stopTimestamp: data.epg_end_timestamp || null,
-                              description: data.epg_description || '',
-                            }];
-                            newSqliteUpdate[sid] = {
-                              title,
-                              progress: data.epg_start_timestamp && data.epg_end_timestamp ? 
-                                Math.round(((Math.floor(Date.now()/1000) - data.epg_start_timestamp) / (data.epg_end_timestamp - data.epg_start_timestamp)) * 100) : 0
-                            };
-                          }
-                        });
-                        
-                        setSqliteEpg(prev => ({ ...prev, ...newSqliteUpdate }));
-                        if (Object.keys(epgForInsert).length > 0) {
-                          await insertProgramsBatch(epgForInsert);
-                        }
                         navigator.vibrate?.(30);
-                        console.log('[EPG Force] Loaded', Object.keys(newSqliteUpdate).length, 'programs');
+                        console.log('[EPG Force] Loaded', Object.keys(epgResults).length, 'programs');
                       }
                     } catch (err) {
                       console.warn('[EPG Force] Error:', err);
                     } finally {
-                      if (btn) btn.textContent = 'FORCE EPG';
+                      btn.textContent = originalText;
                     }
                   }}
                   style={{
