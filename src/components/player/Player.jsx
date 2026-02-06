@@ -133,6 +133,13 @@ const Player = memo(({
     }
   }, [volume]);
 
+  // Mute when browsing Movies/Series gallery
+  useEffect(() => {
+    if (!videoRef.current) return;
+    const shouldMute = ottSidebarOpen && sidebarTab !== 'live';
+    videoRef.current.setVolume(shouldMute ? 0 : volume);
+  }, [ottSidebarOpen, sidebarTab, volume]);
+
   const handleStateChange = useCallback((state) => {
     setIsLoading(state === 'buffering');
   }, []);

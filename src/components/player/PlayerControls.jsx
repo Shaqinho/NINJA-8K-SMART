@@ -420,17 +420,6 @@ export const PlayerControls = ({
       )}
       
       {/* ========== MIDDLE ROW ========== */}
-      
-      {/* Middle Right: Exit Fullscreen (portrait + exit) */}
-      {onFullscreenToggle && (
-        <button
-          onClick={onFullscreenToggle}
-          style={{ ...styles.cornerBtn, position: 'absolute', bottom: '170px', right: '20px', zIndex: 100 }}
-          title="Exit Fullscreen"
-        >
-          <div className="w-5 h-5"><Icons.Minimize /></div>
-        </button>
-      )}
 
       {/* ========== BOTTOM CONTROLS ========== */}
       <div
@@ -456,55 +445,31 @@ export const PlayerControls = ({
           </button>
         </div>
           
-        {/* ROW 2: Channel Navigation (prev + current + next on same line) */}
+        {/* ROW 2: Channel Navigation */}
         {isLive && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '12px' }}>
-
-            {/* Button << */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
             <button onClick={onChannelPrev} style={styles.btnSwitch} title="Previous channel">
               ‹‹
             </button>
-
-            {/* Current channel (center) - logo left of name */}
             {currentChannel && (
-              <div 
-                style={{ 
-                  display: 'flex', 
-                  flexDirection: 'row', 
-                  alignItems: 'center', 
-                  gap: '8px',
-                  padding: '4px 8px',
-                  borderRadius: '8px',
-                  flex: 1,
-                  justifyContent: 'center',
-                  minWidth: 0,
-                }}
-              >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', minWidth: 0 }}>
                 {currentChannel.logo && (
-                  <img
-                    src={currentChannel.logo}
-                    alt=""
-                    style={styles.channelLogo}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
+                  <img src={currentChannel.logo} alt="" style={styles.channelLogo} onError={(e) => { e.target.style.display = 'none'; }} />
                 )}
                 <span style={{ ...styles.channelName, ...styles.channelNameCurrent, display: 'block', maxWidth: '50vw' }}>
-                    {currentChannel.name}
-                  </span>
+                  {currentChannel.name}
+                </span>
               </div>
             )}
-
-            {/* Button >> */}
             <button onClick={onChannelNext} style={styles.btnSwitch} title="Next channel">
               ››
             </button>
-
           </div>
         )}
 
-        {/* ROW 3: < Timeshift > */}
+        {/* ROW 3: < Timeshift > + Minimize */}
         {isLive && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
             {/* Skip Back < */}
             <button
               onClick={() => handleSkip('back')}
@@ -517,9 +482,9 @@ export const PlayerControls = ({
               ‹
             </button>
 
-            {/* Timeshift bar - 90% width centered */}
+            {/* Timeshift bar */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: '60%', position: 'relative' }}>
+              <div style={{ width: '90%', position: 'relative' }}>
               {/* Touch zone élargie (44px) pour faciliter le tap et drag */}
               <div
                 ref={timelineRef}
@@ -570,6 +535,17 @@ export const PlayerControls = ({
             >
               ›
             </button>
+
+            {/* Minimize */}
+            {onFullscreenToggle && (
+              <button
+                onClick={onFullscreenToggle}
+                style={{ ...styles.cornerBtn, marginLeft: '4px', flexShrink: 0 }}
+                title="Exit Fullscreen"
+              >
+                <div className="w-5 h-5"><Icons.Minimize /></div>
+              </button>
+            )}
           </div>
         )}
 

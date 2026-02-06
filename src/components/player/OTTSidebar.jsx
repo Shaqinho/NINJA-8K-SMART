@@ -1408,7 +1408,6 @@ const OTTSidebar = forwardRef(({
     transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
     transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
     zIndex: 10000,
-    borderRight: '1px solid rgba(255,255,255,0.08)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',

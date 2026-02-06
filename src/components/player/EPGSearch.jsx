@@ -7,8 +7,7 @@ import {
 } from '../../database/ProgramQueries';
 
 const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, visible }) => {
-  // On met les presets en state pour la réactivité
-  const [presets] = useState(() => {
+  const [presets, setPresets] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('ninja_epg_presets') || '[]');
     } catch { return []; }
@@ -18,9 +17,48 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
   const [searchQuery, setSearchQuery] = useState('');
   const [, setLoading] = useState(false);
   const [syncOptions, setSyncOptions] = useState({ includeDesc: false, includeTime: true });
-  const [startTimeFilter, setStartTimeFilter] = useState(null); // null = off, number = hour (18, 19, 20, 21...)
+  const [startTimeFilter, setStartTimeFilter] = useState(null);
+  const [showPresetConfig, setShowPresetConfig] = useState(false);
+  const [allCategories, setAllCategories] = useState([]);
+  const [loadingCats, setLoadingCats] = useState(false);
 
   const searchTimerRef = useRef(null);
+
+  // Save presets to localStorage
+  const savePresets = useCallback((newPresets) => {
+    setPresets(newPresets);
+    localStorage.setItem('ninja_epg_presets', JSON.stringify(newPresets));
+  }, []);
+
+  // Load categories for preset config
+  const loadCategories = useCallback(async () => {
+    if (!xtreamService || allCategories.length > 0) return;
+    setLoadingCats(true);
+    try {
+      const cats = await xtreamService.getLiveCategories();
+      setAllCategories(Array.isArray(cats) ? cats : []);
+    } catch (e) {
+      console.error('EPGSearch: Failed to load categories', e);
+    } finally {
+      setLoadingCats(false);
+    }
+  }, [xtreamService, allCategories.length]);
+
+  const toggleCategory = useCallback((cat) => {
+    const catId = String(cat.category_id);
+    const exists = presets.find(p => p.categoryIds?.includes(catId));
+    let newPresets;
+    if (exists) {
+      newPresets = presets.filter(p => !p.categoryIds?.includes(catId));
+    } else {
+      newPresets = [...presets, { name: cat.category_name, categoryIds: [catId] }];
+    }
+    savePresets(newPresets);
+  }, [presets, savePresets]);
+
+  const isCategorySelected = useCallback((catId) => {
+    return presets.some(p => p.categoryIds?.includes(String(catId)));
+  }, [presets]);
 
   // Auto-cleanup des programmes expirés à l'ouverture
   useEffect(() => {
@@ -163,10 +201,54 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
             >
               {startTimeFilter !== null ? `${startTimeFilter}h-${startTimeFilter + 2}h` : 'START À...'}
             </button>
+            <button 
+              onClick={() => {
+                setShowPresetConfig(!showPresetConfig);
+                if (!showPresetConfig) loadCategories();
+              }}
+              style={{ 
+                background: showPresetConfig ? 'rgba(98, 37, 255, 0.4)' : 'rgba(98, 37, 255, 0.2)', 
+                border: '1px solid #6225ff', borderRadius: '4px', color: '#fff', fontSize: '9px', fontWeight: 800, padding: '4px 12px',
+                cursor: 'pointer',
+              }}
+            >
+              PRESETS ({presets.length})
+            </button>
           </div>
-          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{results.length} MATCHES</div>
+          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{results.length} RESULTS</div>
         </div>
       </div>
+
+      {/* Presets Config Panel */}
+      {showPresetConfig && (
+        <div style={{ maxHeight: '200px', overflow: 'auto', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '10px 20px' }}>
+          {loadingCats ? (
+            <div style={{ fontSize: '10px', color: '#6225ff', fontWeight: 700, textAlign: 'center', padding: '10px' }}>LOADING...</div>
+          ) : allCategories.length === 0 ? (
+            <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', padding: '10px' }}>No categories available</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {allCategories.map(cat => {
+                const selected = isCategorySelected(cat.category_id);
+                return (
+                  <button
+                    key={cat.category_id}
+                    onClick={() => toggleCategory(cat)}
+                    style={{
+                      background: selected ? 'rgba(98,37,255,0.4)' : 'rgba(255,255,255,0.06)',
+                      border: selected ? '1px solid #6225ff' : '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px', padding: '4px 10px', fontSize: '9px', fontWeight: 700,
+                      color: selected ? '#fff' : '#888', cursor: 'pointer', transition: 'all 0.2s',
+                    }}
+                  >
+                    {cat.category_name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <List

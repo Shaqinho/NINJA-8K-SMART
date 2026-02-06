@@ -84,7 +84,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
   if (selectedItem) {
     const info = detailData?.info || detailData?.movie_data || {};
     const poster = info.cover || info.movie_image || selectedItem.logo || selectedItem.cover;
-    const title = info.name || selectedItem.name || 'Sans titre';
+    const title = info.name || selectedItem.name || 'Untitled';
     const plot = info.plot || info.description || selectedItem.plot || '';
     const cast = info.cast || selectedItem.cast || '';
     const director = info.director || selectedItem.director || '';
@@ -94,14 +94,14 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
     const duration = info.duration || selectedItem.duration || '';
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'rgba(0,0,0,0.75)' }}>
         {/* Back button */}
         <div style={{ padding: '15px 20px', flexShrink: 0 }}>
           <button
             onClick={handleBack}
-            style={{ background: 'none', border: 'none', color: '#6225ff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+            style={{ background: 'none', border: 'none', color: '#6225ff', fontSize: '18px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
           >
-            ← RETOUR
+            ←
           </button>
         </div>
 
@@ -155,14 +155,14 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
               ))}
             </div>
           ) : !probing && (
-            <div style={{ fontSize: '9px', color: '#444' }}>Aucune piste détectée</div>
+            <div style={{ fontSize: '9px', color: '#444' }}>No tracks detected</div>
           )}
         </div>
 
         {/* Subtitle Tracks */}
         <div style={{ padding: '0 20px 15px' }}>
           <div style={{ fontSize: '10px', fontWeight: 800, color: '#6225ff', marginBottom: '6px' }}>
-            💬 SOUS-TITRES {probing ? '(scanning...)' : probeData ? `(${probeData.subtitleTracks.length})` : ''}
+            💬 SUBTITLES {probing ? '(scanning...)' : probeData ? `(${probeData.subtitleTracks.length})` : ''}
           </div>
           {probeData?.subtitleTracks?.length > 0 ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -176,7 +176,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
               ))}
             </div>
           ) : !probing && (
-            <div style={{ fontSize: '9px', color: '#444' }}>Aucun sous-titre</div>
+            <div style={{ fontSize: '9px', color: '#444' }}>No subtitles</div>
           )}
         </div>
 
@@ -192,13 +192,13 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
               cursor: 'pointer', letterSpacing: '1px',
             }}
           >
-            ▶ LECTURE
+            ▶ PLAY
           </button>
         </div>
 
         {loading && (
           <div style={{ padding: '20px', textAlign: 'center', color: '#6225ff', fontSize: '11px', fontWeight: 700 }}>
-            CHARGEMENT INFOS...
+            LOADING...
           </div>
         )}
       </div>
@@ -244,7 +244,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
               fontSize: '10px', fontWeight: 700, color: '#fff',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
             }}>
-              {item.name || 'Sans titre'}
+              {item.name || 'Untitled'}
             </div>
             {item.year && <div style={{ fontSize: '8px', color: '#555' }}>{item.year}</div>}
             {item.rating && <div style={{ fontSize: '8px', color: '#ffd700' }}>⭐ {item.rating}</div>}
@@ -259,10 +259,10 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
       {/* Header */}
       <div style={{ padding: '20px 20px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
         <div style={{ fontSize: '12px', fontWeight: 800, color: '#fff', letterSpacing: '1px' }}>
-          {type === 'movies' ? '🎬 FILMS' : '📺 SÉRIES'}
+          {type === 'movies' ? '🎬 MOVIES' : '📺 SERIES'}
         </div>
         <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 700, marginTop: '4px' }}>
-          {items.length} TITRES
+          {items.length} TITLES
         </div>
       </div>
 
@@ -282,7 +282,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
           </Grid>
         ) : (
           <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontSize: '11px' }}>
-            Sélectionnez une catégorie à gauche
+            Select a category
           </div>
         )}
       </div>
