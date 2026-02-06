@@ -405,12 +405,20 @@ const OTTSidebar = forwardRef(({
     const totalCount = activeItems.length;
     const favCount = activeItems.filter(item => favorites[item.stream_id || item.id || item.series_id]).length;
     const recentCount = activeItems.filter(item => recentIds.includes(item.stream_id || item.id || item.series_id)).length;
-    return [
+    const folders = [
       { category_id: '__all__', category_name: 'ALL', count: totalCount, isSystem: true },
+    ];
+    // NEW folder only for movies and series tabs
+    if (activeTab === 'movies' || activeTab === 'series') {
+      const newCount = activeItems.filter(item => item.added).length;
+      folders.push({ category_id: '__new__', category_name: 'NEW', count: newCount, isSystem: true });
+    }
+    folders.push(
       { category_id: '__favorites__', category_name: 'FAVORITES', count: favCount, isSystem: true },
       { category_id: '__recent__', category_name: 'RECENT', count: recentCount, isSystem: true },
-    ];
-  }, [activeItems, favorites, recentIds]);
+    );
+    return folders;
+  }, [activeItems, favorites, recentIds, activeTab]);
 
   // ========== EPG BATCH LOAD (same method as Smart) ==========
   const epgLoadedCategoriesRef = useRef(new Set());
@@ -855,6 +863,8 @@ const OTTSidebar = forwardRef(({
     let items;
     if (currentCategory.category_id === '__all__') {
       items = [...activeItems];
+    } else if (currentCategory.category_id === '__new__') {
+      items = [...activeItems].filter(item => item.added).sort((a, b) => Number(b.added) - Number(a.added));
     } else if (currentCategory.category_id === '__favorites__') {
       items = activeItems.filter(item => favorites[item.stream_id || item.id || item.series_id]);
     } else if (currentCategory.category_id === '__recent__') {
@@ -982,13 +992,19 @@ const OTTSidebar = forwardRef(({
   // ========== TAB SWITCH ==========
   const handleTabSwitch = useCallback((tabId) => {
     setActiveTab(tabId);
-    setShowItems(false);
-    setCurrentCategory(null);
     setSearchQuery('');
     setSearchOpen(false);
     setProgramResults([]);
     setShowKeyboard(false);
     onTabChange?.(tabId);
+    // Movies & Series: open NEW folder by default
+    if (tabId === 'movies' || tabId === 'series') {
+      setCurrentCategory({ category_id: '__new__', category_name: 'NEW', isSystem: true });
+      setShowItems(true);
+    } else {
+      setShowItems(false);
+      setCurrentCategory(null);
+    }
   }, [onTabChange]);
 
   // ========== VIRTUALIZED CATEGORY ROW ==========
@@ -1000,6 +1016,8 @@ const OTTSidebar = forwardRef(({
     
     const systemIcon = cat.category_id === '__all__' ? (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    ) : cat.category_id === '__new__' ? (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
     ) : cat.category_id === '__favorites__' ? (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
     ) : cat.category_id === '__recent__' ? (

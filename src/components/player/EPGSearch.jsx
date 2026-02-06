@@ -167,12 +167,12 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
       <div style={{ padding: '25px 20px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         <input 
           type="text" 
-          placeholder="Recherche (Presets uniquement)..." 
+          placeholder="Search program..." 
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
             width: '100%',
-            background: 'rgba(255,255,255,0.08)',
+            background: 'rgba(10,10,10,0.95)',
             border: '1px solid rgba(98, 37, 255, 0.5)',
             borderRadius: '8px',
             padding: '12px',
@@ -192,7 +192,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
                 onChange={(e) => setSyncOptions(p => ({ ...p, includeDesc: e.target.checked }))} 
                 style={{ accentColor: '#6225ff' }}
               />
-              <span style={{ fontSize: '9px', color: '#aaa', fontWeight: 800 }}>PROFOND</span>
+              <span style={{ fontSize: '9px', color: '#aaa', fontWeight: 800 }}>DEEP SEARCH</span>
             </label>
             <button 
               onClick={() => {
@@ -206,7 +206,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
                 cursor: 'pointer',
               }}
             >
-              {startTimeFilter !== null ? `${startTimeFilter}h-${startTimeFilter + 2}h` : 'START À...'}
+              {startTimeFilter !== null ? `${startTimeFilter}h-${startTimeFilter + 2}h` : 'TIME'}
             </button>
             <button 
               onClick={() => {
