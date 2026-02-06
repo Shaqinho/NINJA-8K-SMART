@@ -593,20 +593,33 @@ const OTTSidebar = ({
   }, [activeTab, xtreamService]);
 
   const loadEpgForCategory = useCallback(async (categoryId, items) => {
-    if (!xtreamService || activeTab !== 'live') return;
-    if (epgLoadedCategoriesRef.current.has(categoryId)) return;
-    if (items.length === 0) return;
+    console.log(`[EPG-Auto] loadEpgForCategory called: categoryId=${categoryId}, items=${items.length}, xtream=${!!xtreamService}, tab=${activeTab}`);
+    if (!xtreamService || activeTab !== 'live') {
+      console.log(`[EPG-Auto] SKIP: xtream=${!!xtreamService}, tab=${activeTab}`);
+      return;
+    }
+    if (epgLoadedCategoriesRef.current.has(categoryId)) {
+      console.log(`[EPG-Auto] SKIP: category ${categoryId} already loaded`);
+      return;
+    }
+    if (items.length === 0) {
+      console.log(`[EPG-Auto] SKIP: 0 items`);
+      return;
+    }
 
     epgLoadedCategoriesRef.current.add(categoryId);
 
     try {
       const streamIds = items.map(item => item.stream_id || item.id).filter(Boolean);
+      console.log(`[EPG-Auto] Fetching ${streamIds.length} streams for category ${categoryId}`);
       if (streamIds.length === 0) return;
 
       const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
+      const count = Object.keys(epgResults).length;
+      console.log(`[EPG-Auto] Got ${count} EPG results for category ${categoryId}`);
       setEpgData(prev => ({ ...prev, ...epgResults }));
     } catch (err) {
-      console.warn('EPG batch load error:', err);
+      console.warn('[EPG-Auto] Error:', err);
     }
   }, [xtreamService, activeTab]);
 
@@ -963,6 +976,7 @@ const OTTSidebar = ({
 
   // Trigger EPG load when entering a category
   useEffect(() => {
+    console.log(`[EPG-Auto] Trigger check: tab=${activeTab}, showItems=${showItems}, cat=${currentCategory?.category_id}, items=${filteredItems.length}`);
     if (activeTab === 'live' && showItems && currentCategory && filteredItems.length > 0) {
       loadEpgForCategory(currentCategory.category_id, filteredItems);
     }
@@ -1490,7 +1504,8 @@ const OTTSidebar = ({
 
   // Calculate list height
   const searchBarHeight = showItems ? (searchOpen ? 36 : 28) : 0;
-  const listHeight = window.innerHeight - 100 - searchBarHeight;
+  const headerHeight = showItems ? 48 : 52; // back+name or tabs
+  const listHeight = window.innerHeight - headerHeight - searchBarHeight;
 
   return (
     <>
