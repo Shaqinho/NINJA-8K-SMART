@@ -299,7 +299,7 @@ const PresetEditorView = ({ preset, allCategories, onSave, onCancel }) => {
       {/* Categories list */}
       <div style={{ flex: 1, minHeight: 0 }}>
         <List
-          height={300}
+          height={200}
           itemCount={filteredCategories.length}
           itemSize={36}
           width="100%"

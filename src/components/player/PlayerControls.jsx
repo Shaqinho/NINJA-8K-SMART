@@ -202,17 +202,6 @@ const styles = {
     opacity: 0,
     transition: 'opacity 0.2s',
   },
-  timeshiftLiveMarker: {
-    position: 'absolute',
-    right: 0,
-    top: '50%',
-    transform: 'translateY(-50%)',
-    width: '10px',
-    height: '10px',
-    background: '#22c55e',
-    borderRadius: '50%',
-    boxShadow: '0 0 8px #22c55e, 0 0 15px rgba(34, 197, 94, 0.5)',
-  },
 };
 
 // Skip amounts: 1x=5s, 2x=15s, 3x=30s
@@ -266,19 +255,6 @@ export const PlayerControls = ({
   const skipBackTimerRef = useRef(null);
   const skipForwardTimerRef = useRef(null);
   
-  // Stream info display state
-  const [showStreamInfo, setShowStreamInfo] = useState(false);
-  const streamInfoTimerRef = useRef(null);
-  
-  // Handle tap on current channel to show stream info
-  const handleCurrentChannelTap = useCallback(() => {
-    clearTimeout(streamInfoTimerRef.current);
-    setShowStreamInfo(true);
-    streamInfoTimerRef.current = setTimeout(() => {
-      setShowStreamInfo(false);
-    }, 2000);
-  }, []);
-  
   // Skip back: 5s → 15s → 30s
   const handleSkipBack = useCallback(() => {
     clearTimeout(skipBackTimerRef.current);
@@ -316,7 +292,6 @@ export const PlayerControls = ({
     return () => {
       clearTimeout(skipBackTimerRef.current);
       clearTimeout(skipForwardTimerRef.current);
-      clearTimeout(streamInfoTimerRef.current);
     };
   }, []);
 
@@ -596,16 +571,13 @@ export const PlayerControls = ({
             {/* Current channel (center) - logo left of name */}
             {currentChannel && (
               <div 
-                onClick={handleCurrentChannelTap}
                 style={{ 
                   display: 'flex', 
                   flexDirection: 'row', 
                   alignItems: 'center', 
                   gap: '8px',
-                  cursor: 'pointer',
                   padding: '4px 8px',
                   borderRadius: '8px',
-                  transition: 'background 0.2s',
                 }}
               >
                 {currentChannel.logo && (
@@ -653,66 +625,7 @@ export const PlayerControls = ({
           </div>
         )}
 
-        {/* ROW 3: Stream Info (appears for 2s when tapping current channel) */}
-        {showStreamInfo && streamInfo && (
-          <div 
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              gap: '8px',
-              marginBottom: '12px',
-              padding: '8px 16px',
-              background: 'rgba(0, 0, 0, 0.6)',
-              borderRadius: '20px',
-              backdropFilter: 'blur(10px)',
-              alignSelf: 'center',
-              margin: '0 auto 12px auto',
-            }}
-          >
-            {/* Category name (first, left) */}
-            {streamInfo.category && (
-              <span style={{ fontSize: '11px', color: '#a855f7', fontWeight: '600' }}>
-                {streamInfo.category}
-              </span>
-            )}
-            {streamInfo.resolution && (
-              <>
-                {streamInfo.category && <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>•</span>}
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
-                  {streamInfo.resolution}
-                </span>
-              </>
-            )}
-            {streamInfo.codec && (
-              <>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>•</span>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
-                  {streamInfo.codec}
-                </span>
-              </>
-            )}
-            {streamInfo.fps && (
-              <>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>•</span>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
-                  {streamInfo.fps}
-                </span>
-              </>
-            )}
-            {/* Bitrate (last, right) */}
-            {streamInfo.bitrate && (
-              <>
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>•</span>
-                <span style={{ fontSize: '11px', color: '#22c55e', fontWeight: '600' }}>
-                  {streamInfo.bitrate}
-                </span>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ROW 3: < Timeshift > with LIVE marker */}
+        {/* ROW 3: < Timeshift > */}
         {isLive && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             {/* Skip Back < */}
@@ -763,8 +676,6 @@ export const PlayerControls = ({
                     opacity: 1,
                   }} />
                 </div>
-                {/* LIVE marker - green */}
-                <div style={styles.timeshiftLiveMarker} />
               </div>
               </div>
               </div>

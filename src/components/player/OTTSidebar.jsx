@@ -282,6 +282,19 @@ const OTTSidebar = ({
   const itemTapTimerRef = useRef(null);
   const itemTouchStartPos = useRef({ x: 0, y: 0 });
   const [shakingItemId, setShakingItemId] = useState(null);
+
+  // Global multi-touch: cancel long press if 2+ fingers detected anywhere
+  useEffect(() => {
+    const onTouch = (e) => {
+      if (e.touches.length >= 2 && itemLongPressRef.current) {
+        clearTimeout(itemLongPressRef.current);
+        itemLongPressRef.current = null;
+        setShakingItemId(null);
+      }
+    };
+    window.addEventListener('touchstart', onTouch, { passive: true });
+    return () => window.removeEventListener('touchstart', onTouch);
+  }, []);
   
   // Use external control if provided, otherwise internal
   const isSidebarOpen = externalIsOpen !== undefined ? externalIsOpen : internalSidebarOpen;
@@ -951,8 +964,8 @@ const OTTSidebar = ({
     const isFav = favorites[channelId];
     
     // Priority: SQLite (sqliteEpg) > network cache (epgData) > channel prop
-    const sqlite = sqliteEpg[channelId];
-    const network = epgData[channelId];
+    const sqlite = sqliteEpg[channelId] || sqliteEpg[String(channelId)];
+    const network = epgData[channelId] || epgData[String(channelId)];
     const epgTitle = sqlite?.title || network?.epg_now || channel.epg_now || null;
     const epgProgress = sqlite?.progress || network?.progress || 0;
     
