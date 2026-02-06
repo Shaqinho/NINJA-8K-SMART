@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ninjaCentral, STORES } from '../../services/NinjaCentral';
+import EPGPresets from './EPGPresets';
 
 // ============================================================================
 // SETTINGS OVERLAY - App settings panel over player
@@ -57,8 +58,9 @@ const Icons = {
   ),
 };
 
-const SettingsOverlay = ({ visible, onClose, xtreamService, onServers }) => {
+const SettingsOverlay = ({ visible, onClose, xtreamService, onServers, onChannelSelect }) => {
   const [reloading, setReloading] = useState(null);
+  const [showEPGPresets, setShowEPGPresets] = useState(false);
 
   const handleReload = useCallback(async (type) => {
     if (!xtreamService || reloading) return;
@@ -256,7 +258,7 @@ const SettingsOverlay = ({ visible, onClose, xtreamService, onServers }) => {
         <div>
           <div style={sectionTitle}>EPG</div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button style={btnStyle(true)} disabled>
+            <button style={btnStyle()} onClick={() => setShowEPGPresets(true)}>
               <Icons.EPG />
               <span style={labelStyle}>EPG</span>
             </button>
@@ -275,6 +277,18 @@ const SettingsOverlay = ({ visible, onClose, xtreamService, onServers }) => {
         </div>
 
       </div>
+
+      {/* EPG Presets Panel */}
+      {showEPGPresets && (
+        <EPGPresets
+          onClose={() => setShowEPGPresets(false)}
+          xtreamService={xtreamService}
+          onChannelSelect={(channel) => {
+            setShowEPGPresets(false);
+            onChannelSelect?.(channel);
+          }}
+        />
+      )}
 
       {/* Keyframes */}
       <style>{`

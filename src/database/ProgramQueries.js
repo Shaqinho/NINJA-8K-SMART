@@ -153,5 +153,57 @@ export const isSyncNeeded = async (syncKey, maxAgeSeconds = 900) => {
   return (Math.floor(Date.now() / 1000) - status.last_sync) > maxAgeSeconds;
 };
 
-const ProgramQueriesExports = { insertChannels, insertProgramsBatch, cleanExpiredPrograms, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
+// Get NOW programs for specific category IDs (EPG Presets)
+export const getNowByCategories = async (categoryIds = [], limit = 200) => {
+  if (!categoryIds.length) return [];
+  const now = Math.floor(Date.now() / 1000);
+  const placeholders = categoryIds.map(() => '?').join(', ');
+  const sql = `SELECT p.*, c.name as channel_name, c.logo as channel_logo, c.lang_prefix, c.category_name, c.category_id,
+    1 as is_currently_live
+    FROM programs p
+    INNER JOIN channels c ON p.stream_id = c.stream_id
+    WHERE c.category_id IN (${placeholders})
+    AND p.start_time <= ? AND p.end_time > ?
+    ORDER BY c.category_name ASC, c.name ASC
+    LIMIT ?`;
+  const params = [...categoryIds, now, now, limit];
+  const results = await querySql(sql, params);
+  return results.map(r => ({
+    ...r,
+    progress: r.start_time && r.end_time ? Math.min(100, Math.max(0, Math.round(((now - r.start_time) / (r.end_time - r.start_time)) * 100))) : 0,
+  }));
+};
+
+// Search programs by text within specific category IDs (EPG Presets)
+export const searchProgramsByCategories = async (query, categoryIds = [], limit = 100) => {
+  if (!categoryIds.length || !query?.trim()) return [];
+  const q = normalizeText(query);
+  const now = Math.floor(Date.now() / 1000);
+  const placeholders = categoryIds.map(() => '?').join(', ');
+  const sql = `SELECT p.*, c.name as channel_name, c.logo as channel_logo, c.lang_prefix, c.category_name, c.category_id,
+    CASE WHEN p.start_time <= ${now} AND p.end_time > ${now} THEN 1 ELSE 0 END as is_currently_live
+    FROM programs p
+    INNER JOIN channels c ON p.stream_id = c.stream_id
+    WHERE c.category_id IN (${placeholders})
+    AND (p.title_normalized LIKE ? OR p.description LIKE ?)
+    AND p.end_time > ?
+    ORDER BY is_currently_live DESC, p.start_time ASC
+    LIMIT ?`;
+  const params = [...categoryIds, `%${q}%`, `%${q}%`, now, limit];
+  const results = await querySql(sql, params);
+  return results.map(r => ({
+    ...r,
+    progress: r.is_currently_live && r.start_time && r.end_time ? Math.min(100, Math.max(0, Math.round(((now - r.start_time) / (r.end_time - r.start_time)) * 100))) : 0,
+  }));
+};
+
+// Get stream IDs for specific category IDs (for EPG batch fetch fallback)
+export const getStreamIdsByCategories = async (categoryIds = []) => {
+  if (!categoryIds.length) return [];
+  const placeholders = categoryIds.map(() => '?').join(', ');
+  const results = await querySql(`SELECT stream_id FROM channels WHERE category_id IN (${placeholders})`, categoryIds);
+  return results.map(r => r.stream_id);
+};
+
+const ProgramQueriesExports = { insertChannels, insertProgramsBatch, cleanExpiredPrograms, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, searchProgramsByCategories, getNowByCategories, getStreamIdsByCategories, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
 export default ProgramQueriesExports;
