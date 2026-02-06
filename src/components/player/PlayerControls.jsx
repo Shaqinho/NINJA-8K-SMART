@@ -8,8 +8,8 @@ import SettingsOverlay from './SettingsOverlay';
 // ┌─────────────────────────────────────────────────────────────────────────┐
 // │                          NINJA 8K                                        │
 // │                                                                          │
-// │ ⊞ MultiGrid          🔊━━━━ Volume ━━━━          🖼️ PiP                │
-// │ (top left)           (top center)                 (top right)           │
+// │ 🔊━━━━ Volume ━━━━                                   🖼️ PiP                │
+// │ (top center)                                         (top right)           │
 // │                                                                          │
 // │                                                                          │
 // │ 🔍 Search                                         ✕ Exit Fullscreen     │
@@ -41,7 +41,6 @@ const Icons = {
   Search: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>,
   Fullscreen: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>,
   Minimize: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></svg>,
-  MultiGrid: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
   PiP: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="11" y="9" width="9" height="6" rx="1" fill="currentColor" opacity="0.3"/></svg>,
 };
 
@@ -183,8 +182,6 @@ export const PlayerControls = ({
   onMuteToggle,
   onSearchEPG,
   onFullscreenToggle,
-  onMultiGridToggle,
-  hasMultiGrid = false,
   fullscreen = false,
   isLive = true,
   visible = true,
@@ -211,6 +208,38 @@ export const PlayerControls = ({
   const [isDraggingTimeline, setIsDraggingTimeline] = useState(false);
   const timelineRef = useRef(null);
   const vodTimelineRef = useRef(null);
+  const autoHideTimerRef = useRef(null);
+
+  // ========== AUTO-HIDE CONTROLS (2s inactivity) ==========
+  const resetAutoHideTimer = useCallback(() => {
+    if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current);
+    if (visible && fullscreen && !showSettingsOverlay && !isDraggingTimeline) {
+      autoHideTimerRef.current = setTimeout(() => {
+        onTapDismiss?.();
+      }, 2000);
+    }
+  }, [visible, fullscreen, showSettingsOverlay, isDraggingTimeline, onTapDismiss]);
+
+  // Start/reset timer when controls become visible
+  useEffect(() => {
+    if (visible && fullscreen) {
+      resetAutoHideTimer();
+    } else {
+      if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current);
+    }
+    return () => {
+      if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current);
+    };
+  }, [visible, fullscreen, resetAutoHideTimer]);
+
+  // Pause auto-hide during drag or settings overlay
+  useEffect(() => {
+    if (isDraggingTimeline || showSettingsOverlay) {
+      if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current);
+    } else if (visible && fullscreen) {
+      resetAutoHideTimer();
+    }
+  }, [isDraggingTimeline, showSettingsOverlay, visible, fullscreen, resetAutoHideTimer]);
   
   // Fix : Saut de 15 secondes fixe pour < et >
   const handleSkip = useCallback((direction) => {
@@ -370,6 +399,7 @@ export const PlayerControls = ({
     <div
       className={`absolute inset-0 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       style={{ pointerEvents: visible ? 'auto' : 'none' }}
+      onTouchStart={() => resetAutoHideTimer()}
       onClick={(e) => {
         // Tap on empty area = dismiss controls
         if (e.target === e.currentTarget && onPlayPause) {
@@ -408,16 +438,6 @@ export const PlayerControls = ({
         </span>
       </button>
       
-      {/* Top Left: MultiGrid */}
-      {hasMultiGrid && onMultiGridToggle && (
-        <button
-          onClick={onMultiGridToggle}
-          style={{ ...styles.cornerBtn, position: 'absolute', top: '50px', left: '20px' }}
-          title="MultiGrid"
-        >
-          <div className="w-5 h-5"><Icons.MultiGrid /></div>
-        </button>
-      )}
       
       {/* ========== MIDDLE ROW ========== */}
 
@@ -469,14 +489,14 @@ export const PlayerControls = ({
 
         {/* ROW 3: < Timeshift > + Minimize */}
         {isLive && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0px' }}>
             {/* Skip Back < */}
             <button
               onClick={() => handleSkip('back')}
               style={{
                 ...styles.btnEdge,
                 color: 'white',
-                padding: '8px 4px',
+                padding: '8px 0px',
               }}
             >
               ‹
@@ -530,7 +550,7 @@ export const PlayerControls = ({
               style={{
                 ...styles.btnEdge,
                 color: 'white',
-                padding: '8px 4px',
+                padding: '8px 0px',
               }}
             >
               ›
