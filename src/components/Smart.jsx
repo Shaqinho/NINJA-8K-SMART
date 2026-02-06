@@ -167,6 +167,7 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const autoPlayedRef = useRef(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEPGSearch, setShowEPGSearch] = useState(false);
   const [listHeight, setListHeight] = useState(400);
@@ -227,6 +228,22 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
           setVodCats(vc);
           setSeriesCats(sc);
           console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+          
+          // Auto-play last channel
+          if (live.length > 0 && !autoPlayedRef.current) {
+            autoPlayedRef.current = true;
+            try {
+              const saved = JSON.parse(localStorage.getItem('ninja_last_channel'));
+              if (saved) {
+                const found = live.find(ch => ch.id === saved.id || ch.stream_id === saved.stream_id);
+                if (found) {
+                  setSelectedItem(found);
+                  setIsPlaying(true);
+                  console.log('[AutoPlay] Restored:', found.name);
+                }
+              }
+            } catch {}
+          }
         }
         setNinjaReady(true);
       } catch (err) {
@@ -471,11 +488,13 @@ const Smart = ({ playlist, onPlay, onBack, onLogout, onSwitchToHub, setIsStreami
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setIsPlaying(true);
+    try { localStorage.setItem('ninja_last_channel', JSON.stringify({ id: item.id, stream_id: item.stream_id, name: item.name })); } catch {}
   }, []);
 
   const handleChannelChange = useCallback((channel) => {
     setSelectedItem(channel);
     setIsPlaying(true);
+    try { localStorage.setItem('ninja_last_channel', JSON.stringify({ id: channel.id, stream_id: channel.stream_id, name: channel.name })); } catch {}
   }, []);
 
   const handleLongPress = useCallback((item) => {
