@@ -1,42 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SettingsOverlay from './SettingsOverlay';
 
-// TickerText - auto-scroll text that overflows its container
-const TickerText = ({ children, style = {} }) => {
-  const containerRef = useRef(null);
-  const textRef = useRef(null);
-  const [shouldScroll, setShouldScroll] = useState(false);
-
-  useEffect(() => {
-    if (containerRef.current && textRef.current) {
-      setShouldScroll(textRef.current.scrollWidth > containerRef.current.clientWidth);
-    }
-  }, [children]);
-
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        overflow: 'hidden',
-        ...style,
-      }}
-    >
-      <div
-        ref={textRef}
-        style={{
-          display: 'inline-block',
-          whiteSpace: 'nowrap',
-          animation: shouldScroll ? 'pcTicker 8s linear infinite' : 'none',
-          paddingRight: shouldScroll ? '40px' : '0',
-        }}
-      >
-        {children}
-        {shouldScroll && <span style={{ paddingLeft: '40px' }}>{children}</span>}
-      </div>
-    </div>
-  );
-};
-
 // ============================================================================
 // PLAYER CONTROLS - OTT Design
 // 
@@ -706,10 +670,6 @@ export const PlayerControls = ({
 
       {/* Keyframes */}
       <style>{`
-        @keyframes pcTicker {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
         @keyframes logoPulse {
           0%, 100% { opacity: 0.85; filter: drop-shadow(0 0 0px transparent); }
           50% { opacity: 1; filter: drop-shadow(0 0 8px rgba(98, 37, 255, 0.6)); }
