@@ -280,6 +280,8 @@ const OTTSidebar = ({
   const itemLongPressRef = useRef(null);
   const itemTapCountRef = useRef(0);
   const itemTapTimerRef = useRef(null);
+  const itemTouchStartPos = useRef({ x: 0, y: 0 });
+  const [shakingItemId, setShakingItemId] = useState(null);
   
   // Use external control if provided, otherwise internal
   const isSidebarOpen = externalIsOpen !== undefined ? externalIsOpen : internalSidebarOpen;
@@ -665,6 +667,7 @@ const OTTSidebar = ({
     
     if (itemTapCountRef.current >= 3) {
       toggleFavorite(itemId);
+      navigator.vibrate?.(50);
       itemTapCountRef.current = 0;
       return;
     }
@@ -681,20 +684,50 @@ const OTTSidebar = ({
     // Sidebar stays open
   }, [onChannelSelect, toggleFavorite, addRecent]);
 
-  // Long press on item = toggle favorite
-  const handleItemTouchStart = useCallback((item) => {
+  // Long press on item = toggle favorite (2s, with vibration + shake)
+  const handleItemTouchStart = useCallback((item, e) => {
+    // Cancel if multi-touch (2-finger swipe for folder nav)
+    if (e?.touches?.length > 1) {
+      if (itemLongPressRef.current) {
+        clearTimeout(itemLongPressRef.current);
+        itemLongPressRef.current = null;
+        setShakingItemId(null);
+      }
+      return;
+    }
+    // Store touch start position
+    if (e?.touches?.[0]) {
+      itemTouchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
     const itemId = item.stream_id || item.id || item.series_id;
+    setShakingItemId(itemId);
     itemLongPressRef.current = setTimeout(() => {
       toggleFavorite(itemId);
+      navigator.vibrate?.(50);
+      setShakingItemId(null);
       itemLongPressRef.current = null;
-    }, 3000);
+    }, 2000);
   }, [toggleFavorite]);
+
+  const handleItemTouchMove = useCallback((e) => {
+    if (!itemLongPressRef.current) return;
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    const dx = Math.abs(touch.clientX - itemTouchStartPos.current.x);
+    const dy = Math.abs(touch.clientY - itemTouchStartPos.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimeout(itemLongPressRef.current);
+      itemLongPressRef.current = null;
+      setShakingItemId(null);
+    }
+  }, []);
 
   const handleItemTouchEnd = useCallback(() => {
     if (itemLongPressRef.current) {
       clearTimeout(itemLongPressRef.current);
       itemLongPressRef.current = null;
     }
+    setShakingItemId(null);
   }, []);
   
   const handleBackToCategories = useCallback(() => {
@@ -923,6 +956,8 @@ const OTTSidebar = ({
     const epgTitle = sqlite?.title || network?.epg_now || channel.epg_now || null;
     const epgProgress = sqlite?.progress || network?.progress || 0;
     
+    const isShaking = shakingItemId === channelId;
+    
     return (
       <div
         style={{
@@ -934,11 +969,13 @@ const OTTSidebar = ({
           cursor: 'pointer',
           background: isActive ? 'rgba(98, 37, 255, 0.25)' : 'transparent',
           borderLeft: isActive ? '3px solid #6225ff' : '3px solid transparent',
+          animation: isShaking ? 'ottShake 0.3s ease-in-out infinite' : 'none',
         }}
         onClick={() => handleItemClick(channel)}
-        onTouchStart={() => handleItemTouchStart(channel)}
+        onTouchStart={(e) => handleItemTouchStart(channel, e)}
+        onTouchMove={handleItemTouchMove}
         onTouchEnd={handleItemTouchEnd}
-        onMouseDown={() => handleItemTouchStart(channel)}
+        onMouseDown={(e) => handleItemTouchStart(channel, e)}
         onMouseUp={handleItemTouchEnd}
         onMouseLeave={handleItemTouchEnd}
       >
@@ -1007,7 +1044,7 @@ const OTTSidebar = ({
         )}
       </div>
     );
-  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchEnd, favorites, epgData, sqliteEpg]);
+  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId]);
 
   // ========== VIRTUALIZED MOVIE ROW ==========
   const MovieRow = useCallback(({ index, style }) => {
@@ -1546,6 +1583,11 @@ const OTTSidebar = ({
         @keyframes ottTicker {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
+        }
+        @keyframes ottShake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-2px); }
+          75% { transform: translateX(2px); }
         }
       `}</style>
     </>
