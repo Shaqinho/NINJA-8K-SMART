@@ -493,44 +493,44 @@ const Player = memo(({
         onAspectRatioChange={setAspectRatio}
       />
 
-      {/* Double Sidebar unifiée — slide avec 3 fingers */}
+      {/* OTT Sidebar - Only in fullscreen/landscape mode */}
       {(isFullscreen || isSmartFullscreen) && isLive && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 10000,
-          pointerEvents: ottSidebarOpen ? 'auto' : 'none',
-          display: 'flex',
-          transform: ottSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}>
-          {/* GAUCHE : OTTSidebar (300px fixe) */}
-          <div style={{ width: '300px', height: '100%', flexShrink: 0 }}>
-            <OTTSidebar
-              ref={sidebarRef}
-              categories={categories}
-              channels={channels}
-              selectedChannel={channel}
-              onChannelSelect={onChannelChange}
-              isOpen={ottSidebarOpen}
-              onToggle={onOttSidebarChange}
-              xtreamService={xtreamService}
-            />
-          </div>
+        <OTTSidebar
+          ref={sidebarRef}
+          categories={categories}
+          channels={channels}
+          selectedChannel={channel}
+          onChannelSelect={onChannelChange}
+          isOpen={ottSidebarOpen}
+          onToggle={onOttSidebarChange}
+          xtreamService={xtreamService}
+        />
+      )}
 
-          {/* DROITE : EPGSearch (tout le reste) */}
-          <div style={{ flex: 1, height: '100%' }}>
-            <EPGSearch
-              xtreamService={xtreamService}
-              onChannelSelect={(ch) => {
-                onChannelChange?.(ch);
-                sidebarRef.current?.scrollToChannel(ch.stream_id);
-              }}
-            />
-          </div>
+      {/* EPG Search - Right panel glassmorphic, accolé à OTTSidebar */}
+      {(isFullscreen || isSmartFullscreen) && isLive && ottSidebarOpen && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: '300px',
+          right: 0,
+          background: 'rgba(255, 255, 255, 0.03)',
+          backdropFilter: 'blur(25px) saturate(150%)',
+          WebkitBackdropFilter: 'blur(25px) saturate(150%)',
+          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
+          zIndex: 10001,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
+          <EPGSearch
+            xtreamService={xtreamService}
+            onChannelSelect={(ch) => {
+              onChannelChange?.(ch);
+              sidebarRef.current?.scrollToChannel(ch.stream_id);
+            }}
+          />
         </div>
       )}
 
