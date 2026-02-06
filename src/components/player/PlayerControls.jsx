@@ -438,10 +438,12 @@ export const PlayerControls = ({
           
         {/* ROW 2: Channel Navigation */}
         {isLive && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
-            <button onClick={onChannelPrev} style={styles.btnSwitch} title="Previous channel">
-              ‹‹
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={onChannelPrev} style={styles.btnSwitch} title="Previous channel">
+                ‹‹
+              </button>
+            </div>
             {currentChannel && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', minWidth: 0 }}>
                 {currentChannel.logo && (
@@ -452,9 +454,11 @@ export const PlayerControls = ({
                 </span>
               </div>
             )}
-            <button onClick={onChannelNext} style={styles.btnSwitch} title="Next channel">
-              ››
-            </button>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
+              <button onClick={onChannelNext} style={styles.btnSwitch} title="Next channel">
+                ››
+              </button>
+            </div>
           </div>
         )}
 
