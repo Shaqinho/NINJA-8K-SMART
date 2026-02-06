@@ -1,35 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SettingsOverlay from './SettingsOverlay';
 
-// ============================================================================
-// PLAYER CONTROLS - OTT Design
-// 
-// LAYOUT FULLSCREEN:
-// ┌─────────────────────────────────────────────────────────────────────────┐
-// │                          NINJA 8K                                        │
-// │                                                                          │
-// │ 🔊━━━━ Volume ━━━━                                   🖼️ PiP                │
-// │ (top center)                                         (top right)           │
-// │                                                                          │
-// │                                                                          │
-// │ 🔍 Search                                         ✕ Exit Fullscreen     │
-// │ (bottom left)                                     (bottom right)        │
-// │                                                                          │
-// │                              ▶️                                          │
-// │                           (play/pause)                                   │
-// │                                                                          │
-// │ [Logo] Prev   ‹‹   [LOGO] CURRENT   ››   Next [Logo]                   │
-// │                                                                          │
-// │ ‹    [-0:30 ═══════════════════|───🟢]    ›                             │
-// │ (skip back with multiplier)        (skip forward with multiplier)       │
-// │                                                                          │
-// │ Skip multiplier: 1x=10s, 2x=15s, 3x=30s, 4x=45s, 5x=60s                │
-// └─────────────────────────────────────────────────────────────────────────┘
-//
-// LAYOUT MINIMAL (Small player):
-// Play/Pause + Fullscreen only
-// ============================================================================
-
 // Icons
 const Icons = {
   Play: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>,
