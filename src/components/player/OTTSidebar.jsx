@@ -61,26 +61,40 @@ const TickerText = ({ children, style = {} }) => {
   );
 };
 
-// ========== NINJA KEYBOARD (Custom Alpha Compact + Draggable) ==========
-const KEYBOARD_ROWS = [
-  ['Q','W','E','R','T','Y','U','I','O','P'],
-  ['A','S','D','F','G','H','J','K','L'],
-  ['Z','X','C','V','B','N','M'],
-];
+// ========== NINJA KEYBOARD (QWERTY/AZERTY + Numpad + Special Chars + Draggable) ==========
+const LAYOUTS = {
+  qwerty: {
+    nums: ['1','2','3','4','5','6','7','8','9','0'],
+    rows: [
+      ['Q','W','E','R','T','Y','U','I','O','P'],
+      ['A','S','D','F','G','H','J','K','L'],
+      ['Z','X','C','V','B','N','M'],
+    ],
+  },
+  azerty: {
+    nums: ['1','2','3','4','5','6','7','8','9','0'],
+    rows: [
+      ['A','Z','E','R','T','Y','U','I','O','P'],
+      ['Q','S','D','F','G','H','J','K','L'],
+      ['W','X','C','V','B','N','M'],
+    ],
+  },
+};
+const SPECIAL_CHARS = [':','@','-','_','*','+','/','=','.'];
+const SHORTCUTS = ['http://','https://'];
+const detectDefaultLayout = () => /^(fr|be)/i.test(navigator.language || '') ? 'azerty' : 'qwerty';
 
 const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClose, searchQuery }) => {
   const dragRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
   const isDraggingRef = useRef(false);
+  const [layout, setLayout] = useState(detectDefaultLayout);
+  const [pressedKey, setPressedKey] = useState(null);
+  const pressTimerRef = useRef(null);
 
   const handleDragStart = useCallback((e) => {
     const touch = e.touches?.[0] || e;
-    dragStartRef.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-      posX: position.x,
-      posY: position.y,
-    };
+    dragStartRef.current = { x: touch.clientX, y: touch.clientY, posX: position.x, posY: position.y };
     isDraggingRef.current = true;
   }, [position]);
 
@@ -91,14 +105,12 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
     const dx = touch.clientX - dragStartRef.current.x;
     const dy = touch.clientY - dragStartRef.current.y;
     onPositionChange({
-      x: Math.max(0, Math.min(window.innerWidth - 340, dragStartRef.current.posX + dx)),
-      y: Math.max(0, Math.min(window.innerHeight - 160, dragStartRef.current.posY + dy)),
+      x: Math.max(0, Math.min(window.innerWidth - 380, dragStartRef.current.posX + dx)),
+      y: Math.max(0, Math.min(window.innerHeight - 200, dragStartRef.current.posY + dy)),
     });
   }, [onPositionChange]);
 
-  const handleDragEnd = useCallback(() => {
-    isDraggingRef.current = false;
-  }, []);
+  const handleDragEnd = useCallback(() => { isDraggingRef.current = false; }, []);
 
   useEffect(() => {
     if (!isDraggingRef.current) return;
@@ -110,113 +122,159 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
     };
   }, [handleDragMove, handleDragEnd]);
 
-  const keyStyle = {
-    minWidth: '28px',
-    height: '32px',
-    borderRadius: '5px',
-    border: 'none',
-    background: 'rgba(255,255,255,0.12)',
-    color: '#fff',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'background 0.1s',
-    WebkitTapHighlightColor: 'transparent',
+  useEffect(() => () => clearTimeout(pressTimerRef.current), []);
+
+  const handleKeyPress = useCallback((char, keyId) => {
+    onInput(char);
+    setPressedKey(keyId);
+    clearTimeout(pressTimerRef.current);
+    pressTimerRef.current = setTimeout(() => setPressedKey(null), 150);
+  }, [onInput]);
+
+  const handleBackspacePress = useCallback(() => {
+    onBackspace();
+    setPressedKey('⌫');
+    clearTimeout(pressTimerRef.current);
+    pressTimerRef.current = setTimeout(() => setPressedKey(null), 150);
+  }, [onBackspace]);
+
+  const currentLayout = LAYOUTS[layout];
+
+  const keyBase = {
+    minWidth: '30px', height: '34px', borderRadius: '6px', border: 'none',
+    color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    WebkitTapHighlightColor: 'transparent', position: 'relative', padding: 0,
+  };
+
+  const getKeyStyle = (keyId) => ({
+    ...keyBase,
+    background: pressedKey === keyId ? '#6225ff' : 'rgba(255,255,255,0.12)',
+    transform: pressedKey === keyId ? 'scale(1.05)' : 'scale(1)',
+    transition: 'background 0.08s, transform 0.08s',
+  });
+
+  const ZoomPopup = ({ keyId, children }) => {
+    if (pressedKey !== keyId) return null;
+    return (
+      <div style={{
+        position: 'absolute', bottom: '110%', left: '50%', transform: 'translateX(-50%)',
+        background: '#6225ff', color: '#fff', fontSize: '18px', fontWeight: 700,
+        borderRadius: '8px', padding: '4px 10px', minWidth: '32px', textAlign: 'center',
+        boxShadow: '0 4px 16px rgba(98,37,255,0.5)', pointerEvents: 'none', zIndex: 10,
+        whiteSpace: 'nowrap',
+      }}>
+        {children}
+      </div>
+    );
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        zIndex: 10002,
-        background: 'rgba(0, 0, 0, 0.85)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderRadius: '12px',
-        border: '1px solid rgba(255,255,255,0.08)',
-        padding: '0',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-        userSelect: 'none',
-        touchAction: 'none',
-      }}
-    >
-      {/* Drag Handle Bar */}
-      <div
-        ref={dragRef}
-        onTouchStart={handleDragStart}
-        onMouseDown={handleDragStart}
+    <div style={{
+      position: 'fixed', left: `${position.x}px`, top: `${position.y}px`, zIndex: 10002,
+      background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+      borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.6)', userSelect: 'none', touchAction: 'none',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Drag Handle */}
+      <div ref={dragRef} onTouchStart={handleDragStart} onMouseDown={handleDragStart}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '6px 10px',
-          cursor: 'grab',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        {/* Drag indicator */}
-        <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
-          <div style={{ width: '24px', height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.2)' }} />
-        </div>
-        {/* Search query preview */}
-        <div style={{ fontSize: '10px', color: '#888', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '5px 10px', cursor: 'grab', borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}>
+        <div style={{ width: '24px', height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.2)' }} />
+        <div style={{ fontSize: '10px', color: '#888', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {searchQuery || '...'}
         </div>
-        {/* Close button */}
-        <button onClick={onClose} style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* Layout toggle */}
+          <button onClick={() => setLayout(l => l === 'qwerty' ? 'azerty' : 'qwerty')}
+            style={{ background: 'rgba(98,37,255,0.2)', border: '1px solid rgba(98,37,255,0.3)', borderRadius: '4px', padding: '2px 6px', color: '#a78bfa', fontSize: '9px', fontWeight: 700, cursor: 'pointer' }}>
+            {layout === 'qwerty' ? 'QWE' : 'AZE'}
+          </button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
 
-      {/* Keys */}
-      <div style={{ padding: '6px 8px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {/* Row 1 - QWERTY */}
-        <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
-          {KEYBOARD_ROWS[0].map(key => (
-            <button key={key} onClick={() => onInput(key.toLowerCase())} style={keyStyle}>
-              {key}
+      {/* Main content: Keys left + Special right */}
+      <div style={{ display: 'flex', gap: '6px', padding: '6px 8px 8px' }}>
+        {/* Left: Main keyboard */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {/* Numbers row */}
+          <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
+            {currentLayout.nums.map(key => (
+              <button key={`n${key}`} onClick={() => handleKeyPress(key, `n${key}`)} style={{ ...getKeyStyle(`n${key}`), minWidth: '26px', fontSize: '11px', color: '#aaa' }}>
+                <ZoomPopup keyId={`n${key}`}>{key}</ZoomPopup>
+                {key}
+              </button>
+            ))}
+          </div>
+          {/* Letter rows */}
+          <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
+            {currentLayout.rows[0].map(key => (
+              <button key={key} onClick={() => handleKeyPress(key.toLowerCase(), key)} style={getKeyStyle(key)}>
+                <ZoomPopup keyId={key}>{key}</ZoomPopup>
+                {key}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '3px', justifyContent: 'center', paddingLeft: '10px', paddingRight: '10px' }}>
+            {currentLayout.rows[1].map(key => (
+              <button key={key} onClick={() => handleKeyPress(key.toLowerCase(), key)} style={getKeyStyle(key)}>
+                <ZoomPopup keyId={key}>{key}</ZoomPopup>
+                {key}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
+            {currentLayout.rows[2].map(key => (
+              <button key={key} onClick={() => handleKeyPress(key.toLowerCase(), key)} style={getKeyStyle(key)}>
+                <ZoomPopup keyId={key}>{key}</ZoomPopup>
+                {key}
+              </button>
+            ))}
+            <button onClick={handleBackspacePress} style={{ ...getKeyStyle('⌫'), minWidth: '42px', background: pressedKey === '⌫' ? '#ef4444' : 'rgba(255,80,80,0.2)' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
+                <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>
+              </svg>
             </button>
-          ))}
-        </div>
-        {/* Row 2 - ASDF */}
-        <div style={{ display: 'flex', gap: '3px', justifyContent: 'center', paddingLeft: '12px', paddingRight: '12px' }}>
-          {KEYBOARD_ROWS[1].map(key => (
-            <button key={key} onClick={() => onInput(key.toLowerCase())} style={keyStyle}>
-              {key}
+          </div>
+          {/* Space row */}
+          <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
+            <button onClick={() => handleKeyPress(' ', 'space')} style={{ ...getKeyStyle('space'), flex: 1, minWidth: '160px', color: '#888' }}>
+              <ZoomPopup keyId="space">␣</ZoomPopup>
+              space
             </button>
-          ))}
+          </div>
         </div>
-        {/* Row 3 - ZXCV + Backspace */}
-        <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
-          {KEYBOARD_ROWS[2].map(key => (
-            <button key={key} onClick={() => onInput(key.toLowerCase())} style={keyStyle}>
-              {key}
-            </button>
-          ))}
-          <button onClick={onBackspace} style={{ ...keyStyle, minWidth: '42px', background: 'rgba(255,80,80,0.2)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2">
-              <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/>
-            </svg>
-          </button>
-        </div>
-        {/* Row 4 - Space + Numbers toggle */}
-        <div style={{ display: 'flex', gap: '3px', justifyContent: 'center' }}>
-          <button onClick={() => onInput('0')} style={{ ...keyStyle, minWidth: '28px' }}>0</button>
-          <button onClick={() => onInput('1')} style={{ ...keyStyle, minWidth: '28px' }}>1</button>
-          <button onClick={() => onInput('2')} style={{ ...keyStyle, minWidth: '28px' }}>2</button>
-          <button onClick={() => onInput(' ')} style={{ ...keyStyle, flex: 1, minWidth: '100px', color: '#888' }}>
-            space
-          </button>
-          <button onClick={() => onInput('3')} style={{ ...keyStyle, minWidth: '28px' }}>3</button>
-          <button onClick={() => onInput('4')} style={{ ...keyStyle, minWidth: '28px' }}>4</button>
-          <button onClick={() => onInput('5')} style={{ ...keyStyle, minWidth: '28px' }}>5</button>
+
+        {/* Right: Special chars + shortcuts */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '6px' }}>
+          {/* Special characters in 3-column grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px' }}>
+            {SPECIAL_CHARS.map(ch => (
+              <button key={ch} onClick={() => handleKeyPress(ch, `sp_${ch}`)} style={{ ...getKeyStyle(`sp_${ch}`), minWidth: '28px', fontSize: '12px', color: '#ccc' }}>
+                <ZoomPopup keyId={`sp_${ch}`}>{ch}</ZoomPopup>
+                {ch}
+              </button>
+            ))}
+          </div>
+          {/* URL shortcuts */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '2px' }}>
+            {SHORTCUTS.map(sc => (
+              <button key={sc} onClick={() => handleKeyPress(sc, `sc_${sc}`)}
+                style={{
+                  ...getKeyStyle(`sc_${sc}`), minWidth: '80px', fontSize: '8px', fontWeight: 600,
+                  color: '#a78bfa', background: pressedKey === `sc_${sc}` ? '#6225ff' : 'rgba(98,37,255,0.12)',
+                  padding: '0 4px', whiteSpace: 'nowrap',
+                }}>
+                {sc}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
