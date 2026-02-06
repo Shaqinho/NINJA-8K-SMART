@@ -495,7 +495,7 @@ export const PlayerControls = ({
       {onFullscreenToggle && (
         <button
           onClick={onFullscreenToggle}
-          style={{ ...styles.cornerBtn, position: 'absolute', bottom: '140px', right: '20px' }}
+          style={{ ...styles.cornerBtn, position: 'absolute', bottom: '170px', right: '20px', zIndex: 100 }}
           title="Exit Fullscreen"
         >
           <div className="w-5 h-5"><Icons.Minimize /></div>
@@ -615,21 +615,22 @@ export const PlayerControls = ({
 
         {/* ROW 3: < Timeshift > */}
         {isLive && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             {/* Skip Back < */}
             <button
               onClick={handleSkipBack}
               style={{
                 ...styles.btnEdge,
                 color: skipBackCount > 0 ? 'white' : 'rgba(255,255,255,0.4)',
+                padding: '8px 4px',
               }}
             >
               ‹
             </button>
 
-            {/* Timeshift bar - 70% width centered */}
+            {/* Timeshift bar - 90% width centered */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: '70%', position: 'relative' }}>
+              <div style={{ width: '95%', position: 'relative' }}>
               {/* Touch zone élargie (44px) pour faciliter le tap et drag */}
               <div
                 ref={timelineRef}
@@ -674,7 +675,8 @@ export const PlayerControls = ({
               onClick={handleSkipForward}
               style={{
                 ...styles.btnEdge,
-                color: skipForwardCount > 0 ? '#22c55e' : (isAtLive ? '#22c55e' : 'rgba(255,255,255,0.4)'),
+                color: skipForwardCount > 0 ? 'white' : 'rgba(255,255,255,0.4)',
+                padding: '8px 4px',
               }}
             >
               ›

@@ -764,6 +764,10 @@ const OTTSidebar = ({
         itemLongPressRef.current = null;
         setShakingItemId(null);
       }
+      if (itemTapTimerRef.current) {
+        clearTimeout(itemTapTimerRef.current);
+        itemTapTimerRef.current = null;
+      }
       return;
     }
     // Store touch start position
@@ -771,7 +775,10 @@ const OTTSidebar = ({
       itemTouchStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }
     const itemId = item.stream_id || item.id || item.series_id;
-    setShakingItemId(itemId);
+    // Delay shake start by 300ms (prevents shake on scroll)
+    itemTapTimerRef.current = setTimeout(() => {
+      setShakingItemId(itemId);
+    }, 300);
     itemLongPressRef.current = setTimeout(() => {
       toggleFavorite(itemId);
       navigator.vibrate?.(50);
@@ -789,6 +796,8 @@ const OTTSidebar = ({
     if (dx > 10 || dy > 10) {
       clearTimeout(itemLongPressRef.current);
       itemLongPressRef.current = null;
+      clearTimeout(itemTapTimerRef.current);
+      itemTapTimerRef.current = null;
       setShakingItemId(null);
     }
   }, []);
@@ -797,6 +806,10 @@ const OTTSidebar = ({
     if (itemLongPressRef.current) {
       clearTimeout(itemLongPressRef.current);
       itemLongPressRef.current = null;
+    }
+    if (itemTapTimerRef.current) {
+      clearTimeout(itemTapTimerRef.current);
+      itemTapTimerRef.current = null;
     }
     setShakingItemId(null);
   }, []);
@@ -1396,7 +1409,7 @@ const OTTSidebar = ({
   ];
 
   // Calculate list height
-  const searchBarHeight = searchOpen ? 44 : 0;
+  const searchBarHeight = showItems ? 36 : 0;
   const listHeight = window.innerHeight - 100 - searchBarHeight;
 
   return (
@@ -1458,6 +1471,38 @@ const OTTSidebar = ({
                   {filteredItems.length} {activeTab === 'live' ? 'channels' : activeTab === 'movies' ? 'movies' : 'series'}
                 </div>
               </div>
+              {/* EPG force fetch button */}
+              {activeTab === 'live' && (
+                <button
+                  onClick={async () => {
+                    if (!xtreamService || !filteredItems.length) return;
+                    try {
+                      const streamIds = filteredItems.map(item => item.stream_id || item.id).filter(Boolean);
+                      if (streamIds.length === 0) return;
+                      const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
+                      if (epgResults && Object.keys(epgResults).length > 0) {
+                        setEpgData(prev => ({ ...prev, ...epgResults }));
+                        console.log('[EPG Force] Loaded', Object.keys(epgResults).length, 'channels');
+                      }
+                    } catch (err) {
+                      console.warn('[EPG Force] Error:', err);
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(98,37,255,0.15)',
+                    border: '1px solid rgba(98,37,255,0.3)',
+                    borderRadius: '4px',
+                    padding: '3px 8px',
+                    color: '#a78bfa',
+                    fontSize: '8px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  EPG
+                </button>
+              )}
             </div>
           )}
           
@@ -1531,10 +1576,10 @@ const OTTSidebar = ({
           )}
         </div>
 
-        {/* Search Bar (bottom) */}
-        {searchOpen && showItems && (
+        {/* Search Bar (compact, bottom) */}
+        {showItems && (
           <div style={{
-            height: '44px',
+            height: '36px',
             borderTop: '1px solid rgba(255,255,255,0.08)',
             display: 'flex',
             alignItems: 'center',
@@ -1543,76 +1588,52 @@ const OTTSidebar = ({
             flexShrink: 0,
             background: 'rgba(0,0,0,0.5)',
           }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-            </svg>
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              readOnly
-              onFocus={() => setShowKeyboard(true)}
-              onClick={() => setShowKeyboard(true)}
-              placeholder={currentCategory?.category_id === '__all__' && activeTab === 'live' ? "Search channels & programs..." : "Search in folder..."}
-              style={{
-                flex: 1,
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                color: '#fff',
-                fontSize: '11px',
-                padding: 0,
-                caretColor: '#6225ff',
+            <button
+              onClick={() => {
+                if (!searchOpen) {
+                  setSearchOpen(true);
+                  setShowKeyboard(true);
+                } else {
+                  setSearchOpen(false);
+                  setShowKeyboard(false);
+                  setSearchQuery('');
+                  setProgramResults([]);
+                }
               }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: '4px' }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-              </button>
+              style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', display: 'flex', flexShrink: 0 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchOpen ? '#6225ff' : '#888'} strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+            </button>
+            {searchOpen ? (
+              <>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  readOnly
+                  onFocus={() => setShowKeyboard(true)}
+                  onClick={() => setShowKeyboard(true)}
+                  placeholder={currentCategory?.category_id === '__all__' && activeTab === 'live' ? "Search channels & programs..." : "Search in folder..."}
+                  style={{
+                    flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                    color: '#fff', fontSize: '11px', padding: 0, caretColor: '#6225ff',
+                  }}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')}
+                    style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: '4px' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                )}
+              </>
+            ) : (
+              <span style={{ fontSize: '10px', color: '#555' }}>Search...</span>
             )}
           </div>
-        )}
-
-        {/* Search Toggle Button (bottom-right) */}
-        {showItems && (
-          <button
-            onClick={() => {
-              if (!searchOpen) {
-                setSearchOpen(true);
-                setShowKeyboard(true);
-              } else {
-                setSearchOpen(false);
-                setShowKeyboard(false);
-                setSearchQuery('');
-                setProgramResults([]);
-              }
-            }}
-            style={{
-              position: 'absolute',
-              bottom: searchOpen ? '52px' : '12px',
-              right: '12px',
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              background: searchOpen ? '#6225ff' : 'rgba(255,255,255,0.15)',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              zIndex: 10,
-              transition: 'all 0.2s',
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-            </svg>
-          </button>
         )}
 
         {/* ========== EPG SYNC PROGRESS BAR (2px, bottom) ========== */}
