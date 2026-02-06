@@ -80,6 +80,8 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
     }
   }, [selectedItem, onItemSelect]);
 
+  const [posterOverlay, setPosterOverlay] = useState(false);
+
   // ========== DETAIL VIEW ==========
   if (selectedItem) {
     const info = detailData?.info || detailData?.movie_data || {};
@@ -95,110 +97,101 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'rgba(0,0,0,0.75)' }}>
-        {/* Back button */}
-        <div style={{ padding: '15px 20px', flexShrink: 0 }}>
-          <button
-            onClick={handleBack}
-            style={{ background: 'none', border: 'none', color: '#6225ff', fontSize: '18px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
-          >
-            ←
+
+        {/* Title row — title left, play + fav + back right */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+              {year && <span style={{ fontSize: '10px', color: '#888' }}>{year}</span>}
+              {genre && <span style={{ fontSize: '9px', color: '#6225ff', fontWeight: 700 }}>{genre}</span>}
+              {rating && <span style={{ fontSize: '9px', color: '#ffd700' }}>⭐ {rating}</span>}
+              {duration && <span style={{ fontSize: '9px', color: '#666' }}>{duration}</span>}
+            </div>
+          </div>
+          {/* Play button */}
+          <button onClick={handlePlay} style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <span style={{ color: '#fff', fontSize: '14px', marginLeft: '2px' }}>▶</span>
           </button>
+          {/* Favorite button */}
+          <button onClick={() => {/* TODO: toggle favorite */}} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <span style={{ fontSize: '16px' }}>☆</span>
+          </button>
+          {/* Back arrow */}
+          <button onClick={handleBack} style={{ background: 'none', border: 'none', color: '#6225ff', fontSize: '18px', fontWeight: 700, cursor: 'pointer', padding: '0 0 0 8px', flexShrink: 0 }}>✕</button>
         </div>
 
-        {/* Poster + Info */}
-        <div style={{ display: 'flex', gap: '20px', padding: '0 20px 20px', flexShrink: 0 }}>
+        {/* Poster + Description horizontal */}
+        <div style={{ display: 'flex', gap: '16px', padding: '0 20px 15px', flexShrink: 0 }}>
+          {/* Poster — clickable for overlay */}
           {poster && (
             <img
               src={poster}
               alt=""
-              style={{ width: '140px', height: '210px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }}
+              onClick={() => setPosterOverlay(true)}
+              style={{ width: '140px', height: '210px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, cursor: 'pointer' }}
             />
           )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>{title}</div>
-            {year && <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>{year}</div>}
-            {genre && <div style={{ fontSize: '10px', color: '#6225ff', fontWeight: 700, marginBottom: '4px' }}>{genre}</div>}
-            {rating && <div style={{ fontSize: '10px', color: '#ffd700', marginBottom: '4px' }}>⭐ {rating}</div>}
-            {duration && <div style={{ fontSize: '10px', color: '#666', marginBottom: '8px' }}>{duration}</div>}
+          {/* Right side — plot, cast, director, tracks */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {director && <div style={{ fontSize: '10px', color: '#888' }}>🎬 {director}</div>}
-          </div>
-        </div>
+            {plot && (
+              <div style={{ fontSize: '11px', color: '#aaa', lineHeight: '1.5' }}>
+                {plot.substring(0, 300)}{plot.length > 300 ? '...' : ''}
+              </div>
+            )}
+            {cast && <div style={{ fontSize: '10px', color: '#666' }}>🎭 {cast.substring(0, 150)}</div>}
 
-        {/* Plot */}
-        {plot && (
-          <div style={{ padding: '0 20px 15px', fontSize: '11px', color: '#aaa', lineHeight: '1.5' }}>
-            {plot.substring(0, 300)}{plot.length > 300 ? '...' : ''}
-          </div>
-        )}
-
-        {/* Cast */}
-        {cast && (
-          <div style={{ padding: '0 20px 15px', fontSize: '10px', color: '#666' }}>
-            🎭 {cast.substring(0, 150)}
-          </div>
-        )}
-
-        {/* Audio Tracks */}
-        <div style={{ padding: '0 20px 10px' }}>
-          <div style={{ fontSize: '10px', fontWeight: 800, color: '#6225ff', marginBottom: '6px' }}>
-            🔊 AUDIO {probing ? '(scanning...)' : probeData ? `(${probeData.audioTracks.length})` : ''}
-          </div>
-          {probeData?.audioTracks?.length > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {probeData.audioTracks.map((t, i) => (
-                <div key={i} style={{
-                  background: 'rgba(98,37,255,0.2)', border: '1px solid rgba(98,37,255,0.4)',
-                  borderRadius: '4px', padding: '3px 8px', fontSize: '9px', color: '#fff', fontWeight: 600
-                }}>
-                  {t.name || `Track ${t.id}`}
+            {/* Audio Tracks */}
+            <div>
+              <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>
+                🔊 AUDIO {probing ? '...' : probeData ? `(${probeData.audioTracks.length})` : ''}
+              </span>
+              {probeData?.audioTracks?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                  {probeData.audioTracks.map((t, i) => (
+                    <span key={i} style={{ background: 'rgba(98,37,255,0.2)', border: '1px solid rgba(98,37,255,0.4)', borderRadius: '3px', padding: '2px 6px', fontSize: '8px', color: '#fff', fontWeight: 600 }}>
+                      {t.name || `Track ${t.id}`}
+                    </span>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          ) : !probing && (
-            <div style={{ fontSize: '9px', color: '#444' }}>No tracks detected</div>
-          )}
-        </div>
 
-        {/* Subtitle Tracks */}
-        <div style={{ padding: '0 20px 15px' }}>
-          <div style={{ fontSize: '10px', fontWeight: 800, color: '#6225ff', marginBottom: '6px' }}>
-            💬 SUBTITLES {probing ? '(scanning...)' : probeData ? `(${probeData.subtitleTracks.length})` : ''}
-          </div>
-          {probeData?.subtitleTracks?.length > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {probeData.subtitleTracks.map((t, i) => (
-                <div key={i} style={{
-                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: '4px', padding: '3px 8px', fontSize: '9px', color: '#ccc', fontWeight: 600
-                }}>
-                  {t.name || `Sub ${t.id}`}
+            {/* Subtitle Tracks */}
+            <div>
+              <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>
+                💬 SUBTITLES {probing ? '...' : probeData ? `(${probeData.subtitleTracks.length})` : ''}
+              </span>
+              {probeData?.subtitleTracks?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                  {probeData.subtitleTracks.map((t, i) => (
+                    <span key={i} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '3px', padding: '2px 6px', fontSize: '8px', color: '#ccc', fontWeight: 600 }}>
+                      {t.name || `Sub ${t.id}`}
+                    </span>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          ) : !probing && (
-            <div style={{ fontSize: '9px', color: '#444' }}>No subtitles</div>
-          )}
-        </div>
-
-        {/* Play Button */}
-        <div style={{ padding: '10px 20px 30px' }}>
-          <button
-            onClick={handlePlay}
-            style={{
-              width: '100%', padding: '14px',
-              background: 'linear-gradient(135deg, #6225ff, #8b5cf6)',
-              border: 'none', borderRadius: '8px',
-              color: '#fff', fontSize: '14px', fontWeight: 800,
-              cursor: 'pointer', letterSpacing: '1px',
-            }}
-          >
-            ▶ PLAY
-          </button>
+          </div>
         </div>
 
         {loading && (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#6225ff', fontSize: '11px', fontWeight: 700 }}>
-            LOADING...
+          <div style={{ padding: '10px', textAlign: 'center', color: '#6225ff', fontSize: '11px', fontWeight: 700 }}>LOADING...</div>
+        )}
+
+        {/* Poster Overlay — fullscreen image */}
+        {posterOverlay && poster && (
+          <div
+            onClick={() => setPosterOverlay(false)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.9)', zIndex: 99999,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <img src={poster} alt="" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }} />
           </div>
         )}
       </div>
@@ -256,24 +249,14 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header */}
-      <div style={{ padding: '20px 20px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
-        <div style={{ fontSize: '12px', fontWeight: 800, color: '#fff', letterSpacing: '1px' }}>
-          {type === 'movies' ? '🎬 MOVIES' : '📺 SERIES'}
-        </div>
-        <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 700, marginTop: '4px' }}>
-          {items.length} TITLES
-        </div>
-      </div>
-
-      {/* Grid */}
+      {/* Grid — no header, full space */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {items.length > 0 ? (
           <Grid
             ref={gridRef}
             columnCount={COLUMN_COUNT}
             columnWidth={ITEM_WIDTH}
-            height={window.innerHeight - 80}
+            height={window.innerHeight}
             rowCount={ROW_COUNT}
             rowHeight={ITEM_HEIGHT}
             width={window.innerWidth - 280}

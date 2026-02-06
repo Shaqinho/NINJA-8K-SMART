@@ -1167,30 +1167,7 @@ const OTTSidebar = forwardRef(({
         }}
         onClick={() => handleItemClick(movie)}
       >
-        <div style={{
-          width: '75px',
-          height: '25px',
-          borderRadius: '4px',
-          background: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          flexShrink: 0,
-          marginLeft: '-5px',
-        }}>
-          {movie.stream_icon || movie.logo ? (
-            <img 
-              src={movie.stream_icon || movie.logo} 
-              alt="" 
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          ) : (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
-          )}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, marginLeft: '5px' }}>
           <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
             {movie.name}
           </TickerText>
@@ -1230,30 +1207,7 @@ const OTTSidebar = forwardRef(({
         }}
         onClick={() => handleItemClick(series)}
       >
-        <div style={{
-          width: '75px',
-          height: '25px',
-          borderRadius: '4px',
-          background: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          flexShrink: 0,
-          marginLeft: '-5px',
-        }}>
-          {series.cover || series.logo ? (
-            <img 
-              src={series.cover || series.logo} 
-              alt="" 
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          ) : (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
-          )}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, marginLeft: '5px' }}>
           <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
             {series.name}
           </TickerText>
@@ -1489,11 +1443,15 @@ const OTTSidebar = forwardRef(({
                 <button
                   onClick={async () => {
                     if (!xtreamService || !filteredItems.length) return;
+                    const btn = document.activeElement;
+                    if (btn) btn.textContent = 'LOADING...';
                     try {
                       const streamIds = filteredItems.map(item => item.stream_id || item.id).filter(Boolean);
                       if (streamIds.length === 0) return;
+                      console.log('[EPG Force] Fetching for', streamIds.length, 'channels');
                       
-                      const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
+                      const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 50);
+                      console.log('[EPG Force] Got results:', epgResults ? Object.keys(epgResults).length : 0);
                       
                       if (epgResults && Object.keys(epgResults).length > 0) {
                         setEpgData(prev => ({ ...prev, ...epgResults }));
@@ -1502,9 +1460,10 @@ const OTTSidebar = forwardRef(({
                         const newSqliteUpdate = {};
                         
                         Object.entries(epgResults).forEach(([sid, data]) => {
-                          if (data.epg_now) {
+                          const title = data.epg_now || data.title || (data.epg_listings?.[0]?.title) || null;
+                          if (title) {
                             epgForInsert[sid] = [{
-                              title: data.epg_now,
+                              title,
                               start: data.epg_start || '',
                               end: data.epg_end || '',
                               startTimestamp: data.epg_start_timestamp || null,
@@ -1512,7 +1471,7 @@ const OTTSidebar = forwardRef(({
                               description: data.epg_description || '',
                             }];
                             newSqliteUpdate[sid] = {
-                              title: data.epg_now,
+                              title,
                               progress: data.epg_start_timestamp && data.epg_end_timestamp ? 
                                 Math.round(((Math.floor(Date.now()/1000) - data.epg_start_timestamp) / (data.epg_end_timestamp - data.epg_start_timestamp)) * 100) : 0
                             };
@@ -1524,10 +1483,12 @@ const OTTSidebar = forwardRef(({
                           await insertProgramsBatch(epgForInsert);
                         }
                         navigator.vibrate?.(30);
-                        console.log('[EPG Force] Loaded', Object.keys(epgResults).length, 'channels');
+                        console.log('[EPG Force] Loaded', Object.keys(newSqliteUpdate).length, 'programs');
                       }
                     } catch (err) {
-                      console.warn('[EPG Force] Erreur critique:', err);
+                      console.warn('[EPG Force] Error:', err);
+                    } finally {
+                      if (btn) btn.textContent = 'FORCE EPG';
                     }
                   }}
                   style={{

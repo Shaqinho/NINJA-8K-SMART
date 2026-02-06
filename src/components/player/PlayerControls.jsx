@@ -484,7 +484,7 @@ export const PlayerControls = ({
 
             {/* Timeshift bar */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: '90%', position: 'relative' }}>
+              <div style={{ width: '60%', position: 'relative' }}>
               {/* Touch zone élargie (44px) pour faciliter le tap et drag */}
               <div
                 ref={timelineRef}

@@ -99,6 +99,13 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
     return () => clearTimeout(searchTimerRef.current);
   }, [searchQuery, performSearch]);
 
+  // Re-fetch when panel becomes visible again
+  useEffect(() => {
+    if (visible !== false) {
+      performSearch(searchQuery);
+    }
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const ProgramRow = ({ index, style }) => {
     const prog = results[index];
     if (!prog) return null;

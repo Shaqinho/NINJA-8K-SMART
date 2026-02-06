@@ -194,13 +194,15 @@ const Player = memo(({
   }, [muted, volume]);
 
   const toggleFullscreen = useCallback(async () => {
-    // If in Smart fullscreen (landscape mode), just force portrait — video keeps playing
+    // If in Smart fullscreen (landscape mode), go directly back to Smart grid
     if (isSmartFullscreen) {
       try {
         await ScreenOrientation.lock({ orientation: 'portrait' });
       } catch (e) {
         console.log('ScreenOrientation portrait lock failed:', e);
       }
+      // Signal to stop playing — collapses player, shows Smart grid directly
+      onTogglePlay?.();
       return;
     }
     
@@ -226,7 +228,7 @@ const Player = memo(({
     } catch (err) {
       console.error('Fullscreen error:', err);
     }
-  }, [isSmartFullscreen]);
+  }, [isSmartFullscreen, onTogglePlay]);
 
   useEffect(() => {
     const handleFullscreenChange = async () => {
