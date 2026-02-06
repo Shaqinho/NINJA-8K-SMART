@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 
 const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, visible }) => {
