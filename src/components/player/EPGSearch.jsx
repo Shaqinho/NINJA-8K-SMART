@@ -6,7 +6,7 @@ import {
   cleanExpiredPrograms
 } from '../../database/ProgramQueries';
 
-const EPGSearch = ({ xtreamService, onChannelSelect, onClose }) => {
+const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, visible }) => {
   // On met les presets en state pour la réactivité
   const [presets] = useState(() => {
     try {
@@ -81,12 +81,13 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onClose }) => {
           transition: 'background 0.2s'
         }}
         onClick={() => {
-          onChannelSelect?.({ 
+          const ch = { 
             stream_id: prog.stream_id, 
             id: prog.stream_id, 
             name: prog.channel_name, 
             logo: prog.channel_logo 
-          });
+          };
+          (onChannelSelect || onSelectChannel)?.(ch);
           navigator.vibrate?.(30);
         }}
         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
@@ -107,6 +108,9 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onClose }) => {
       </div>
     );
   };
+
+  // When used from Smart.jsx with visible prop
+  if (visible === false) return null;
 
   return (
     <div style={{ 
