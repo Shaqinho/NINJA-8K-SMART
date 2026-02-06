@@ -7,6 +7,7 @@ import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
 import OTTSidebar from './OTTSidebar';
+import EPGSearch from './EPGSearch';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -502,6 +503,30 @@ const Player = memo(({
           onToggle={onOttSidebarChange}
           xtreamService={xtreamService}
         />
+      )}
+
+      {/* EPG Search - Right panel, accolé à OTTSidebar */}
+      {(isFullscreen || isSmartFullscreen) && isLive && ottSidebarOpen && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: '300px',
+          right: 0,
+          background: 'rgba(0, 0, 0, 0.95)',
+          backdropFilter: 'blur(20px)',
+          zIndex: 10000,
+          display: 'flex',
+          flexDirection: 'column',
+          borderLeft: '1px solid rgba(255,255,255,0.1)',
+        }}>
+          <EPGSearch
+            xtreamService={xtreamService}
+            onChannelSelect={(ch) => {
+              onChannelChange?.(ch);
+            }}
+          />
+        </div>
       )}
 
     </div>

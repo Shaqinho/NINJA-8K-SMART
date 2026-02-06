@@ -205,5 +205,47 @@ export const getStreamIdsByCategories = async (categoryIds = []) => {
   return results.map(r => r.stream_id);
 };
 
-const ProgramQueriesExports = { insertChannels, insertProgramsBatch, cleanExpiredPrograms, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, searchProgramsByCategories, getNowByCategories, getStreamIdsByCategories, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
+/**
+ * VERSION SÉLECTIVE & ULTRA-FAST : Ingestion massive EPG NOW
+ * Permet de choisir d'inclure ou non la description et les horaires pour gagner du temps.
+ * @param {Object} epgDataMap - Données JSON Xtream
+ * @param {Object} options - { includeDesc: bool, includeTime: bool }
+ */
+export const insertMassiveEpgNow = async (epgDataMap, options = { includeDesc: false, includeTime: true }) => {
+  const entries = Object.entries(epgDataMap);
+  if (!entries.length) return 0;
+
+  const db = getDatabase();
+  const now = Math.floor(Date.now() / 1000);
+
+  try {
+    await db.execute('BEGIN TRANSACTION');
+    await db.execute('DELETE FROM programs');
+
+    const statements = entries.map(([streamId, data]) => {
+      const title = data.epg_now || 'Sans titre';
+      const description = options.includeDesc ? (data.epg_description || '') : '';
+      const searchContent = options.includeDesc ? `${title} ${description}` : title;
+      const start = options.includeTime ? (data.epg_start_timestamp || null) : null;
+      const end = options.includeTime ? (data.epg_end_timestamp || null) : null;
+      const isLive = (start && end && start <= now && end > now) ? 1 : 0;
+
+      return {
+        statement: `INSERT INTO programs (stream_id, title, title_normalized, description, start_time, end_time, is_live) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        values: [parseInt(streamId), title, normalizeText(searchContent), description, start, end, isLive]
+      };
+    });
+
+    await db.executeSet(statements);
+    await db.execute('COMMIT');
+    console.log(`🚀 NinjaIngest: ${entries.length} programmes (Desc: ${options.includeDesc}, Time: ${options.includeTime})`);
+    return entries.length;
+  } catch (err) {
+    try { await db.execute('ROLLBACK'); } catch (e) {}
+    console.error('❌ NinjaIngest Selective Error:', err);
+    throw err;
+  }
+};
+
+const ProgramQueriesExports = { insertChannels, insertProgramsBatch, insertMassiveEpgNow, cleanExpiredPrograms, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, searchProgramsByCategories, getNowByCategories, getStreamIdsByCategories, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
 export default ProgramQueriesExports;
