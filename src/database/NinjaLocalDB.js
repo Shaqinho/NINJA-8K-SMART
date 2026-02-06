@@ -113,6 +113,12 @@ const initSchema = async () => {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_title ON programs(title_normalized)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_start ON programs(start_time)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_live ON programs(is_live, start_time)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_end ON programs(end_time)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_timerange ON programs(start_time, end_time)`);
+  
+  // WAL mode pour perf lectures pendant écritures massives
+  await db.execute(`PRAGMA journal_mode=WAL`);
+  
   console.log('✅ NinjaLocalDB: Schema initialized');
 };
 

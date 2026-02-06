@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { ninjaCentral, STORES } from '../../services/NinjaCentral';
 import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
@@ -281,7 +281,7 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
   );
 };
 
-const OTTSidebar = ({ 
+const OTTSidebar = forwardRef(({ 
   categories = [], 
   channels = [],
   selectedCategory,
@@ -292,7 +292,7 @@ const OTTSidebar = ({
   isOpen: externalIsOpen,
   onToggle: externalOnToggle,
   xtreamService,
-}) => {
+}, ref) => {
   // States
   const [isVisible, setIsVisible] = useState(true);
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(false);
@@ -366,6 +366,24 @@ const OTTSidebar = ({
   const longPressTimerRef = useRef(null);
   const listRef = useRef(null);
   const searchInputRef = useRef(null);
+
+  // Focus visuel : chaîne qui clignote après scroll depuis EPGSearch
+  const [focusedStreamId, setFocusedStreamId] = useState(null);
+  const focusTimerRef = useRef(null);
+
+  // Expose scrollToChannel au parent via ref
+  useImperativeHandle(ref, () => ({
+    scrollToChannel: (streamId) => {
+      const sid = String(streamId);
+      const index = filteredItems.findIndex(item => String(item.stream_id || item.id) === sid);
+      if (index !== -1 && listRef.current) {
+        listRef.current.scrollToItem(index, 'center');
+        setFocusedStreamId(sid);
+        clearTimeout(focusTimerRef.current);
+        focusTimerRef.current = setTimeout(() => setFocusedStreamId(null), 2000);
+      }
+    }
+  }), [filteredItems]);
 
   // ========== FAVORITES ==========
   const toggleFavorite = useCallback((itemId) => {
@@ -1031,6 +1049,7 @@ const OTTSidebar = ({
     const epgProgress = network?.progress || sqlite?.progress || 0;
     
     const isShaking = shakingItemId === channelId;
+    const isFocused = focusedStreamId === String(channelId);
     
     return (
       <div
@@ -1041,9 +1060,9 @@ const OTTSidebar = ({
           alignItems: 'center',
           gap: '8px',
           cursor: 'pointer',
-          background: isActive ? 'rgba(98, 37, 255, 0.25)' : 'transparent',
-          borderLeft: isActive ? '3px solid #6225ff' : '3px solid transparent',
-          animation: isShaking ? 'ottShake 0.3s ease-in-out infinite' : 'none',
+          background: isFocused ? 'rgba(98, 37, 255, 0.4)' : isActive ? 'rgba(98, 37, 255, 0.25)' : 'transparent',
+          borderLeft: (isActive || isFocused) ? '3px solid #6225ff' : '3px solid transparent',
+          animation: isShaking ? 'ottShake 0.3s ease-in-out infinite' : isFocused ? 'ottFocus 0.5s ease-in-out 3' : 'none',
         }}
         onClick={() => handleItemClick(channel)}
         onTouchStart={(e) => handleItemTouchStart(channel, e)}
@@ -1118,7 +1137,7 @@ const OTTSidebar = ({
         )}
       </div>
     );
-  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId]);
+  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId, focusedStreamId]);
 
   // ========== VIRTUALIZED MOVIE ROW ==========
   const MovieRow = useCallback(({ index, style }) => {
@@ -1700,9 +1719,13 @@ const OTTSidebar = ({
           25% { transform: translateX(-2px); }
           75% { transform: translateX(2px); }
         }
+        @keyframes ottFocus {
+          0%, 100% { background: rgba(98, 37, 255, 0.4); }
+          50% { background: rgba(98, 37, 255, 0.15); }
+        }
       `}</style>
     </>
   );
-};
+});
 
 export default OTTSidebar;

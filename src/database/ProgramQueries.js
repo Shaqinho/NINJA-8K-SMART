@@ -239,6 +239,10 @@ export const insertMassiveEpgNow = async (epgDataMap, options = { includeDesc: f
     await db.executeSet(statements);
     await db.execute('COMMIT');
     console.log(`🚀 NinjaIngest: ${entries.length} programmes (Desc: ${options.includeDesc}, Time: ${options.includeTime})`);
+    
+    // Fire & Forget : maintenance après ingestion
+    runSilentMaintenance();
+    
     return entries.length;
   } catch (err) {
     try { await db.execute('ROLLBACK'); } catch (e) {}
@@ -247,5 +251,33 @@ export const insertMassiveEpgNow = async (epgDataMap, options = { includeDesc: f
   }
 };
 
-const ProgramQueriesExports = { insertChannels, insertProgramsBatch, insertMassiveEpgNow, cleanExpiredPrograms, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, searchProgramsByCategories, getNowByCategories, getStreamIdsByCategories, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
+/**
+ * DÉCLENCHEUR DE NETTOYAGE INTELLIGENT
+ * À lancer après une grosse ingestion ou au démarrage.
+ */
+export const runSilentMaintenance = () => {
+  setTimeout(async () => {
+    try {
+      console.log('🧼 NinjaMaintenance: Démarrage du nettoyage de fond...');
+      await cleanExpiredPrograms();
+
+      const db = getDatabase();
+      const countRes = await db.query('SELECT COUNT(*) as count FROM programs');
+      const total = countRes.values?.[0]?.count || 0;
+
+      if (total > 100000) {
+        const toDelete = total - 80000;
+        await db.run(
+          `DELETE FROM programs WHERE id IN (SELECT id FROM programs ORDER BY start_time ASC LIMIT ?)`,
+          [toDelete]
+        );
+        console.log(`🧹 GC: Base allégée de ${toDelete} entrées.`);
+      }
+    } catch (e) {
+      console.warn('Maintenance silent fail (non-critical)');
+    }
+  }, 2000);
+};
+
+const ProgramQueriesExports = { insertChannels, insertProgramsBatch, insertMassiveEpgNow, cleanExpiredPrograms, runSilentMaintenance, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, searchProgramsByCategories, getNowByCategories, getStreamIdsByCategories, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
 export default ProgramQueriesExports;
