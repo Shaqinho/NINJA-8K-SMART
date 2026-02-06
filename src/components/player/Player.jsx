@@ -540,6 +540,7 @@ const Player = memo(({
           onChannelSelect={onChannelChange}
           isOpen={ottSidebarOpen}
           onToggle={onOttSidebarChange}
+          xtreamService={xtreamService}
         />
       )}
 
