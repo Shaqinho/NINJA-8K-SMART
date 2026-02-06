@@ -3,12 +3,10 @@ import { THEME } from '../../constants/theme';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import PlayerControls from './PlayerControls';
 
-import TimeshiftBar from './TimeshiftBar';
 import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
 import OTTSidebar from './OTTSidebar';
-import { PiPMiniPlayer } from './PiPManager';
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -494,19 +492,6 @@ const Player = memo(({
         />
       </div>
 
-      {/* Timeshift */}
-      {isLive && timeshiftOffset > 0 && (
-        <TimeshiftBar
-          enabled={true}
-          isLive={timeshiftOffset === 0}
-          currentOffset={timeshiftOffset}
-          maxOffset={7200}
-          onSeek={handleTimeshiftSeek}
-          onJumpToLive={() => setTimeshiftOffset(0)}
-          visible={showControls}
-        />
-      )}
-
       {/* MultiGrid Overlay */}
       <MultiGrid
         visible={actualShowMultiGrid}
@@ -544,15 +529,6 @@ const Player = memo(({
         />
       )}
 
-      {/* PiP Mini Player */}
-      <PiPMiniPlayer
-        visible={isPiP}
-        channelName={channel?.name}
-        channelLogo={channel?.logo}
-        isPlaying={isPlaying}
-        onPlayPause={onTogglePlay}
-        onExpand={handlePiPExpand}
-      />
     </div>
   );
 });

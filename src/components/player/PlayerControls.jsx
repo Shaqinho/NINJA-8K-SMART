@@ -220,7 +220,6 @@ export const PlayerControls = ({
   onSearchEPG,
   onFullscreenToggle,
   onMultiGridToggle,
-  onPiPToggle,
   hasMultiGrid = false,
   fullscreen = false,
   isLive = true,
@@ -490,24 +489,13 @@ export const PlayerControls = ({
         </button>
       )}
       
-      {/* Top Right: PiP - mini player only */}
-      {onPiPToggle && (
-        <button
-          onClick={onPiPToggle}
-          style={{ ...styles.cornerBtn, position: 'absolute', top: '50px', right: '20px' }}
-          title="Picture in Picture"
-        >
-          <div className="w-5 h-5"><Icons.PiP /></div>
-        </button>
-      )}
-
       {/* ========== MIDDLE ROW ========== */}
       
       {/* Middle Right: Exit Fullscreen (portrait + exit) */}
       {onFullscreenToggle && (
         <button
           onClick={onFullscreenToggle}
-          style={{ ...styles.cornerBtn, position: 'absolute', bottom: '180px', right: '20px' }}
+          style={{ ...styles.cornerBtn, position: 'absolute', bottom: '140px', right: '20px' }}
           title="Exit Fullscreen"
         >
           <div className="w-5 h-5"><Icons.Minimize /></div>

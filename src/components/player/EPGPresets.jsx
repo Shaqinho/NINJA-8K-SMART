@@ -233,19 +233,31 @@ const PresetEditorView = ({ preset, allCategories, onSave, onCancel }) => {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Name input */}
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Preset name (e.g. MULTI SPORT)"
-        maxLength={40}
-        style={{
-          width: '100%', padding: '10px 12px', borderRadius: '8px',
-          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-          color: '#fff', fontSize: '13px', fontWeight: 600, outline: 'none',
-        }}
-      />
+      {/* Name input + Save button */}
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Preset name"
+          maxLength={40}
+          style={{
+            flex: 1, padding: '10px 12px', borderRadius: '8px',
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+            color: '#fff', fontSize: '13px', fontWeight: 600, outline: 'none',
+          }}
+        />
+        <button onClick={handleSave}
+          disabled={!name.trim() || count === 0}
+          style={{
+            padding: '10px 16px', borderRadius: '8px', flexShrink: 0,
+            background: (!name.trim() || count === 0) ? 'rgba(98,37,255,0.1)' : '#6225ff',
+            border: 'none', color: (!name.trim() || count === 0) ? '#666' : '#fff',
+            fontSize: '12px', fontWeight: 700, cursor: (!name.trim() || count === 0) ? 'not-allowed' : 'pointer',
+          }}>
+          {preset ? 'Save' : 'Create'}
+        </button>
+      </div>
 
       {/* Folder search + counter */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -309,23 +321,6 @@ const PresetEditorView = ({ preset, allCategories, onSave, onCancel }) => {
         </List>
       </div>
 
-      {/* Action buttons */}
-      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-        <button onClick={onCancel}
-          style={{ flex: 1, padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#888', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-          Cancel
-        </button>
-        <button onClick={handleSave}
-          disabled={!name.trim() || count === 0}
-          style={{
-            flex: 1, padding: '12px', borderRadius: '8px',
-            background: (!name.trim() || count === 0) ? 'rgba(98,37,255,0.1)' : '#6225ff',
-            border: 'none', color: (!name.trim() || count === 0) ? '#666' : '#fff',
-            fontSize: '12px', fontWeight: 600, cursor: (!name.trim() || count === 0) ? 'not-allowed' : 'pointer',
-          }}>
-          {preset ? 'Update' : 'Create'}
-        </button>
-      </div>
     </div>
   );
 };
