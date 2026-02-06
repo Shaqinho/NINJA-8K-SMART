@@ -1409,7 +1409,7 @@ const OTTSidebar = ({
   ];
 
   // Calculate list height
-  const searchBarHeight = showItems ? 36 : 0;
+  const searchBarHeight = showItems ? (searchOpen ? 36 : 28) : 0;
   const listHeight = window.innerHeight - 100 - searchBarHeight;
 
   return (
@@ -1475,14 +1475,19 @@ const OTTSidebar = ({
               {activeTab === 'live' && (
                 <button
                   onClick={async () => {
-                    if (!xtreamService || !filteredItems.length) return;
+                    console.log('[EPG Force] Click! xtreamService:', !!xtreamService, 'items:', activeItems.length);
+                    if (!xtreamService || !activeItems.length) return;
                     try {
-                      const streamIds = filteredItems.map(item => item.stream_id || item.id).filter(Boolean);
+                      const streamIds = activeItems.map(item => item.stream_id || item.id).filter(Boolean);
+                      console.log('[EPG Force] Fetching for', streamIds.length, 'streams, first 5:', streamIds.slice(0, 5));
                       if (streamIds.length === 0) return;
                       const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
+                      console.log('[EPG Force] Results:', epgResults ? Object.keys(epgResults).length : 'null', 'keys. Sample:', epgResults ? JSON.stringify(Object.entries(epgResults).slice(0, 2)) : 'none');
                       if (epgResults && Object.keys(epgResults).length > 0) {
                         setEpgData(prev => ({ ...prev, ...epgResults }));
-                        console.log('[EPG Force] Loaded', Object.keys(epgResults).length, 'channels');
+                        console.log('[EPG Force] Updated epgData');
+                      } else {
+                        console.log('[EPG Force] No results returned');
                       }
                     } catch (err) {
                       console.warn('[EPG Force] Error:', err);
@@ -1576,10 +1581,10 @@ const OTTSidebar = ({
           )}
         </div>
 
-        {/* Bottom toolbar (compact, icons only) */}
+        {/* Bottom toolbar */}
         {showItems && (
           <div style={{
-            height: '36px',
+            height: searchOpen ? '36px' : '28px',
             borderTop: '1px solid rgba(255,255,255,0.08)',
             display: 'flex',
             alignItems: 'center',
