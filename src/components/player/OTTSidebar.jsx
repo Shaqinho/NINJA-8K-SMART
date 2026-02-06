@@ -371,20 +371,6 @@ const OTTSidebar = forwardRef(({
   const [focusedStreamId, setFocusedStreamId] = useState(null);
   const focusTimerRef = useRef(null);
 
-  // Expose scrollToChannel au parent via ref
-  useImperativeHandle(ref, () => ({
-    scrollToChannel: (streamId) => {
-      const sid = String(streamId);
-      const index = filteredItems.findIndex(item => String(item.stream_id || item.id) === sid);
-      if (index !== -1 && listRef.current) {
-        listRef.current.scrollToItem(index, 'center');
-        setFocusedStreamId(sid);
-        clearTimeout(focusTimerRef.current);
-        focusTimerRef.current = setTimeout(() => setFocusedStreamId(null), 2000);
-      }
-    }
-  }), [filteredItems]);
-
   // ========== FAVORITES ==========
   const toggleFavorite = useCallback((itemId) => {
     setFavorites(prev => {
@@ -888,6 +874,20 @@ const OTTSidebar = forwardRef(({
     
     return items;
   }, [currentCategory, activeItems, searchQuery, favorites, recentIds, epgData]);
+
+  // Expose scrollToChannel au parent via ref (après filteredItems)
+  useImperativeHandle(ref, () => ({
+    scrollToChannel: (streamId) => {
+      const sid = String(streamId);
+      const index = filteredItems.findIndex(item => String(item.stream_id || item.id) === sid);
+      if (index !== -1 && listRef.current) {
+        listRef.current.scrollToItem(index, 'center');
+        setFocusedStreamId(sid);
+        clearTimeout(focusTimerRef.current);
+        focusTimerRef.current = setTimeout(() => setFocusedStreamId(null), 2000);
+      }
+    }
+  }), [filteredItems]);
 
   // Trigger EPG load when entering a category
   useEffect(() => {

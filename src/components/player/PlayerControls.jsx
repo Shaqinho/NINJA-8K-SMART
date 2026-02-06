@@ -205,7 +205,7 @@ const styles = {
 };
 
 // Skip amounts: 1x=5s, 2x=15s, 3x=30s
-const skipAmounts = [5, 15, 30];
+
 
 export const PlayerControls = ({
   playing,

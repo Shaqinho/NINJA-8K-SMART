@@ -16,7 +16,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onClose }) => {
 
   const [results, setResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [syncOptions, setSyncOptions] = useState({ includeDesc: false, includeTime: true });
 
   const searchTimerRef = useRef(null);
