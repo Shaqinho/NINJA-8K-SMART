@@ -1470,28 +1470,58 @@ const OTTSidebar = ({
                     try {
                       const streamIds = filteredItems.map(item => item.stream_id || item.id).filter(Boolean);
                       if (streamIds.length === 0) return;
+                      
                       const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 100);
+                      
                       if (epgResults && Object.keys(epgResults).length > 0) {
                         setEpgData(prev => ({ ...prev, ...epgResults }));
+                        
+                        const epgForInsert = {};
+                        const newSqliteUpdate = {};
+                        
+                        Object.entries(epgResults).forEach(([sid, data]) => {
+                          if (data.epg_now) {
+                            epgForInsert[sid] = [{
+                              title: data.epg_now,
+                              start: data.epg_start || '',
+                              end: data.epg_end || '',
+                              startTimestamp: data.epg_start_timestamp || null,
+                              stopTimestamp: data.epg_end_timestamp || null,
+                              description: data.epg_description || '',
+                            }];
+                            newSqliteUpdate[sid] = {
+                              title: data.epg_now,
+                              progress: data.epg_start_timestamp && data.epg_end_timestamp ? 
+                                Math.round(((Math.floor(Date.now()/1000) - data.epg_start_timestamp) / (data.epg_end_timestamp - data.epg_start_timestamp)) * 100) : 0
+                            };
+                          }
+                        });
+                        
+                        setSqliteEpg(prev => ({ ...prev, ...newSqliteUpdate }));
+                        if (Object.keys(epgForInsert).length > 0) {
+                          await insertProgramsBatch(epgForInsert);
+                        }
+                        navigator.vibrate?.(30);
                         console.log('[EPG Force] Loaded', Object.keys(epgResults).length, 'channels');
                       }
                     } catch (err) {
-                      console.warn('[EPG Force] Error:', err);
+                      console.warn('[EPG Force] Erreur critique:', err);
                     }
                   }}
                   style={{
-                    background: 'rgba(98,37,255,0.15)',
-                    border: '1px solid rgba(98,37,255,0.3)',
+                    background: 'rgba(98,37,255,0.25)',
+                    border: '1px solid #6225ff',
                     borderRadius: '4px',
-                    padding: '3px 8px',
-                    color: '#a78bfa',
-                    fontSize: '8px',
-                    fontWeight: 700,
+                    padding: '4px 10px',
+                    color: '#fff',
+                    fontSize: '9px',
+                    fontWeight: 800,
                     cursor: 'pointer',
                     flexShrink: 0,
+                    boxShadow: '0 0 10px rgba(98, 37, 255, 0.3)',
                   }}
                 >
-                  EPG
+                  FORCE EPG
                 </button>
               )}
             </div>
