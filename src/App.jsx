@@ -15,11 +15,6 @@ import { useGestures } from './hooks/useGestures';
 // No more Smart.jsx — Player handles everything with OTTLeft + OTTRight
 // ============================================================================
 
-const NINJA_THEME = {
-  background: '#0a0a0f',
-  particle: 'purple',
-};
-
 const AppContent = () => {
   const { playlist, setPlaylist, clearPlaylist, isRestored } = usePlaylistContext();
   const [currentPage, setCurrentPage] = useState(null);
@@ -27,11 +22,6 @@ const AppContent = () => {
 
   // NinjaCentral data (persisted)
   const [liveData, setLiveData] = useState([]);
-  const [vodData, setVodData] = useState([]);
-  const [seriesData, setSeriesData] = useState([]);
-  const [liveCats, setLiveCats] = useState([]);
-  const [vodCats, setVodCats] = useState([]);
-  const [seriesCats, setSeriesCats] = useState([]);
   const [ninjaReady, setNinjaReady] = useState(false);
 
   // Player state
@@ -41,6 +31,11 @@ const AppContent = () => {
   const [showVolumeGauge, setShowVolumeGauge] = useState(false);
   const [ottSidebarOpen, setOttSidebarOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('live');
+
+  // Particle theme
+  const [particleTheme] = useState(() => {
+    return localStorage.getItem('ninja_particle_theme') || 'ultimate';
+  });
 
   const autoPlayedRef = useRef(false);
   const playerRef = useRef(null);
@@ -106,11 +101,6 @@ const AppContent = () => {
         ]);
         if (live.length > 0 || vod.length > 0 || series.length > 0) {
           setLiveData(live);
-          setVodData(vod);
-          setSeriesData(series);
-          setLiveCats(lc);
-          setVodCats(vc);
-          setSeriesCats(sc);
           console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
         }
         setNinjaReady(true);
@@ -137,19 +127,14 @@ const AppContent = () => {
           await ninjaCentral.saveItems(STORES.LIVE, live);
           await ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, liveCategories || []);
           setLiveData(live);
-          setLiveCats(liveCategories || []);
         }
         if (vod?.length > 0) {
           await ninjaCentral.saveItems(STORES.VOD, vod);
           await ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, vodCategories || []);
-          setVodData(vod);
-          setVodCats(vodCategories || []);
         }
         if (series?.length > 0) {
           await ninjaCentral.saveItems(STORES.SERIES, series);
           await ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, seriesCategories || []);
-          setSeriesData(series);
-          setSeriesCats(seriesCategories || []);
         }
         console.log('[NinjaCentral] Saved playlist.data');
 
@@ -178,7 +163,7 @@ const AppContent = () => {
   // ============================================================================
   // GESTURES — attached to playerRef
   // ============================================================================
-  const gestures = useGestures(playerRef, {
+  useGestures(playerRef, {
     onVolumeChange: (vol) => {
       setVolume(vol);
       setShowVolumeGauge(true);
@@ -279,6 +264,13 @@ const AppContent = () => {
   // ============================================================================
   return (
     <div ref={playerRef} className="fixed inset-0 overflow-hidden" style={{ background: 'transparent' }}>
+      {/* Particles Background */}
+      {particleTheme !== 'off' && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <ParticleThemes containerRef={playerRef} theme={particleTheme} />
+        </div>
+      )}
+
       {/* Volume Gauge */}
       {showVolumeGauge && (
         <div
