@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
+import React, { useRef, useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { THEME } from '../../constants/theme';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import PlayerControls from './PlayerControls';
@@ -6,18 +6,18 @@ import PlayerControls from './PlayerControls';
 import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import MultiGrid from './MultiGrid';
-import OTTSidebar from './OTTSidebar';
-import EPGSearch from './EPGSearch';
-import MediaGallery from './MediaGallery';
+import OTTSidebar from './OTTSidebar';      // OTTLeft
+import EPGSearch from './EPGSearch';         // OTTRight (live tab)
+import MediaGallery from './MediaGallery';   // OTTRight (movies/series tab)
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
+// OTTLeft = channel list sidebar (280px)
+// OTTRight = EPGSearch (live) or MediaGallery (movies/series)
 // ============================================================================
 
 const Player = memo(({
   channel,
-  channels = [],
-  categories = [],
   isPlaying,
   onTogglePlay,
   onChannelChange,
@@ -33,6 +33,7 @@ const Player = memo(({
   onVolumeChange: externalVolumeChange,
   ottSidebarOpen = false,
   onOttSidebarChange,
+  onTabChange,
   xtreamService,
   onServers,
 }) => {
@@ -67,51 +68,49 @@ const Player = memo(({
   const src = channel?.streamUrl || channel?.url || null;
 
   // ============================================================================
-  // CALCULATE PREV/NEXT CHANNELS AND CATEGORIES
+  // CHANNELS LIST — fed by OTTLeft via window globals
+  // OTTLeft sets window.__ottChannels when its filtered list changes
   // ============================================================================
-  
-  // Find current channel index in the channels list
-  const currentChannelIndex = channels.findIndex(
-    ch => (ch.streamUrl || ch.url) === src || ch.id === channel?.id || ch.name === channel?.name
-  );
-  
-  // Get prev/next channels
-  const prevChannel = currentChannelIndex > 0 ? channels[currentChannelIndex - 1] : null;
-  const nextChannel = currentChannelIndex < channels.length - 1 ? channels[currentChannelIndex + 1] : null;
-  
-  // Find current category
-  const currentCategoryName = channel?.category || channel?.group;
-  const currentCategoryIndex = categories.findIndex(cat => cat.name === currentCategoryName);
-  
-  // Get channels in current category for count
-  const channelsInCurrentCategory = channels.filter(
-    ch => (ch.category || ch.group) === currentCategoryName
-  );
-  
-  // Get prev/next categories with channel counts
-  const prevCategoryData = currentCategoryIndex > 0 ? categories[currentCategoryIndex - 1] : null;
-  const nextCategoryData = currentCategoryIndex < categories.length - 1 ? categories[currentCategoryIndex + 1] : null;
-  
-  const getChannelCountForCategory = (categoryName) => {
-    return channels.filter(ch => (ch.category || ch.group) === categoryName).length;
-  };
-  
-  const currentCategory = currentCategoryName ? {
-    name: currentCategoryName,
-    count: channelsInCurrentCategory.length,
-  } : null;
-  
-  const prevCategory = prevCategoryData ? {
-    name: prevCategoryData.name,
-    count: getChannelCountForCategory(prevCategoryData.name),
-  } : null;
-  
-  const nextCategory = nextCategoryData ? {
-    name: nextCategoryData.name,
-    count: getChannelCountForCategory(nextCategoryData.name),
-  } : null;
+  const [ottChannels, setOttChannels] = useState([]);
 
-  // Sync fullscreen state with Smart's isSmartFullscreen
+  useEffect(() => {
+    // OTTLeft publishes its channel list
+    window.__ottSetChannels = (channels) => setOttChannels(channels);
+    return () => { window.__ottSetChannels = null; };
+  }, []);
+
+  // Channel navigation from OTTLeft's list
+  const currentChannelIndex = ottChannels.findIndex(
+    ch => (ch.streamUrl || ch.url) === src || ch.id === channel?.id
+  );
+  const prevChannel = currentChannelIndex > 0 ? ottChannels[currentChannelIndex - 1] : null;
+  const nextChannel = currentChannelIndex < ottChannels.length - 1 ? ottChannels[currentChannelIndex + 1] : null;
+
+  // ============================================================================
+  // BUILD currentMedia for PlayerControls (Phase 4)
+  // ============================================================================
+  const currentMedia = useMemo(() => {
+    if (!channel) return null;
+    if (isLive) return null; // Live uses channel info directly
+
+    return {
+      title: channel.title || channel.name || '',
+      type: channel.type === 'series' ? 'series' : 'movie',
+      season: channel.season || null,
+      episode: channel.episode || channel.episode_num || null,
+      duration: channel.duration ? formatDuration(channel.duration) : null,
+      resolution: channel.resolution || null,
+      audioTracks: channel.audioTracks || 0,
+      subtitleTracks: channel.subtitleTracks || 0,
+    };
+  }, [channel, isLive]);
+
+  // Sync tab change to parent
+  useEffect(() => {
+    onTabChange?.(sidebarTab);
+  }, [sidebarTab, onTabChange]);
+
+  // Sync fullscreen state
   useEffect(() => {
     setIsFullscreen(isSmartFullscreen);
   }, [isSmartFullscreen]);
@@ -119,21 +118,20 @@ const Player = memo(({
   // Force VideoPlayer position update when fullscreen changes
   useEffect(() => {
     if (videoRef.current?.updatePosition) {
-      // Multiple delays for layout stabilization
       setTimeout(() => videoRef.current?.updatePosition?.(), 100);
       setTimeout(() => videoRef.current?.updatePosition?.(), 300);
       setTimeout(() => videoRef.current?.updatePosition?.(), 500);
     }
   }, [isFullscreen, isSmartFullscreen]);
 
-  // Sync volume prop to video element
+  // Sync volume
   useEffect(() => {
     if (videoRef.current && volume !== undefined) {
       videoRef.current.setVolume(volume);
     }
   }, [volume]);
 
-  // Mute when browsing Movies/Series gallery
+  // Mute when browsing Movies/Series
   useEffect(() => {
     if (!videoRef.current) return;
     const shouldMute = ottSidebarOpen && sidebarTab !== 'live';
@@ -194,14 +192,12 @@ const Player = memo(({
   }, [muted, volume]);
 
   const toggleFullscreen = useCallback(async () => {
-    // If in Smart fullscreen (landscape mode), go directly back to Smart grid
     if (isSmartFullscreen) {
       try {
         await ScreenOrientation.lock({ orientation: 'portrait' });
       } catch (e) {
         console.log('ScreenOrientation portrait lock failed:', e);
       }
-      // Signal to stop playing — collapses player, shows Smart grid directly
       onTogglePlay?.();
       return;
     }
@@ -234,9 +230,7 @@ const Player = memo(({
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement && isFullscreen) {
         setIsFullscreen(false);
-        try {
-          await ScreenOrientation.unlock();
-        } catch (e) { }
+        try { await ScreenOrientation.unlock(); } catch (e) { }
       }
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -246,16 +240,12 @@ const Player = memo(({
   useEffect(() => {
     const handleOrientationChange = () => {
       const angle = window.innerWidth > window.innerHeight ? 
-        (window.orientation || 90) : 
-        (window.orientation || 0);
-      
+        (window.orientation || 90) : (window.orientation || 0);
       setIsInvertedGravity(angle === 180 || angle === 270);
     };
-
     window.addEventListener('orientationchange', handleOrientationChange);
     window.addEventListener('resize', handleOrientationChange);
     handleOrientationChange();
-
     return () => {
       window.removeEventListener('orientationchange', handleOrientationChange);
       window.removeEventListener('resize', handleOrientationChange);
@@ -263,35 +253,24 @@ const Player = memo(({
   }, []);
 
   const handleMultiGridToggle = useCallback(() => {
-    if (onMultiGridToggle) {
-      onMultiGridToggle();
-    } else {
-      setInternalShowMultiGrid(!internalShowMultiGrid);
-    }
+    if (onMultiGridToggle) { onMultiGridToggle(); }
+    else { setInternalShowMultiGrid(!internalShowMultiGrid); }
   }, [onMultiGridToggle, internalShowMultiGrid]);
 
   const handleMultiGridSelect = useCallback((index) => {
     setMultiGridActiveIndex(index);
     const item = actualMultiGridItems[index];
-    if (item) {
-      onChannelChange?.(item);
-    }
+    if (item) onChannelChange?.(item);
   }, [actualMultiGridItems, onChannelChange]);
 
   const handleMultiGridRemove = useCallback((index) => {
-    if (onMultiGridRemove) {
-      onMultiGridRemove(index);
-    } else {
-      setInternalMultiGridItems(prev => prev.filter((_, i) => i !== index));
-    }
+    if (onMultiGridRemove) { onMultiGridRemove(index); }
+    else { setInternalMultiGridItems(prev => prev.filter((_, i) => i !== index)); }
   }, [onMultiGridRemove]);
 
   const handleMultiGridAdd = useCallback(() => {
-    if (onMultiGridToggle) {
-      onMultiGridToggle();
-    } else {
-      setInternalShowMultiGrid(false);
-    }
+    if (onMultiGridToggle) { onMultiGridToggle(); }
+    else { setInternalShowMultiGrid(false); }
   }, [onMultiGridToggle]);
 
   void onMultiGridAdd;
@@ -299,59 +278,21 @@ const Player = memo(({
   const renderMultiGridVideo = useCallback((item, index) => {
     const itemSrc = item?.streamUrl || item?.url;
     if (!itemSrc) return null;
-
     void index;
-
-    return (
-      <VideoPlayer
-        src={itemSrc}
-        aspectRatio="auto"
-        className="w-full h-full"
-      />
-    );
+    return <VideoPlayer src={itemSrc} aspectRatio="auto" className="w-full h-full" />;
   }, []);
 
   const handleTimeshiftSeek = useCallback((offset) => {
     setTimeshiftOffset(offset);
   }, []);
 
-  // Channel navigation handlers
   const handleChannelPrev = useCallback(() => {
-    if (prevChannel && onChannelChange) {
-      onChannelChange(prevChannel);
-    }
+    if (prevChannel && onChannelChange) onChannelChange(prevChannel);
   }, [prevChannel, onChannelChange]);
 
   const handleChannelNext = useCallback(() => {
-    if (nextChannel && onChannelChange) {
-      onChannelChange(nextChannel);
-    }
+    if (nextChannel && onChannelChange) onChannelChange(nextChannel);
   }, [nextChannel, onChannelChange]);
-
-  // Category navigation handlers
-  const handleCategoryPrev = useCallback(() => {
-    if (prevCategoryData && onChannelChange) {
-      // Find first channel in previous category
-      const firstChannelInCategory = channels.find(
-        ch => (ch.category || ch.group) === prevCategoryData.name
-      );
-      if (firstChannelInCategory) {
-        onChannelChange(firstChannelInCategory);
-      }
-    }
-  }, [prevCategoryData, channels, onChannelChange]);
-
-  const handleCategoryNext = useCallback(() => {
-    if (nextCategoryData && onChannelChange) {
-      // Find first channel in next category
-      const firstChannelInCategory = channels.find(
-        ch => (ch.category || ch.group) === nextCategoryData.name
-      );
-      if (firstChannelInCategory) {
-        onChannelChange(firstChannelInCategory);
-      }
-    }
-  }, [nextCategoryData, channels, onChannelChange]);
 
   const handleSpeedChange = useCallback((speed) => {
     setPlaybackSpeed(speed);
@@ -378,10 +319,8 @@ const Player = memo(({
       }}
       onClick={() => setShowControls(true)}
     >
-      {/* Video Player - CRITICAL: Pass isFullScreen prop */}
-      <div
-        className="absolute inset-0"
-      >
+      {/* Video */}
+      <div className="absolute inset-0">
         {src ? (
           <VideoPlayer
             ref={videoRef}
@@ -400,10 +339,7 @@ const Player = memo(({
             className="absolute inset-0"
           />
         ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{ backgroundColor: 'transparent' }}
-          >
+          <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'transparent' }}>
             <p className="text-gray-600 text-xs">Select content</p>
           </div>
         )}
@@ -422,7 +358,7 @@ const Player = memo(({
           <div className="text-center p-4">
             <p className="text-red-400 text-sm">{error}</p>
             <button
-              onClick={() => { setError(null); }}
+              onClick={() => setError(null)}
               className="mt-2 px-4 py-2 rounded-lg text-white text-sm"
               style={{ background: THEME.gradients.primary }}
             >
@@ -431,7 +367,6 @@ const Player = memo(({
           </div>
         </div>
       )}
-
 
       {/* Controls */}
       <div style={{ transform: isInvertedGravity ? 'scaleY(-1)' : 'none' }}>
@@ -453,18 +388,18 @@ const Player = memo(({
           hasMultiGrid={actualMultiGridItems.length > 0}
           visible={showControls}
           isLive={isLive}
-          // Channel navigation
-          currentChannel={channel ? { name: channel.name, logo: channel.logo } : null}
-          prevChannel={prevChannel ? { name: prevChannel.name, logo: prevChannel.logo } : null}
-          nextChannel={nextChannel ? { name: nextChannel.name, logo: nextChannel.logo } : null}
+          // Channel navigation (from OTTLeft list)
+          currentChannel={channel ? {
+            name: channel.name,
+            logo: channel.logo,
+            stream_id: channel.id || channel.stream_id,
+            epgChannelId: channel.epgChannelId,
+            epg_now: channel.epg_now,
+          } : null}
           onChannelPrev={handleChannelPrev}
           onChannelNext={handleChannelNext}
-          // Category navigation
-          currentCategory={currentCategory}
-          prevCategory={prevCategory}
-          nextCategory={nextCategory}
-          onCategoryPrev={handleCategoryPrev}
-          onCategoryNext={handleCategoryNext}
+          // Media info (movies/series)
+          currentMedia={currentMedia}
           // Timeshift
           timeshiftOffset={timeshiftOffset}
           maxTimeshiftOffset={7200}
@@ -472,15 +407,16 @@ const Player = memo(({
           onJumpToLive={() => setTimeshiftOffset(0)}
           // Sidebar state
           sidebarOpen={ottSidebarOpen}
-          // Stream info (TODO: get from VideoPlayer when available)
+          // Stream info
           streamInfo={null}
           // Settings overlay
           xtreamService={xtreamService}
           onServers={onServers}
+          onTapDismiss={() => setShowControls(false)}
         />
       </div>
 
-      {/* MultiGrid Overlay */}
+      {/* MultiGrid */}
       <MultiGrid
         visible={actualShowMultiGrid}
         onClose={handleMultiGridToggle}
@@ -494,7 +430,7 @@ const Player = memo(({
         renderVideo={renderMultiGridVideo}
       />
 
-      {/* Settings Modal */}
+      {/* Settings */}
       <PlayerSettings
         visible={showSettings}
         onClose={() => setShowSettings(false)}
@@ -504,37 +440,30 @@ const Player = memo(({
         onAspectRatioChange={setAspectRatio}
       />
 
-      {/* OTT Sidebar - Only in fullscreen/landscape mode */}
-      {(isFullscreen || isSmartFullscreen) && isLive && (
+      {/* OTTLeft — Channel list sidebar */}
+      {(isFullscreen || isSmartFullscreen) && (
         <OTTSidebar
           ref={sidebarRef}
-          categories={categories}
-          channels={channels}
           selectedChannel={channel}
           onChannelSelect={onChannelChange}
           isOpen={ottSidebarOpen}
           onToggle={onOttSidebarChange}
-          onTabChange={setSidebarTab}
+          onTabChange={(tab) => setSidebarTab(tab)}
           xtreamService={xtreamService}
         />
       )}
 
-      {/* Right panel — slide from RIGHT (porte d'ascenseur) */}
-      {(isFullscreen || isSmartFullscreen) && isLive && (
+      {/* OTTRight — EPGSearch (live) or MediaGallery (movies/series) */}
+      {(isFullscreen || isSmartFullscreen) && (
         <div style={{
           position: 'absolute',
-          top: 0,
-          bottom: 0,
-          left: '280px',
-          right: 0,
+          top: 0, bottom: 0, left: '280px', right: 0,
           background: 'rgba(0, 0, 0, 0.10)',
           backdropFilter: 'blur(15px) saturate(150%)',
           WebkitBackdropFilter: 'blur(15px) saturate(150%)',
           borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
           zIndex: 10001,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
           transform: ottSidebarOpen ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
           pointerEvents: ottSidebarOpen ? 'auto' : 'none',
@@ -561,11 +490,19 @@ const Player = memo(({
           )}
         </div>
       )}
-
     </div>
   );
 });
 
 Player.displayName = 'Player';
+
+// Helper
+const formatDuration = (seconds) => {
+  if (!seconds) return null;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h${m.toString().padStart(2, '0')}`;
+  return `${m}min`;
+};
 
 export default Player;

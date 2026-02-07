@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Clipboard } from '@capacitor/clipboard';
 import { THEME } from '../constants/theme';
-import { XtreamService, parseXtreamUrl, DEMO_CONTENT } from '../services/XtreamService';
+import { XtreamService, parseXtreamUrl } from '../services/XtreamService';
 import { Icons } from './Icons';
 import { LoadingScreen } from './LoadingScreen';
 import { ActivationBlock } from './ActivationBlock';
@@ -38,7 +38,6 @@ const tryConnect = async (server, username, password) => {
   } catch (err) {
     console.log('❌ Failed with:', normalizedServer, err.message);
     
-    // Essayer l'autre protocole
     let altServer;
     if (normalizedServer.startsWith('http://')) {
       altServer = normalizedServer.replace('http://', 'https://');
@@ -63,7 +62,7 @@ const tryConnect = async (server, username, password) => {
 };
 
 // ============================================================================
-// PARTICLE THEME COLORS - Visual feedback on logo
+// PARTICLE THEME COLORS
 // ============================================================================
 const PARTICLE_THEME_COLORS = {
   ultimate: '#8B5CF6',
@@ -74,7 +73,7 @@ const PARTICLE_THEME_COLORS = {
 // ============================================================================
 // LANDING PAGE
 // ============================================================================
-const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
+const LandingPage = ({ onNavigateToPlayer, onVerifyActivation }) => {
   const [mode, setMode] = useState('xtream');
   const [form, setForm] = useState({ name: 'My Server', url: '', server: '', username: '', password: '', file: null });
   const [fetchOptions, setFetchOptions] = useState({ live: true, movies: true, series: true });
@@ -203,7 +202,6 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
           const totalBatches = Math.ceil(streamIds.length / BATCH_SIZE);
           let batchesDone = 0;
 
-          // Clean expired programs before starting
           try {
             await cleanExpiredPrograms();
           } catch (cleanErr) {
@@ -219,16 +217,13 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
             const batchIds = streamIds.slice(i, i + BATCH_SIZE);
 
             try {
-              // Fetch real EPG data from server (getShortEPG per channel returns real start/stop)
               const epgResults = await service.getShortEPGBatch(batchIds, 2, 20);
 
               if (signal.aborted) return;
 
-              // Build insert payload with REAL server timestamps
               const epgForInsert = {};
               Object.entries(epgResults).forEach(([streamId, data]) => {
                 const programs = [];
-                // Current program
                 if (data.epg_now) {
                   programs.push({
                     title: data.epg_now,
@@ -239,7 +234,6 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
                     description: data.epg_description || '',
                   });
                 }
-                // Next program(s) if available
                 if (data.epg_next) {
                   programs.push({
                     title: data.epg_next,
@@ -260,13 +254,11 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
               }
             } catch (batchErr) {
               console.warn(`⚠️ EPG batch ${Math.floor(i / BATCH_SIZE) + 1} failed:`, batchErr);
-              // Continue with next batch - don't break the whole sync
             }
 
             batchesDone++;
             window.__epgSyncProgress = Math.round((batchesDone / totalBatches) * 100);
 
-            // Real pause between batches (not on last batch)
             if (i + BATCH_SIZE < streamIds.length && !signal.aborted) {
               await new Promise(r => setTimeout(r, BATCH_DELAY));
             }
@@ -276,7 +268,6 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
           console.log(`✅ EPG background sync complete: ${streamIds.length} channels indexed`);
         };
 
-        // Launch in background - non-blocking
         startEpgBackgroundSync(mappedLive, epgAbortController.signal).catch(err => {
           if (!epgAbortController.signal.aborted) {
             console.warn('⚠️ Background EPG sync failed:', err);
@@ -297,6 +288,9 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
     };
   };
 
+  // ============================================================================
+  // HANDLE ADD SERVER — navigates to Player on success
+  // ============================================================================
   const handleAddServer = async () => {
     setError(null);
     setLoading(true);
@@ -304,10 +298,6 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
     try {
       if (mode === 'xtream') {
         console.log('=== XTREAM TAB ===');
-        console.log('Server:', form.server);
-        console.log('Username:', form.username);
-        console.log('Password:', form.password);
-        
         if (!form.server || !form.username || !form.password) throw new Error('Please fill all fields');
         
         setProgress({ step: 'Connecting...', percent: 10 });
@@ -315,7 +305,7 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
         
         const data = await fetchXtreamData(service, auth, connectedServer);
 
-        setTimeout(() => onNavigateToSmart({
+        setTimeout(() => onNavigateToPlayer({
           id: Date.now(), 
           name: form.name || 'My Server', 
           type: 'xtream',
@@ -330,36 +320,18 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
 
       } else if (mode === 'url') {
         console.log('=== M3U TAB ===');
-        console.log('1. Raw URL:', form.url);
-        console.log('   URL length:', form.url?.length);
-        
         if (!form.url) throw new Error('Please enter M3U URL');
         
         setProgress({ step: 'Parsing URL...', percent: 20 });
         const parsed = parseXtreamUrl(form.url);
         
-        console.log('2. Parsed result:', parsed);
-        
         if (parsed.hasCredentials) {
-          console.log('3. Has credentials!');
-          console.log('   Server:', parsed.server);
-          console.log('   Username:', parsed.username);
-          console.log('   Password:', parsed.password);
-          
           setProgress({ step: 'Connecting...', percent: 30 });
           const { service, auth, server: connectedServer } = await tryConnect(parsed.server, parsed.username, parsed.password);
           
-          console.log('4. Auth success!');
-          
           const data = await fetchXtreamData(service, auth, connectedServer);
-          
-          console.log('5. Data fetched:', {
-            live: data.live?.length,
-            vod: data.vod?.length,
-            series: data.series?.length,
-          });
 
-          setTimeout(() => onNavigateToSmart({
+          setTimeout(() => onNavigateToPlayer({
             id: Date.now(), 
             name: form.name || 'My Server', 
             type: 'xtream',
@@ -372,7 +344,6 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
             addedAt: new Date().toISOString(),
           }), 500);
         } else {
-          console.log('3. No credentials found!');
           throw new Error('URL must contain Xtream credentials (username & password)');
         }
 
@@ -391,7 +362,7 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
           
           const data = await fetchXtreamData(service, auth, connectedServer);
 
-          setTimeout(() => onNavigateToSmart({
+          setTimeout(() => onNavigateToPlayer({
             id: Date.now(), 
             name: form.name || form.file.name, 
             type: 'xtream',
@@ -414,34 +385,6 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
     }
   };
 
-  const handleDemo = () => {
-    setLoading(true);
-    setProgress({ step: 'Loading demo...', percent: 50 });
-    setTimeout(() => {
-      setProgress({ step: 'Ready!', percent: 100 });
-      setTimeout(() => onNavigateToSmart({
-        id: Date.now(), 
-        name: 'NINJA Demo', 
-        type: 'demo', 
-        isDemo: true, 
-        data: {
-          ...DEMO_CONTENT,
-          liveCategories: [],
-          vodCategories: [
-            { category_id: '4k', category_name: '4K Demo' },
-            { category_id: 'audio', category_name: 'Audio Demo' },
-            { category_id: 'hdr', category_name: 'HDR Demo' },
-            { category_id: 'dv', category_name: 'Dolby Vision' },
-            { category_id: 'sub', category_name: 'Subtitle Demo' },
-          ],
-          seriesCategories: [],
-        },
-        addedAt: new Date().toISOString(), 
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      }), 500);
-    }, 1000);
-  };
-
   if (loading) return <LoadingScreen progress={progress} />;
 
   return (
@@ -453,6 +396,7 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
         paddingTop: 'env(safe-area-inset-top)',
       }}
     >
+      {/* Particles */}
       {particleTheme !== 'off' && (
         <div className="fixed inset-0 pointer-events-none z-0">
           <ParticleThemes containerRef={containerRef} theme={particleTheme} />
@@ -460,6 +404,7 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
       )}
       
       <div className="relative z-10">
+        {/* Logo — tap to cycle particle themes */}
         <div className="text-center pt-8 pb-4">
           <h1 
             onClick={handleLogoClick}
@@ -475,19 +420,41 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
         </div>
 
         <div className="max-w-md mx-auto w-full px-4 space-y-4">
+          {/* Activation */}
           <ActivationBlock onVerifyActivation={onVerifyActivation} />
 
-          <div className="rounded-xl p-3 flex items-center justify-center gap-2" style={{ background: 'rgba(18, 18, 31, 0.5)', border: '1px solid rgba(98, 37, 255, 0.3)' }}>
+          {/* Disclaimer */}
+          <div 
+            className="rounded-xl p-3 flex items-center justify-center gap-2"
+            style={{ 
+              background: 'rgba(18, 18, 31, 0.45)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(98, 37, 255, 0.2)',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04)',
+            }}
+          >
             <div className="w-3.5 h-3.5 text-gray-500"><Icons.Info/></div>
             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">We do not provide any content.</p>
           </div>
 
+          {/* Error */}
           {error && (
-            <div className="rounded-xl p-3 bg-red-500/10 border border-red-500/30">
+            <div 
+              className="rounded-xl p-3"
+              style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                boxShadow: '0 4px 20px rgba(239, 68, 68, 0.1)',
+              }}
+            >
               <p className="text-red-400 text-sm text-center">{error}</p>
             </div>
           )}
 
+          {/* Playlist Form */}
           <PlaylistForm 
             mode={mode} setMode={setMode} 
             form={form} setForm={setForm}
@@ -496,20 +463,10 @@ const LandingPage = ({ onNavigateToSmart, onVerifyActivation }) => {
             onAddServer={handleAddServer}
           />
 
-          <div className="py-1 space-y-3">
-            <div className="flex items-center gap-3 px-4 opacity-30">
-              <div className="flex-1 h-px bg-white"></div>
-              <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">OR</span>
-              <div className="flex-1 h-px bg-white"></div>
-            </div>
-            <button onClick={handleDemo} className="w-full py-3 rounded-xl text-gray-400 font-bold text-base transition-all active:scale-95" style={{ background: 'rgba(18, 18, 31, 0.5)', border: '1px solid rgba(98, 37, 255, 0.3)' }}>
-              7 DAYS DEMO
-            </button>
-          </div>
-
-          <div className="pt-6 pb-2 text-center">
+          {/* Footer */}
+          <div className="pt-8 pb-2 text-center">
             <p className="text-gray-600 text-[10px] font-bold">Ninja 8K | All Rights Reserved</p>
-            <p className="text-gray-700 text-[9px]">Version 1.0</p>
+            <p className="text-gray-700 text-[9px]">Version 2.0</p>
           </div>
         </div>
       </div>

@@ -1,249 +1,242 @@
 import React, { useState, useCallback, useRef } from 'react';
 
 // ============================================================================
-// GESTURE TUTORIAL - Interactive gesture learning
-// User must perform each gesture correctly to proceed
+// GESTURE TUTORIAL - Contextual Interactive Learning
+// Each step = real app scenario (volume slider, OTT panels, grid zoom, etc.)
 // ============================================================================
 
 const TUTORIAL_DONE_KEY = 'ninja_tutorial_done';
 
-// Check if tutorial was already completed
 export const isTutorialDone = () => {
-  try {
-    return localStorage.getItem(TUTORIAL_DONE_KEY) === 'true';
-  } catch {
-    return false;
-  }
+  try { return localStorage.getItem(TUTORIAL_DONE_KEY) === 'true'; } catch { return false; }
 };
-
-// Mark tutorial as done
 export const setTutorialDone = () => {
-  try {
-    localStorage.setItem(TUTORIAL_DONE_KEY, 'true');
-  } catch {}
+  try { localStorage.setItem(TUTORIAL_DONE_KEY, 'true'); } catch {}
 };
-
-// Reset tutorial (for testing)
 export const resetTutorial = () => {
-  try {
-    localStorage.removeItem(TUTORIAL_DONE_KEY);
-  } catch {}
+  try { localStorage.removeItem(TUTORIAL_DONE_KEY); } catch {}
 };
 
-// Calculate angle between two touch points
-const getAngle = (touch1, touch2) => {
-  return Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX) * 180 / Math.PI;
-};
+const getAngle = (t1, t2) => Math.atan2(t2.pageY - t1.pageY, t2.pageX - t1.pageX) * 180 / Math.PI;
 
-// Gesture definitions
+// ============================================================================
+// STEPS — Each with real app context
+// ============================================================================
 const GESTURES = [
   {
-    id: 'scroll',
-    name: 'Scroll',
-    description: 'Swipe up or down',
-    fingers: 1,
-    icon: '👆',
-    animation: 'scroll',
+    id: 'volume',
+    name: 'Volume Control',
+    description: 'Slide 2 fingers up to raise volume',
+    fingers: 2,
+    icon: '🔊',
+    scene: 'volume',
   },
   {
-    id: 'tap2',
-    name: '2-Finger Tap',
-    description: 'Tap with 2 fingers',
+    id: 'grid_zoom_out',
+    name: 'More Thumbnails',
+    description: 'Pinch 2 fingers to see more items per row',
     fingers: 2,
-    icon: '✌️',
-    animation: 'tap2',
+    icon: '🔍',
+    scene: 'grid_pinch',
   },
   {
-    id: 'pinch',
-    name: 'Pinch',
-    description: 'Pinch with 2 fingers',
+    id: 'grid_zoom_in',
+    name: 'Bigger Thumbnails',
+    description: 'Spread 2 fingers to enlarge items',
     fingers: 2,
-    icon: '🤏',
-    animation: 'pinch',
-  },
-  {
-    id: 'spread',
-    name: 'Spread',
-    description: 'Spread with 2 fingers',
-    fingers: 2,
-    icon: '🖐️',
-    animation: 'spread',
+    icon: '🖼️',
+    scene: 'grid_spread',
   },
   {
     id: 'rotate_right',
-    name: 'Rotate Right',
-    description: 'Rotate clockwise',
+    name: 'Next Channel',
+    description: 'Rotate 2 fingers clockwise',
     fingers: 2,
-    icon: '🔄',
-    animation: 'rotate_right',
+    icon: '📺',
+    scene: 'channel_next',
   },
   {
     id: 'rotate_left',
-    name: 'Rotate Left',
-    description: 'Rotate counter-clockwise',
+    name: 'Previous Channel',
+    description: 'Rotate 2 fingers counter-clockwise',
     fingers: 2,
-    icon: '🔃',
-    animation: 'rotate_left',
+    icon: '📺',
+    scene: 'channel_prev',
   },
   {
-    id: 'pinch3',
-    name: '3-Finger Pinch',
-    description: 'Pinch with 3 fingers → OTT mode',
+    id: 'ott_open',
+    name: 'Open OTT Panels',
+    description: 'Swipe 3 fingers right to open OTTLeft + OTTRight',
     fingers: 3,
-    icon: '🤌',
-    animation: 'pinch3',
+    icon: '📂',
+    scene: 'ott_open',
   },
   {
-    id: 'spread3',
-    name: '3-Finger Spread',
-    description: 'Spread with 3 fingers → Hub mode',
+    id: 'ott_close',
+    name: 'Close OTT Panels',
+    description: 'Swipe 3 fingers left to close the panels',
     fingers: 3,
-    icon: '🖐️',
-    animation: 'spread3',
+    icon: '✖️',
+    scene: 'ott_close',
   },
 ];
 
-// Animated hand component
-const AnimatedHand = ({ animation, isPaused }) => {
-  const getAnimationStyle = () => {
-    switch (animation) {
-      case 'scroll':
-        return {
-          animation: isPaused ? 'none' : 'scrollAnim 1.5s ease-in-out infinite',
-        };
-      case 'tap2':
-        return {
-          animation: isPaused ? 'none' : 'tap2Anim 1s ease-in-out infinite',
-        };
-      case 'pinch':
-        return {
-          animation: isPaused ? 'none' : 'pinchAnim 1.5s ease-in-out infinite',
-        };
-      case 'spread':
-        return {
-          animation: isPaused ? 'none' : 'spreadAnim 1.5s ease-in-out infinite',
-        };
-      case 'rotate_right':
-        return {
-          animation: isPaused ? 'none' : 'rotateRightAnim 2s ease-in-out infinite',
-        };
-      case 'rotate_left':
-        return {
-          animation: isPaused ? 'none' : 'rotateLeftAnim 2s ease-in-out infinite',
-        };
-      case 'pinch3':
-        return {
-          animation: isPaused ? 'none' : 'pinch3Anim 1.5s ease-in-out infinite',
-        };
-      case 'spread3':
-        return {
-          animation: isPaused ? 'none' : 'spread3Anim 1.5s ease-in-out infinite',
-        };
-      default:
-        return {};
-    }
-  };
+// ============================================================================
+// SCENE COMPONENTS — Visual mock-ups of the real app
+// ============================================================================
 
-  const renderFingers = () => {
-    switch (animation) {
-      case 'scroll':
-        return (
-          <div className="relative" style={getAnimationStyle()}>
-            <div className="w-8 h-8 rounded-full bg-white/80 shadow-lg" />
-          </div>
-        );
-      
-      case 'tap2':
-        return (
-          <div className="flex gap-6" style={getAnimationStyle()}>
-            <div className="w-8 h-8 rounded-full bg-white/80 shadow-lg" />
-            <div className="w-8 h-8 rounded-full bg-white/80 shadow-lg" />
-          </div>
-        );
-      
-      case 'pinch':
-      case 'spread':
-        return (
-          <div className="flex gap-4 items-center" style={getAnimationStyle()}>
-            <div className="w-8 h-8 rounded-full bg-white/80 shadow-lg finger-left" />
-            <div className="w-8 h-8 rounded-full bg-white/80 shadow-lg finger-right" />
-          </div>
-        );
-      
-      case 'rotate_right':
-      case 'rotate_left':
-        return (
-          <div className="relative w-24 h-24" style={getAnimationStyle()}>
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white/80 shadow-lg" />
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white/80 shadow-lg" />
-          </div>
-        );
-      
-      case 'pinch3':
-      case 'spread3':
-        return (
-          <div className="flex gap-3 items-center" style={getAnimationStyle()}>
-            <div className="w-7 h-7 rounded-full bg-white/80 shadow-lg" />
-            <div className="w-7 h-7 rounded-full bg-white/80 shadow-lg" />
-            <div className="w-7 h-7 rounded-full bg-white/80 shadow-lg" />
-          </div>
-        );
-      
-      default:
-        return null;
-    }
-  };
+const VolumeScene = ({ progress }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+    <div style={{ width: '6px', height: '140px', borderRadius: '3px', background: 'rgba(255,255,255,0.12)', position: 'relative', overflow: 'hidden' }}>
+      <div style={{
+        position: 'absolute', bottom: 0, width: '100%',
+        height: `${Math.min(100, progress)}%`,
+        borderRadius: '3px',
+        background: 'linear-gradient(to top, #6225ff, #a855f7)',
+        transition: 'height 0.1s',
+      }} />
+    </div>
+    <span style={{ fontSize: '14px', fontWeight: 700, color: '#fff' }}>{Math.round(progress)}%</span>
+  </div>
+);
 
+const GridScene = ({ columns }) => (
+  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: '4px', width: '160px' }}>
+    {Array.from({ length: columns * 2 }, (_, i) => (
+      <div key={i} style={{
+        aspectRatio: '16/9', borderRadius: '4px',
+        background: `linear-gradient(135deg, rgba(98,37,255,${0.2 + i * 0.05}), rgba(168,85,247,${0.15 + i * 0.03}))`,
+        border: '1px solid rgba(255,255,255,0.08)',
+      }} />
+    ))}
+  </div>
+);
+
+const ChannelScene = ({ channel }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+    <div style={{
+      width: '180px', height: '100px', borderRadius: '8px',
+      background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <span style={{ fontSize: '32px', fontWeight: 900, color: '#6225ff' }}>{channel}</span>
+    </div>
+    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>CH {channel}</span>
+  </div>
+);
+
+const OTTScene = ({ open }) => (
+  <div style={{ width: '200px', height: '120px', borderRadius: '8px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', position: 'relative', overflow: 'hidden' }}>
+    {/* OTTLeft */}
+    <div style={{
+      position: 'absolute', top: 0, bottom: 0, left: 0, width: '50px',
+      background: 'rgba(98,37,255,0.2)', borderRight: '1px solid rgba(255,255,255,0.1)',
+      transform: open ? 'translateX(0)' : 'translateX(-100%)',
+      transition: 'transform 0.4s cubic-bezier(0.16,1,0.3,1)',
+    }}>
+      <div style={{ padding: '6px 4px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} style={{ height: '8px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)' }} />
+        ))}
+      </div>
+    </div>
+    {/* OTTRight */}
+    <div style={{
+      position: 'absolute', top: 0, bottom: 0, right: 0, width: '80px',
+      background: 'rgba(98,37,255,0.15)', borderLeft: '1px solid rgba(255,255,255,0.1)',
+      transform: open ? 'translateX(0)' : 'translateX(100%)',
+      transition: 'transform 0.4s cubic-bezier(0.16,1,0.3,1)',
+    }}>
+      <div style={{ padding: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ height: '6px', width: '60%', borderRadius: '2px', background: 'rgba(255,255,255,0.2)' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px' }}>
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} style={{ aspectRatio: '16/9', borderRadius: '2px', background: 'rgba(255,255,255,0.1)' }} />
+          ))}
+        </div>
+      </div>
+    </div>
+    {/* Center label */}
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>
+        {open ? 'OTT OPEN' : 'VIDEO'}
+      </span>
+    </div>
+  </div>
+);
+
+// ============================================================================
+// FINGER HINT — Shows how many fingers to use
+// ============================================================================
+const FingerHint = ({ count, animation }) => {
+  const dots = Array.from({ length: count });
   return (
-    <div className="flex items-center justify-center h-40">
-      {renderFingers()}
+    <div style={{ display: 'flex', gap: count === 3 ? '8px' : '12px', animation: animation || 'none' }}>
+      {dots.map((_, i) => (
+        <div key={i} style={{
+          width: count === 3 ? '24px' : '28px',
+          height: count === 3 ? '24px' : '28px',
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.7)',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+        }} />
+      ))}
     </div>
   );
 };
 
-// Main tutorial component
+// ============================================================================
+// MAIN TUTORIAL
+// ============================================================================
 const GestureTutorial = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [touchData, setTouchData] = useState({
-    startY: 0,
-    startDistance: 0,
-    startAngle: 0,
-    fingerCount: 0,
-  });
+  const [volumeProgress, setVolumeProgress] = useState(30);
+  const [gridCols, setGridCols] = useState(3);
+  const [channelNum, setChannelNum] = useState(42);
+  const [ottOpen, setOttOpen] = useState(false);
+  const [touchData, setTouchData] = useState({ startY: 0, startX: 0, startDistance: 0, startAngle: 0, fingerCount: 0 });
 
   const containerRef = useRef(null);
   const currentGesture = GESTURES[currentStep];
   const progress = ((currentStep) / GESTURES.length) * 100;
 
-  // Handle gesture success
   const handleSuccess = useCallback(() => {
     setIsSuccess(true);
-    
     setTimeout(() => {
       setIsSuccess(false);
-      
       if (currentStep < GESTURES.length - 1) {
         setCurrentStep(prev => prev + 1);
+        // Reset scenes for next step
+        setVolumeProgress(30);
+        setGridCols(3);
+        setChannelNum(42);
+        setOttOpen(false);
       } else {
-        // Tutorial complete
         setTutorialDone();
         onComplete?.();
       }
     }, 800);
   }, [currentStep, onComplete]);
 
-  // Touch handlers
+  // ========================================
+  // TOUCH HANDLERS
+  // ========================================
   const handleTouchStart = useCallback((e) => {
     const touches = e.touches;
-    
     setTouchData({
       fingerCount: touches.length,
       startY: touches.length > 0 ? touches[0].pageY : 0,
-      startDistance: touches.length >= 2 
+      startX: touches.length > 0 ? touches[0].pageX : 0,
+      startDistance: touches.length >= 2
         ? Math.hypot(touches[0].pageX - touches[1].pageX, touches[0].pageY - touches[1].pageY)
         : 0,
-      startAngle: touches.length >= 2 
+      startAngle: touches.length >= 2
         ? getAngle(touches[0], touches[1])
         : 0,
     });
@@ -251,99 +244,110 @@ const GestureTutorial = ({ onComplete }) => {
 
   const handleTouchMove = useCallback((e) => {
     if (isSuccess) return;
-    
     const touches = e.touches;
     const gesture = currentGesture;
-    
-    // Scroll detection (1 finger)
-    if (gesture.id === 'scroll' && touches.length === 1) {
-      const deltaY = Math.abs(touches[0].pageY - touchData.startY);
-      if (deltaY > 50) {
-        handleSuccess();
-      }
-    }
-    
+
     // 2-finger gestures
     if (touches.length === 2 && touchData.startDistance > 0) {
       const currentDistance = Math.hypot(
-        touches[0].pageX - touches[1].pageX,
-        touches[0].pageY - touches[1].pageY
+        touches[0].pageX - touches[1].pageX, touches[0].pageY - touches[1].pageY
       );
       const currentAngle = getAngle(touches[0], touches[1]);
-      
       const distanceDelta = currentDistance - touchData.startDistance;
       let angleDelta = currentAngle - touchData.startAngle;
       if (angleDelta > 180) angleDelta -= 360;
       if (angleDelta < -180) angleDelta += 360;
-      
-      // Pinch
-      if (gesture.id === 'pinch' && distanceDelta < -40) {
+
+      // Volume (2 finger vertical)
+      if (gesture.id === 'volume') {
+        const centerY = (touches[0].pageY + touches[1].pageY) / 2;
+        const deltaY = touchData.startY - centerY;
+        if (Math.abs(deltaY) > 30) {
+          setVolumeProgress(prev => Math.max(0, Math.min(100, prev + (deltaY > 0 ? 5 : -5))));
+          if (Math.abs(deltaY) > 80) handleSuccess();
+        }
+      }
+
+      // Pinch → grid zoom out
+      if (gesture.id === 'grid_zoom_out' && distanceDelta < -40) {
+        setGridCols(5);
         handleSuccess();
       }
-      
-      // Spread
-      if (gesture.id === 'spread' && distanceDelta > 40) {
+
+      // Spread → grid zoom in
+      if (gesture.id === 'grid_zoom_in' && distanceDelta > 40) {
+        setGridCols(2);
         handleSuccess();
       }
-      
-      // Rotate right
+
+      // Rotate right → next channel
       if (gesture.id === 'rotate_right' && angleDelta > 25) {
+        setChannelNum(prev => prev + 1);
         handleSuccess();
       }
-      
-      // Rotate left
+
+      // Rotate left → prev channel
       if (gesture.id === 'rotate_left' && angleDelta < -25) {
+        setChannelNum(prev => prev - 1);
         handleSuccess();
       }
     }
-    
+
     // 3-finger gestures
     if (touches.length === 3 && touchData.fingerCount === 3) {
-      const currentDistance = Math.hypot(
-        touches[0].pageX - touches[1].pageX,
-        touches[0].pageY - touches[1].pageY
-      );
-      const distanceDelta = currentDistance - touchData.startDistance;
-      
-      // 3-finger pinch
-      if (gesture.id === 'pinch3' && distanceDelta < -30) {
+      const centerX = (touches[0].pageX + touches[1].pageX + touches[2].pageX) / 3;
+      const deltaX = centerX - touchData.startX;
+
+      // OTT open (swipe right)
+      if (gesture.id === 'ott_open' && deltaX > 60) {
+        setOttOpen(true);
         handleSuccess();
       }
-      
-      // 3-finger spread
-      if (gesture.id === 'spread3' && distanceDelta > 30) {
+
+      // OTT close (swipe left)
+      if (gesture.id === 'ott_close' && deltaX < -60) {
+        setOttOpen(false);
         handleSuccess();
       }
     }
   }, [currentGesture, touchData, isSuccess, handleSuccess]);
 
-  const handleTouchEnd = useCallback((e) => {
-    if (isSuccess) return;
-    
-    const gesture = currentGesture;
-    
-    // 2-finger tap
-    if (gesture.id === 'tap2' && touchData.fingerCount === 2) {
-      handleSuccess();
-    }
-    
-    // Reset touch data
-    setTouchData({
-      startY: 0,
-      startDistance: 0,
-      startAngle: 0,
-      fingerCount: 0,
-    });
-  }, [currentGesture, touchData, isSuccess, handleSuccess]);
+  const handleTouchEnd = useCallback(() => {
+    setTouchData({ startY: 0, startX: 0, startDistance: 0, startAngle: 0, fingerCount: 0 });
+  }, []);
 
-  // Skip tutorial
   const handleSkip = useCallback(() => {
     setTutorialDone();
     onComplete?.();
   }, [onComplete]);
 
+  // ========================================
+  // SCENE RENDERER
+  // ========================================
+  const renderScene = () => {
+    switch (currentGesture.scene) {
+      case 'volume':
+        return <VolumeScene progress={volumeProgress} />;
+      case 'grid_pinch':
+        return <GridScene columns={gridCols} />;
+      case 'grid_spread':
+        return <GridScene columns={gridCols} />;
+      case 'channel_next':
+      case 'channel_prev':
+        return <ChannelScene channel={channelNum} />;
+      case 'ott_open':
+        return <OTTScene open={ottOpen} />;
+      case 'ott_close':
+        // Start with panels open for close gesture
+        if (!ottOpen && currentGesture.id === 'ott_close') setOttOpen(true);
+        return <OTTScene open={ottOpen} />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div 
+    <div
       ref={containerRef}
       className="fixed inset-0 z-[100] flex flex-col"
       style={{ background: 'linear-gradient(180deg, #0a0a0f 0%, #1a1a2f 100%)' }}
@@ -357,134 +361,81 @@ const GestureTutorial = ({ onComplete }) => {
           <span className="text-white font-black text-xl">NINJA</span>
           <span className="font-black text-xl ml-1" style={{ color: '#6225ff' }}>8K</span>
         </div>
-        <button 
-          onClick={handleSkip}
-          className="px-4 py-2 text-gray-400 text-sm"
-        >
-          Skip
-        </button>
+        <button onClick={handleSkip} className="px-4 py-2 text-gray-400 text-sm">Skip</button>
       </div>
 
       {/* Progress bar */}
-      <div className="px-4 mb-8">
+      <div className="px-4 mb-6">
         <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-          <div 
+          <div
             className="h-full rounded-full transition-all duration-500"
-            style={{ 
-              width: `${progress}%`,
-              background: 'linear-gradient(90deg, #6225ff, #8b5cf6)',
-            }}
+            style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #6225ff, #8b5cf6)' }}
           />
         </div>
         <div className="flex justify-between mt-2">
           <span className="text-gray-500 text-xs">{currentStep + 1} / {GESTURES.length}</span>
-          <span className="text-gray-500 text-xs">Gestures</span>
+          <span className="text-gray-500 text-xs">Controls</span>
         </div>
       </div>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col items-center justify-center px-8">
-        {/* Success indicator */}
         {isSuccess ? (
           <div className="flex flex-col items-center animate-pulse">
-            <div 
+            <div
               className="w-24 h-24 rounded-full flex items-center justify-center mb-6"
               style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}
             >
               <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <polyline points="20 6 9 17 4 12"/>
+                <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
             <p className="text-green-400 text-xl font-bold">Perfect!</p>
           </div>
         ) : (
           <>
-            {/* Gesture icon */}
-            <div 
-              className="w-32 h-32 rounded-full flex items-center justify-center mb-6"
-              style={{ background: 'rgba(98, 37, 255, 0.2)', border: '2px solid rgba(98, 37, 255, 0.5)' }}
+            {/* Scene mockup */}
+            <div
+              className="w-full max-w-xs h-52 rounded-2xl flex items-center justify-center mb-6"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
             >
-              <span className="text-5xl">{currentGesture.icon}</span>
+              {renderScene()}
             </div>
 
-            {/* Gesture name */}
-            <h2 className="text-white text-2xl font-bold mb-2">{currentGesture.name}</h2>
-            <p className="text-gray-400 text-center mb-8">{currentGesture.description}</p>
+            {/* Gesture name + description */}
+            <h2 className="text-white text-xl font-bold mb-1">{currentGesture.name}</h2>
+            <p className="text-gray-400 text-center text-sm mb-6">{currentGesture.description}</p>
 
-            {/* Animated demo */}
-            <div 
-              className="w-full max-w-xs h-48 rounded-2xl flex items-center justify-center"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)' }}
+            {/* Finger hint */}
+            <div
+              className="w-full max-w-xs h-20 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.15)' }}
             >
-              <AnimatedHand animation={currentGesture.animation} isPaused={isSuccess} />
+              <FingerHint count={currentGesture.fingers} />
             </div>
 
-            {/* Hint */}
-            <p className="text-gray-500 text-sm mt-6 text-center">
+            <p className="text-gray-600 text-xs mt-4 text-center">
               Perform the gesture anywhere on screen
             </p>
           </>
         )}
       </div>
 
-      {/* Dots indicator */}
+      {/* Dots */}
       <div className="flex justify-center gap-2 pb-8">
         {GESTURES.map((_, index) => (
           <div
             key={index}
             className={`w-2 h-2 rounded-full transition-all duration-300 ${
-              index < currentStep 
-                ? 'bg-green-500' 
-                : index === currentStep 
-                  ? 'bg-purple-500 w-4' 
+              index < currentStep
+                ? 'bg-green-500'
+                : index === currentStep
+                  ? 'bg-purple-500 w-4'
                   : 'bg-white/20'
             }`}
           />
         ))}
       </div>
-
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes scrollAnim {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-30px); }
-        }
-        
-        @keyframes tap2Anim {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(0.9); opacity: 0.7; }
-        }
-        
-        @keyframes pinchAnim {
-          0%, 100% { gap: 4rem; }
-          50% { gap: 1rem; }
-        }
-        
-        @keyframes spreadAnim {
-          0%, 100% { gap: 1rem; }
-          50% { gap: 4rem; }
-        }
-        
-        @keyframes rotateRightAnim {
-          0%, 100% { transform: rotate(0deg); }
-          50% { transform: rotate(45deg); }
-        }
-        
-        @keyframes rotateLeftAnim {
-          0%, 100% { transform: rotate(0deg); }
-          50% { transform: rotate(-45deg); }
-        }
-        
-        @keyframes pinch3Anim {
-          0%, 100% { gap: 2rem; }
-          50% { gap: 0.5rem; }
-        }
-        
-        @keyframes spread3Anim {
-          0%, 100% { gap: 0.5rem; }
-          50% { gap: 2rem; }
-        }
-      `}</style>
     </div>
   );
 };
