@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Clipboard } from '@capacitor/clipboard';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { THEME } from '../constants/theme';
 import { XtreamService, parseXtreamUrl } from '../services/XtreamService';
 import { Icons } from './Icons';
@@ -85,6 +86,18 @@ const LandingPage = ({ onNavigateToPlayer }) => {
   const [particleTheme, setParticleTheme] = useState(() => {
     return localStorage.getItem('ninja_particle_theme') || 'ultimate';
   });
+
+  // Lock landscape
+  useEffect(() => {
+    const lockLandscape = async () => {
+      try {
+        await ScreenOrientation.lock({ orientation: 'landscape' });
+      } catch (e) {
+        console.log('ScreenOrientation not available:', e);
+      }
+    };
+    lockLandscape();
+  }, []);
 
   const handleLogoClick = () => {
     setParticleTheme(current => {

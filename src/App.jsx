@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { PlaylistProvider, usePlaylistContext } from './context/PlaylistContext';
 import LandingPage from './components/LandingPage';
 import { Player } from './components/player';
@@ -52,6 +53,11 @@ const AppContent = () => {
         await StatusBar.setBackgroundColor({ color: '#00000000' });
       } catch (err) {
         console.log('StatusBar not available (web?):', err);
+      }
+      try {
+        await ScreenOrientation.lock({ orientation: 'landscape' });
+      } catch (err) {
+        console.log('ScreenOrientation not available:', err);
       }
     };
     setupStatusBar();

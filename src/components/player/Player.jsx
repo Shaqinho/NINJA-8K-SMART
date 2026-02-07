@@ -398,7 +398,7 @@ const Player = memo(({
         <div style={{
           position: 'absolute',
           top: 0, bottom: 0, left: '280px', right: 0,
-          background: 'rgba(0, 0, 0, 0.10)',
+          background: 'rgba(0, 0, 0, 0.50)',
           backdropFilter: 'blur(15px) saturate(150%)',
           WebkitBackdropFilter: 'blur(15px) saturate(150%)',
           borderLeft: '1px solid rgba(255, 255, 255, 0.1)',

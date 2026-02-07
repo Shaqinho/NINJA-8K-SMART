@@ -1449,7 +1449,7 @@ const OTTSidebar = forwardRef(({
     top: 0,
     bottom: 0,
     width: '280px',
-    background: 'rgba(0, 0, 0, 0.10)',
+    background: 'rgba(0, 0, 0, 0.50)',
     backdropFilter: 'blur(15px) saturate(150%)',
     WebkitBackdropFilter: 'blur(15px) saturate(150%)',
     transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
