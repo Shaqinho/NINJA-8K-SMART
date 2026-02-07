@@ -1004,8 +1004,8 @@ const OTTSidebar = forwardRef(({
   const programSearchTimerRef = useRef(null);
   
   useEffect(() => {
-    // Only trigger program search in ALL folder on live tab
-    if (activeTab !== 'live' || !showItems || !currentCategory || currentCategory.category_id !== '__all__') {
+    // Only trigger program search in specific folders (not ALL) on live tab
+    if (activeTab !== 'live' || !showItems || !currentCategory || currentCategory.category_id === '__all__') {
       setProgramResults([]);
       return;
     }
@@ -1037,14 +1037,14 @@ const OTTSidebar = forwardRef(({
   const handleProgramClick = useCallback((program) => {
     const streamId = program.stream_id;
     // Find the channel in the live channels list
-    const channel = channels.find(ch => 
+    const channel = filteredItems.find(ch => 
       (ch.stream_id || ch.id) === streamId || 
       String(ch.stream_id || ch.id) === String(streamId)
     );
     if (channel) {
       onChannelSelect?.(channel);
     }
-  }, [channels, onChannelSelect]);
+  }, [filteredItems, onChannelSelect]);
 
   // ========== KEYBOARD HANDLERS ==========
   const handleKeyboardInput = useCallback((char) => {
@@ -1690,7 +1690,7 @@ const OTTSidebar = forwardRef(({
                   readOnly
                   onFocus={() => setShowKeyboard(true)}
                   onClick={() => setShowKeyboard(true)}
-                  placeholder={currentCategory?.category_id === '__all__' && activeTab === 'live' ? "Search channels & programs..." : "Search in folder..."}
+                  placeholder={currentCategory?.category_id === '__all__' && activeTab === 'live' ? "Search channels..." : "Search channels & programs..."}
                   style={{
                     flex: 1, background: 'transparent', border: 'none', outline: 'none',
                     color: '#fff', fontSize: '11px', padding: 0, caretColor: '#6225ff',
