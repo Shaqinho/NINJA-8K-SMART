@@ -4,7 +4,6 @@ import { THEME } from '../constants/theme';
 import { XtreamService, parseXtreamUrl } from '../services/XtreamService';
 import { Icons } from './Icons';
 import { LoadingScreen } from './LoadingScreen';
-import { ActivationBlock } from './ActivationBlock';
 import { PlaylistForm } from './PlaylistForm';
 import ParticleThemes from './ParticleThemes';
 import { openDatabase } from '../database/NinjaLocalDB';
@@ -73,7 +72,7 @@ const PARTICLE_THEME_COLORS = {
 // ============================================================================
 // LANDING PAGE
 // ============================================================================
-const LandingPage = ({ onNavigateToPlayer, onVerifyActivation }) => {
+const LandingPage = ({ onNavigateToPlayer }) => {
   const [mode, setMode] = useState('xtream');
   const [form, setForm] = useState({ name: 'My Server', url: '', server: '', username: '', password: '', file: null });
   const [fetchOptions, setFetchOptions] = useState({ live: true, movies: true, series: true });
@@ -420,8 +419,6 @@ const LandingPage = ({ onNavigateToPlayer, onVerifyActivation }) => {
         </div>
 
         <div className="max-w-md mx-auto w-full px-4 space-y-4">
-          {/* Activation */}
-          <ActivationBlock onVerifyActivation={onVerifyActivation} />
 
           {/* Disclaimer */}
           <div 
