@@ -49,8 +49,6 @@ const Player = memo(({
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [aspectRatio, setAspectRatio] = useState('Auto');
 
-  const [isInvertedGravity, setIsInvertedGravity] = useState(false);
-
   const src = channel?.streamUrl || channel?.url || null;
 
   // ============================================================================
@@ -223,21 +221,6 @@ const Player = memo(({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, [isFullscreen]);
 
-  useEffect(() => {
-    const handleOrientationChange = () => {
-      const angle = window.innerWidth > window.innerHeight ? 
-        (window.orientation || 90) : (window.orientation || 0);
-      setIsInvertedGravity(angle === 180 || angle === 270);
-    };
-    window.addEventListener('orientationchange', handleOrientationChange);
-    window.addEventListener('resize', handleOrientationChange);
-    handleOrientationChange();
-    return () => {
-      window.removeEventListener('orientationchange', handleOrientationChange);
-      window.removeEventListener('resize', handleOrientationChange);
-    };
-  }, []);
-
   const handleTimeshiftSeek = useCallback((offset) => {
     setTimeshiftOffset(offset);
   }, []);
@@ -325,7 +308,7 @@ const Player = memo(({
       )}
 
       {/* Controls */}
-      <div style={{ transform: isInvertedGravity ? 'scaleY(-1)' : 'none' }}>
+      <div>
         <PlayerControls
           playing={isPlaying}
           muted={muted}
