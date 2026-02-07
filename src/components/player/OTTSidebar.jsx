@@ -282,8 +282,6 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
 };
 
 const OTTSidebar = forwardRef(({ 
-  categories = [], 
-  channels = [],
   selectedCategory,
   selectedChannel,
   onCategorySelect,
@@ -309,12 +307,15 @@ const OTTSidebar = forwardRef(({
   const [showKeyboard, setShowKeyboard] = useState(false);
   const [keyboardPos, setKeyboardPos] = useState({ x: 290, y: 60 });
   
-  // Tab-specific data from NinjaCentral
+  // Tab-specific data (all fetched from Xtream directly)
+  const [liveChannels, setLiveChannels] = useState([]);
+  const [liveCategories, setLiveCategories] = useState([]);
   const [vodCategories, setVodCategories] = useState([]);
   const [seriesCategories, setSeriesCategories] = useState([]);
   const [vodItems, setVodItems] = useState([]);
   const [seriesItems, setSeriesItems] = useState([]);
   const [seriesSeasons, setSeriesSeasons] = useState({});
+  const [dataLoaded, setDataLoaded] = useState(false);
   
   // EPG lazy-load
   const [epgData, setEpgData] = useState({});
@@ -394,11 +395,11 @@ const OTTSidebar = forwardRef(({
 
   // ========== ACTIVE ITEMS BASED ON TAB ==========
   const activeItems = useMemo(() => {
-    if (activeTab === 'live') return channels;
+    if (activeTab === 'live') return liveChannels;
     if (activeTab === 'movies') return vodItems;
     if (activeTab === 'series') return seriesItems;
     return [];
-  }, [activeTab, channels, vodItems, seriesItems]);
+  }, [activeTab, liveChannels, vodItems, seriesItems]);
 
   // ========== SYSTEM FOLDERS ==========
   const systemFolders = useMemo(() => {
@@ -547,28 +548,48 @@ const OTTSidebar = forwardRef(({
   // ========== ACTIVE CATEGORIES WITH SYSTEM FOLDERS ==========
   const activeCategories = useMemo(() => {
     let cats = [];
-    if (activeTab === 'live') cats = categories;
+    if (activeTab === 'live') cats = liveCategories;
     else if (activeTab === 'movies') cats = vodCategories;
     else if (activeTab === 'series') cats = seriesCategories;
     return [...systemFolders, ...cats];
-  }, [activeTab, categories, vodCategories, seriesCategories, systemFolders]);
+  }, [activeTab, liveCategories, vodCategories, seriesCategories, systemFolders]);
 
-  // ========== LOAD DATA FROM NINJACENTRAL ==========
+  // ========== LOAD DATA FROM XTREAM (direct fetch) ==========
   useEffect(() => {
+    if (!xtreamService || dataLoaded) return;
+
     const loadData = async () => {
       try {
+        console.log('[OTT] Fetching data from Xtream...');
         const counts = {};
 
-        // Live counts
-        const liveChannels = await ninjaCentral.getAll(STORES.LIVE);
-        liveChannels.forEach(channel => {
-          const catId = String(channel.categoryId);
+        // Fetch all 6 lists in parallel
+        const [
+          rawLive, rawLiveCats,
+          rawVod, rawVodCats,
+          rawSeries, rawSeriesCats,
+        ] = await Promise.all([
+          xtreamService.getLiveStreams(),
+          xtreamService.getLiveCategories(),
+          xtreamService.getVodStreams(),
+          xtreamService.getVodCategories(),
+          xtreamService.getSeries(),
+          xtreamService.getSeriesCategories(),
+        ]);
+
+        // Parse live
+        const liveCats = Array.isArray(rawLiveCats) ? rawLiveCats : [];
+        const live = xtreamService.parseLiveStreams(rawLive, liveCats);
+        live.forEach(ch => {
+          const catId = String(ch.categoryId);
           counts[`live_${catId}`] = (counts[`live_${catId}`] || 0) + 1;
         });
+        setLiveChannels(live);
+        setLiveCategories(liveCats);
 
-        // VOD data
-        const vod = await ninjaCentral.getAll(STORES.VOD);
-        const vodCats = await ninjaCentral.getAll(STORES.VOD_CATEGORIES);
+        // Parse VOD
+        const vodCats = Array.isArray(rawVodCats) ? rawVodCats : [];
+        const vod = xtreamService.parseVodStreams(rawVod, vodCats);
         vod.forEach(item => {
           const catId = String(item.categoryId);
           counts[`vod_${catId}`] = (counts[`vod_${catId}`] || 0) + 1;
@@ -576,9 +597,9 @@ const OTTSidebar = forwardRef(({
         setVodItems(vod);
         setVodCategories(vodCats);
 
-        // Series data
-        const series = await ninjaCentral.getAll(STORES.SERIES);
-        const seriesCats = await ninjaCentral.getAll(STORES.SERIES_CATEGORIES);
+        // Parse Series
+        const seriesCats = Array.isArray(rawSeriesCats) ? rawSeriesCats : [];
+        const series = xtreamService.parseSeries(rawSeries, seriesCats);
         series.forEach(item => {
           const catId = String(item.categoryId);
           counts[`series_${catId}`] = (counts[`series_${catId}`] || 0) + 1;
@@ -587,15 +608,63 @@ const OTTSidebar = forwardRef(({
         setSeriesCategories(seriesCats);
 
         setCategoryCounts(counts);
+        setDataLoaded(true);
+        console.log(`[OTT] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+
+        // Save to NinjaCentral in background (non-blocking)
+        ninjaCentral.init().then(async () => {
+          try {
+            await Promise.all([
+              ninjaCentral.saveItems(STORES.LIVE, live),
+              ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, liveCats),
+              ninjaCentral.saveItems(STORES.VOD, vod),
+              ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, vodCats),
+              ninjaCentral.saveItems(STORES.SERIES, series),
+              ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, seriesCats),
+            ]);
+            console.log('[OTT] Saved to NinjaCentral');
+          } catch (e) {
+            console.warn('[OTT] NinjaCentral save failed:', e);
+          }
+        });
+
       } catch (err) {
-        console.warn('OTTSidebar: Could not load data from NinjaCentral', err);
+        console.error('[OTT] Xtream fetch failed, falling back to NinjaCentral...', err);
+        // Fallback: try NinjaCentral
+        try {
+          await ninjaCentral.init();
+          const counts = {};
+
+          const [live, vod, series, lc, vc, sc] = await Promise.all([
+            ninjaCentral.getAll(STORES.LIVE),
+            ninjaCentral.getAll(STORES.VOD),
+            ninjaCentral.getAll(STORES.SERIES),
+            ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
+            ninjaCentral.getAll(STORES.VOD_CATEGORIES),
+            ninjaCentral.getAll(STORES.SERIES_CATEGORIES),
+          ]);
+
+          live.forEach(ch => { counts[`live_${String(ch.categoryId)}`] = (counts[`live_${String(ch.categoryId)}`] || 0) + 1; });
+          vod.forEach(item => { counts[`vod_${String(item.categoryId)}`] = (counts[`vod_${String(item.categoryId)}`] || 0) + 1; });
+          series.forEach(item => { counts[`series_${String(item.categoryId)}`] = (counts[`series_${String(item.categoryId)}`] || 0) + 1; });
+
+          setLiveChannels(live);
+          setLiveCategories(lc);
+          setVodItems(vod);
+          setVodCategories(vc);
+          setSeriesItems(series);
+          setSeriesCategories(sc);
+          setCategoryCounts(counts);
+          setDataLoaded(true);
+          console.log(`[OTT] Fallback NinjaCentral: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+        } catch (fallbackErr) {
+          console.error('[OTT] NinjaCentral fallback also failed:', fallbackErr);
+        }
       }
     };
-    
-    if (isSidebarOpen) {
-      loadData();
-    }
-  }, [isSidebarOpen]);
+
+    loadData();
+  }, [xtreamService, dataLoaded]);
 
   // ========== LAZY-LOAD SERIES SEASONS ==========
   const loadSeriesSeasons = useCallback(async (seriesId) => {
@@ -1143,6 +1212,11 @@ const OTTSidebar = forwardRef(({
             </div>
           )}
         </div>
+        {channel.num && (
+          <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontWeight: 600, flexShrink: 0, fontFamily: 'monospace' }}>
+            {channel.num}
+          </span>
+        )}
         {isFav && (
           <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b" stroke="none" style={{ flexShrink: 0 }}>
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
@@ -1167,9 +1241,9 @@ const OTTSidebar = forwardRef(({
     const movie = filteredItems[index];
     if (!movie) return null;
     
-    const year = movie.release_date ? movie.release_date.substring(0, 4) : '';
+    const year = movie.year || (movie.release_date ? movie.release_date.substring(0, 4) : '');
     const rating = movie.rating || '';
-    const genre = movie.category_name || movie.category || '';
+    const genre = movie.genre || movie.category_name || movie.category || '';
     const subLine = [year, rating ? `★ ${rating}` : '', genre].filter(Boolean).join(' | ');
     
     return (

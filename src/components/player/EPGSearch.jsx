@@ -1,21 +1,59 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 
+// ============================================================================
+// EPG SEARCH — In-Memory Smart Search with Cascading Filters
+//
+// All EPG data lives in React state. Every JSON field becomes a filter.
+// No SQLite dependency — pure JS filtering on fetched results.
+//
+// Filters (AND logic, all combined):
+//   TEXT    → search in title, channel_name, description
+//   LANG    → filter by channel language prefix (FR, EN, AR...)
+//   LIVE    → show only currently airing / show upcoming
+//   TIME    → filter by time slot (20h-22h, etc.)
+//   LIMIT   → number of programs per channel to fetch
+//
+// Flow: SELECT categories → CONFIRM → fetch EPG → filter in memory
+// ============================================================================
+
+// Extract language prefix from channel name (e.g. "FR| TF1 HD" → "FR")
+const extractLang = (name) => {
+  if (!name) return 'OTHER';
+  const m = name.match(/^([A-Z]{2,3})[\s|:]/i);
+  if (m) return m[1].toUpperCase();
+  if (name.toUpperCase().startsWith('VIP')) return 'VIP';
+  return 'OTHER';
+};
+
+// Normalize text for search (lowercase, no accents)
+const normalize = (text) => {
+  if (!text) return '';
+  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').trim();
+};
+
+// Common language filters
+const LANG_OPTIONS = ['FR', 'EN', 'AR', 'ES', 'DE', 'TR', 'IT', 'PT', 'NL'];
+
 const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, visible }) => {
   // ========== PRESETS (localStorage) ==========
   const [presets, setPresets] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('ninja_epg_presets') || '[]');
-    } catch { return []; }
+    try { return JSON.parse(localStorage.getItem('ninja_epg_presets') || '[]'); }
+    catch { return []; }
   });
   const [activePreset, setActivePreset] = useState(null);
 
-  // ========== STATES ==========
-  const [results, setResults] = useState([]);
+  // ========== RAW DATA ==========
+  const [rawResults, setRawResults] = useState([]); // Full fetched EPG results (unfiltered)
+
+  // ========== FILTER STATES ==========
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLiveOnly, setIsLiveOnly] = useState(false);
   const [isNotLive, setIsNotLive] = useState(false);
   const [epgLimit, setEpgLimit] = useState(1);
   const [startTimeFilter, setStartTimeFilter] = useState(null);
+  const [langFilters, setLangFilters] = useState([]); // e.g. ['FR', 'EN']
+  const [showLangBar, setShowLangBar] = useState(false);
 
   // ========== CATEGORY SELECTION MODE ==========
   const [showCategorySelect, setShowCategorySelect] = useState(false);
@@ -25,7 +63,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
   const [fetchingEpg, setFetchingEpg] = useState(false);
   const [fetchProgress, setFetchProgress] = useState('');
 
-  // ========== PRESET MANAGEMENT ==========
+  // ========== PRESET UI ==========
   const [showPresetList, setShowPresetList] = useState(false);
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [presetName, setPresetName] = useState('');
@@ -35,10 +73,9 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
     localStorage.setItem('ninja_epg_presets', JSON.stringify(newPresets));
   }, []);
 
-  // Load categories for selection
+  // Load categories
   const loadCategories = useCallback(async () => {
-    if (!xtreamService) return;
-    if (allCategories.length > 0) return;
+    if (!xtreamService || allCategories.length > 0) return;
     setLoadingCats(true);
     try {
       const cats = await xtreamService.getLiveCategories();
@@ -50,12 +87,13 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
     }
   }, [xtreamService, allCategories.length]);
 
-  // Toggle category selection
   const toggleCategorySelection = useCallback((catId) => {
     const id = String(catId);
-    setSelectedCategoryIds(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
-    );
+    setSelectedCategoryIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  }, []);
+
+  const toggleLangFilter = useCallback((lang) => {
+    setLangFilters(prev => prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]);
   }, []);
 
   // ========== CONFIRM: Fetch EPG for selected categories ==========
@@ -66,7 +104,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
     setShowCategorySelect(false);
 
     try {
-      // Get all streams for selected categories
+      // Get streams for selected categories
       let allStreams = [];
       for (let i = 0; i < selectedCategoryIds.length; i++) {
         const catId = selectedCategoryIds[i];
@@ -80,6 +118,8 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
             name: s.name,
             logo: s.stream_icon || null,
             categoryName: catName,
+            categoryId: catId,
+            lang: extractLang(s.name),
           })));
         }
       }
@@ -97,26 +137,51 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
 
       const epgResults = await xtreamService.getShortEPGBatch(streamIds, limit, 50);
 
-      // Build results
+      // Build results — store ALL available fields
       const newResults = [];
       allStreams.forEach(stream => {
         const epg = epgResults[stream.id];
         if (epg) {
-          newResults.push({
-            stream_id: stream.id,
-            channel_name: stream.name,
-            channel_logo: stream.logo,
-            category_name: stream.categoryName,
-            title: epg.epg_now || 'No program info',
-            epg_start: epg.epg_start || '',
-            epg_end: epg.epg_end || '',
-            progress: epg.progress || 0,
-            is_live: epg.progress > 0 && epg.progress < 100 ? 1 : 0,
+          // If multiple programs per channel (limit > 1), epg might have .programs array
+          const programs = epg.programs || [epg];
+          programs.forEach((prog, idx) => {
+            const title = prog.title || prog.epg_now || 'No program info';
+            newResults.push({
+              stream_id: stream.id,
+              channel_name: stream.name,
+              channel_logo: stream.logo,
+              category_name: stream.categoryName,
+              category_id: stream.categoryId,
+              lang: stream.lang,
+              title: title,
+              title_normalized: normalize(title),
+              description: prog.description || prog.epg_description || '',
+              description_normalized: normalize(prog.description || prog.epg_description || ''),
+              epg_start: prog.epg_start || prog.start || '',
+              epg_end: prog.epg_end || prog.end || '',
+              start_timestamp: prog.epg_start_timestamp || prog.startTimestamp || 0,
+              end_timestamp: prog.epg_end_timestamp || prog.stopTimestamp || prog.endTimestamp || 0,
+              progress: prog.progress || (idx === 0 ? (epg.progress || 0) : 0),
+              is_live: 0, // will be calculated below
+            });
           });
         }
       });
 
-      setResults(newResults);
+      // Calculate is_live
+      const now = Math.floor(Date.now() / 1000);
+      newResults.forEach(r => {
+        if (r.start_timestamp && r.end_timestamp) {
+          r.is_live = (r.start_timestamp <= now && r.end_timestamp > now) ? 1 : 0;
+          if (r.is_live && !r.progress) {
+            r.progress = Math.min(100, Math.max(0, Math.round(((now - r.start_timestamp) / (r.end_timestamp - r.start_timestamp)) * 100)));
+          }
+        } else if (r.progress > 0 && r.progress < 100) {
+          r.is_live = 1;
+        }
+      });
+
+      setRawResults(newResults);
       setFetchProgress(`${newResults.length} programs loaded`);
       navigator.vibrate?.(30);
     } catch (err) {
@@ -127,27 +192,21 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
     }
   }, [xtreamService, selectedCategoryIds, allCategories, isNotLive, epgLimit]);
 
-  // ========== SAVE AS PRESET ==========
+  // ========== PRESETS ==========
   const handleSavePreset = useCallback(() => {
     if (!presetName.trim() || selectedCategoryIds.length === 0) return;
-    const newPreset = {
-      name: presetName.trim(),
-      categoryIds: [...selectedCategoryIds],
-    };
-    savePresets([...presets, newPreset]);
+    savePresets([...presets, { name: presetName.trim(), categoryIds: [...selectedCategoryIds] }]);
     setPresetName('');
     setShowSavePreset(false);
     navigator.vibrate?.(30);
   }, [presetName, selectedCategoryIds, presets, savePresets]);
 
-  // ========== LOAD PRESET ==========
   const handleLoadPreset = useCallback((preset) => {
     setSelectedCategoryIds(preset.categoryIds || []);
     setActivePreset(preset.name);
     setShowPresetList(false);
   }, []);
 
-  // ========== DELETE PRESET ==========
   const handleDeletePreset = useCallback((index) => {
     const newPresets = presets.filter((_, i) => i !== index);
     savePresets(newPresets);
@@ -156,35 +215,92 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
 
   // Auto-confirm when preset is loaded
   useEffect(() => {
-    if (activePreset && selectedCategoryIds.length > 0 && !fetchingEpg && results.length === 0) {
+    if (activePreset && selectedCategoryIds.length > 0 && !fetchingEpg && rawResults.length === 0) {
       handleConfirmSelection();
     }
   }, [activePreset, selectedCategoryIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ========== FILTER RESULTS ==========
+  // ========== CASCADING FILTERS (all AND) ==========
   const displayResults = useMemo(() => {
-    let items = results;
+    let items = rawResults;
 
+    // TEXT filter — search in title, channel_name, description
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+      const q = normalize(searchQuery);
       items = items.filter(r =>
-        (r.title || '').toLowerCase().includes(q) ||
-        (r.channel_name || '').toLowerCase().includes(q)
+        r.title_normalized.includes(q) ||
+        (r.channel_name || '').toLowerCase().includes(q) ||
+        r.description_normalized.includes(q)
       );
     }
 
+    // LANG filter
+    if (langFilters.length > 0) {
+      items = items.filter(r => langFilters.includes(r.lang));
+    }
+
+    // LIVE ONLY filter
+    if (isLiveOnly) {
+      items = items.filter(r => r.is_live === 1);
+    }
+
+    // IS NOT LIVE filter (show upcoming only)
+    if (isNotLive) {
+      items = items.filter(r => r.is_live === 0);
+    }
+
+    // TIME SLOT filter
     if (startTimeFilter !== null) {
-      items = items.filter(p => {
-        const startStr = p.epg_start;
+      items = items.filter(r => {
+        const startStr = r.epg_start;
         if (!startStr) return false;
         const hour = parseInt(startStr.split(':')[0], 10);
-        return hour >= startTimeFilter && hour < startTimeFilter + 2;
+        return !isNaN(hour) && hour >= startTimeFilter && hour < startTimeFilter + 2;
       });
     }
 
-    return items;
-  }, [results, searchQuery, startTimeFilter]);
+    // Sort: live first, then by start time
+    items.sort((a, b) => {
+      if (a.is_live !== b.is_live) return b.is_live - a.is_live;
+      return (a.start_timestamp || 0) - (b.start_timestamp || 0);
+    });
 
+    return items;
+  }, [rawResults, searchQuery, langFilters, isLiveOnly, isNotLive, startTimeFilter]);
+
+  // ========== AVAILABLE LANGUAGES (from fetched data) ==========
+  const availableLangs = useMemo(() => {
+    const counts = {};
+    rawResults.forEach(r => {
+      counts[r.lang] = (counts[r.lang] || 0) + 1;
+    });
+    // Sort by count desc, keep only langs that exist
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([lang, count]) => ({ lang, count }));
+  }, [rawResults]);
+
+  // ========== ACTIVE FILTERS COUNT ==========
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (searchQuery.trim()) count++;
+    if (langFilters.length > 0) count++;
+    if (isLiveOnly) count++;
+    if (isNotLive) count++;
+    if (startTimeFilter !== null) count++;
+    return count;
+  }, [searchQuery, langFilters, isLiveOnly, isNotLive, startTimeFilter]);
+
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setSearchQuery('');
+    setLangFilters([]);
+    setIsLiveOnly(false);
+    setIsNotLive(false);
+    setStartTimeFilter(null);
+  }, []);
+
+  // ========== RESULT ROW ==========
   const ProgramRow = ({ index, style }) => {
     const prog = displayResults[index];
     if (!prog) return null;
@@ -203,36 +319,48 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
           transition: 'background 0.2s',
         }}
         onClick={() => {
-          const ch = {
-            stream_id: prog.stream_id,
-            id: prog.stream_id,
-            name: prog.channel_name,
-            logo: prog.channel_logo,
-          };
+          const ch = { stream_id: prog.stream_id, id: prog.stream_id, name: prog.channel_name, logo: prog.channel_logo };
           (onChannelSelect || onSelectChannel)?.(ch);
           navigator.vibrate?.(30);
         }}
         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
       >
+        {/* Logo */}
         <div style={{ width: '45px', height: '30px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
           {prog.channel_logo && (
             <img src={prog.channel_logo} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
           )}
         </div>
+        {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {prog.title}
           </div>
-          <div style={{ fontSize: '10px', color: '#6225ff', fontWeight: 600 }}>
-            {prog.epg_start || '--:--'} • {prog.channel_name}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '1px' }}>
+            <span style={{ fontSize: '10px', color: '#6225ff', fontWeight: 600 }}>
+              {prog.epg_start || '--:--'}
+            </span>
+            <span style={{ fontSize: '9px', color: '#888' }}>•</span>
+            <span style={{ fontSize: '10px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {prog.channel_name}
+            </span>
+            <span style={{ fontSize: '8px', color: '#555' }}>
+              {prog.category_name}
+            </span>
           </div>
         </div>
+        {/* Lang badge */}
+        <span style={{ fontSize: '7px', fontWeight: 800, color: 'rgba(255,255,255,0.25)', flexShrink: 0 }}>
+          {prog.lang}
+        </span>
+        {/* Progress bar */}
         {prog.progress > 0 && (
           <div style={{ width: '40px', height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.1)', flexShrink: 0 }}>
             <div style={{ height: '100%', borderRadius: '2px', background: '#6225ff', width: `${Math.min(100, prog.progress)}%` }} />
           </div>
         )}
+        {/* Live dot */}
         {prog.is_live === 1 && (
           <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ff4b4b', boxShadow: '0 0 8px #ff4b4b', flexShrink: 0 }} />
         )}
@@ -246,9 +374,10 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* ========== HEADER ========== */}
       <div style={{ padding: '25px 20px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        {/* Search input */}
         <input
           type="text"
-          placeholder="Search program..."
+          placeholder="Search title, channel, description..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
@@ -264,34 +393,43 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
           }}
         />
 
-        {/* Controls Row */}
+        {/* Controls Row 1: Filters */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* IS NOT LIVE toggle */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={isNotLive}
-                onChange={(e) => setIsNotLive(e.target.checked)}
-                style={{ accentColor: '#6225ff' }}
-              />
-              <span style={{ fontSize: '9px', color: isNotLive ? '#fff' : '#aaa', fontWeight: 800 }}>IS NOT LIVE</span>
-            </label>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* LIVE ONLY toggle */}
+            <button
+              onClick={() => { setIsLiveOnly(!isLiveOnly); if (!isLiveOnly) setIsNotLive(false); }}
+              style={{
+                background: isLiveOnly ? 'rgba(255,75,75,0.3)' : 'rgba(255,255,255,0.06)',
+                border: isLiveOnly ? '1px solid #ff4b4b' : '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '4px', color: isLiveOnly ? '#ff4b4b' : '#888', fontSize: '9px', fontWeight: 800, padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              🔴 LIVE
+            </button>
 
-            {/* EPG Limit dropdown */}
+            {/* NOT LIVE toggle */}
+            <button
+              onClick={() => { setIsNotLive(!isNotLive); if (!isNotLive) setIsLiveOnly(false); }}
+              style={{
+                background: isNotLive ? 'rgba(98,37,255,0.3)' : 'rgba(255,255,255,0.06)',
+                border: isNotLive ? '1px solid #6225ff' : '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '4px', color: isNotLive ? '#fff' : '#888', fontSize: '9px', fontWeight: 800, padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              UPCOMING
+            </button>
+
+            {/* EPG Limit */}
             <select
               value={epgLimit}
               onChange={(e) => setEpgLimit(Number(e.target.value))}
               style={{
-                background: 'rgba(98,37,255,0.2)',
-                border: '1px solid #6225ff',
-                borderRadius: '4px',
-                color: '#fff',
-                fontSize: '9px',
-                fontWeight: 800,
-                padding: '4px 6px',
-                cursor: 'pointer',
-                outline: 'none',
+                background: 'rgba(98,37,255,0.2)', border: '1px solid #6225ff',
+                borderRadius: '4px', color: '#fff', fontSize: '9px', fontWeight: 800, padding: '4px 6px',
+                cursor: 'pointer', outline: 'none',
               }}
             >
               <option value={1}>1 PROG</option>
@@ -308,23 +446,47 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
                 else setStartTimeFilter(startTimeFilter + 2);
               }}
               style={{
-                background: startTimeFilter !== null ? 'rgba(98, 37, 255, 0.4)' : 'rgba(98, 37, 255, 0.2)',
-                border: '1px solid #6225ff', borderRadius: '4px', color: '#fff', fontSize: '9px', fontWeight: 800, padding: '4px 12px',
+                background: startTimeFilter !== null ? 'rgba(98, 37, 255, 0.4)' : 'rgba(255,255,255,0.06)',
+                border: startTimeFilter !== null ? '1px solid #6225ff' : '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '4px', color: startTimeFilter !== null ? '#fff' : '#888', fontSize: '9px', fontWeight: 800, padding: '4px 12px',
                 cursor: 'pointer',
               }}
             >
-              {startTimeFilter !== null ? `${startTimeFilter}h-${startTimeFilter + 2}h` : 'TIME'}
+              {startTimeFilter !== null ? `${startTimeFilter}h-${startTimeFilter + 2}h` : '⏰ TIME'}
             </button>
+
+            {/* LANG toggle */}
+            <button
+              onClick={() => setShowLangBar(!showLangBar)}
+              style={{
+                background: langFilters.length > 0 ? 'rgba(98, 37, 255, 0.4)' : 'rgba(255,255,255,0.06)',
+                border: langFilters.length > 0 ? '1px solid #6225ff' : '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '4px', color: langFilters.length > 0 ? '#fff' : '#888', fontSize: '9px', fontWeight: 800, padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              🌐 LANG {langFilters.length > 0 ? `(${langFilters.length})` : ''}
+            </button>
+
+            {/* Clear filters */}
+            {activeFilterCount > 0 && (
+              <button
+                onClick={clearFilters}
+                style={{
+                  background: 'rgba(255,75,75,0.15)', border: '1px solid rgba(255,75,75,0.3)',
+                  borderRadius: '4px', color: '#ff4b4b', fontSize: '8px', fontWeight: 800, padding: '4px 8px',
+                  cursor: 'pointer',
+                }}
+              >
+                ✕ CLEAR ({activeFilterCount})
+              </button>
+            )}
           </div>
 
+          {/* Right side: PRESETS + SELECT */}
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {/* PRESETS */}
             <button
-              onClick={() => {
-                setShowPresetList(!showPresetList);
-                setShowCategorySelect(false);
-                setShowSavePreset(false);
-              }}
+              onClick={() => { setShowPresetList(!showPresetList); setShowCategorySelect(false); setShowSavePreset(false); }}
               style={{
                 background: showPresetList ? 'rgba(98, 37, 255, 0.4)' : 'rgba(98, 37, 255, 0.2)',
                 border: '1px solid #6225ff', borderRadius: '4px', color: '#fff', fontSize: '9px', fontWeight: 800, padding: '4px 12px',
@@ -333,15 +495,8 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
             >
               PRESETS ({presets.length})
             </button>
-
-            {/* SELECT CATEGORIES */}
             <button
-              onClick={() => {
-                setShowCategorySelect(!showCategorySelect);
-                setShowPresetList(false);
-                setShowSavePreset(false);
-                if (!showCategorySelect) loadCategories();
-              }}
+              onClick={() => { setShowCategorySelect(!showCategorySelect); setShowPresetList(false); setShowSavePreset(false); if (!showCategorySelect) loadCategories(); }}
               style={{
                 background: showCategorySelect ? 'rgba(98, 37, 255, 0.4)' : 'rgba(98, 37, 255, 0.2)',
                 border: '1px solid #6225ff', borderRadius: '4px', color: '#fff', fontSize: '9px', fontWeight: 800, padding: '4px 12px',
@@ -353,13 +508,40 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
           </div>
         </div>
 
+        {/* LANG BAR — shown when toggled */}
+        {showLangBar && (
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
+            {/* Known languages first, then others from data */}
+            {[...LANG_OPTIONS, ...availableLangs.filter(l => !LANG_OPTIONS.includes(l.lang)).map(l => l.lang)].map(lang => {
+              const active = langFilters.includes(lang);
+              const data = availableLangs.find(l => l.lang === lang);
+              const count = data?.count || 0;
+              if (count === 0 && !active) return null; // Hide langs not in data
+              return (
+                <button
+                  key={lang}
+                  onClick={() => toggleLangFilter(lang)}
+                  style={{
+                    background: active ? 'rgba(98,37,255,0.4)' : 'rgba(255,255,255,0.05)',
+                    border: active ? '1px solid #6225ff' : '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '3px', padding: '3px 8px', fontSize: '8px', fontWeight: 700,
+                    color: active ? '#fff' : '#666', cursor: 'pointer',
+                  }}
+                >
+                  {lang} {count > 0 ? `(${count})` : ''}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Status */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
           <div style={{ fontSize: '9px', color: fetchingEpg ? '#6225ff' : '#555', fontWeight: 700 }}>
             {fetchingEpg ? fetchProgress : activePreset ? `Preset: ${activePreset}` : ''}
           </div>
           <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>
-            {displayResults.length} RESULTS
+            {displayResults.length}{rawResults.length !== displayResults.length ? ` / ${rawResults.length}` : ''} RESULTS
           </div>
         </div>
       </div>
@@ -369,24 +551,22 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
         <div style={{ maxHeight: '150px', overflow: 'auto', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '8px 20px' }}>
           {presets.length === 0 ? (
             <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', padding: '10px' }}>No presets saved</div>
-          ) : (
-            presets.map((preset, idx) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <button
-                  onClick={() => handleLoadPreset(preset)}
-                  style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: '4px 0' }}
-                >
-                  {preset.name} <span style={{ color: '#6225ff', fontSize: '9px' }}>({preset.categoryIds?.length || 0} folders)</span>
-                </button>
-                <button
-                  onClick={() => handleDeletePreset(idx)}
-                  style={{ background: 'none', border: 'none', color: '#ff4b4b', fontSize: '10px', cursor: 'pointer', padding: '4px 8px' }}
-                >
-                  ✕
-                </button>
-              </div>
-            ))
-          )}
+          ) : presets.map((preset, idx) => (
+            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <button
+                onClick={() => handleLoadPreset(preset)}
+                style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: '4px 0' }}
+              >
+                {preset.name} <span style={{ color: '#6225ff', fontSize: '9px' }}>({preset.categoryIds?.length || 0} folders)</span>
+              </button>
+              <button
+                onClick={() => handleDeletePreset(idx)}
+                style={{ background: 'none', border: 'none', color: '#ff4b4b', fontSize: '10px', cursor: 'pointer', padding: '4px 8px' }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -447,7 +627,6 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
               SAVE AS PRESET
             </button>
           </div>
-          {/* Save preset name input */}
           {showSavePreset && (
             <div style={{ display: 'flex', gap: '8px', padding: '0 20px 8px' }}>
               <input
@@ -497,10 +676,16 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
             ) : (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', color: '#555', fontWeight: 600 }}>
-                  {selectedCategoryIds.length > 0 ? 'Press CONFIRM to fetch EPG' : 'Select categories to start'}
+                  {rawResults.length > 0 && displayResults.length === 0
+                    ? 'No results match current filters'
+                    : selectedCategoryIds.length > 0
+                      ? 'Press CONFIRM to fetch EPG'
+                      : 'Select categories to start'}
                 </div>
                 <div style={{ fontSize: '9px', color: '#444', marginTop: '4px' }}>
-                  Use SELECT to pick folders, or load a PRESET
+                  {rawResults.length > 0 && displayResults.length === 0
+                    ? 'Try adjusting your filters or press CLEAR'
+                    : 'Use SELECT to pick folders, or load a PRESET'}
                 </div>
               </div>
             )}
@@ -508,9 +693,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
         )}
       </div>
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };

@@ -1,26 +1,94 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 
 // ============================================================================
-// MEDIA GALLERY - Thumbnails grid for Movies/Series (right panel)
+// MEDIA GALLERY - Thumbnails grid + Detail views for Movies/Series/Live
 // 
 // - Windowed grid (react-window FixedSizeGrid)
-// - Thumbnail click → probe 3s → extract audio/subtitle tracks
-// - Detail view with poster, description, tracks
+// - Movies: poster grid → detail with TMDB info, trailer, audio/subtitles
+// - Series: poster grid → detail with seasons tabs, episodes list
+// - Live: channel info with EPG data
 // ============================================================================
 
-const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, onItemSelect }) => {
+// Language code mapping (ISO 639-2/3 → display name)
+const LANG_MAP = {
+  fre: 'FRENCH', fra: 'FRENCH', fr: 'FRENCH',
+  eng: 'ENGLISH', en: 'ENGLISH',
+  ara: 'ARABIC', ar: 'ARABIC',
+  spa: 'SPANISH', es: 'SPANISH',
+  ger: 'GERMAN', deu: 'GERMAN', de: 'GERMAN',
+  ita: 'ITALIAN', it: 'ITALIAN',
+  por: 'PORTUGUESE', pt: 'PORTUGUESE',
+  rus: 'RUSSIAN', ru: 'RUSSIAN',
+  tur: 'TURKISH', tr: 'TURKISH',
+  pol: 'POLISH', pl: 'POLISH',
+  dut: 'DUTCH', nld: 'DUTCH', nl: 'DUTCH',
+  jpn: 'JAPANESE', ja: 'JAPANESE',
+  kor: 'KOREAN', ko: 'KOREAN',
+  chi: 'CHINESE', zho: 'CHINESE', zh: 'CHINESE',
+  hin: 'HINDI', hi: 'HINDI',
+  und: 'UNDEFINED',
+};
+
+const getLangName = (code) => LANG_MAP[(code || '').toLowerCase()] || (code || 'UNKNOWN').toUpperCase();
+
+// Format duration seconds → "1h35"
+const formatDuration = (secs) => {
+  if (!secs || !isFinite(secs)) return '';
+  const s = Number(secs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
+  return `${m}min`;
+};
+
+// Format "Updated X days ago"
+const formatTimeAgo = (timestamp) => {
+  if (!timestamp) return '';
+  const now = Date.now() / 1000;
+  const ts = Number(timestamp);
+  if (!ts || !isFinite(ts)) return '';
+  const diffDays = Math.floor((now - ts) / 86400);
+  if (diffDays < 1) return 'Updated today';
+  if (diffDays === 1) return 'Updated yesterday';
+  if (diffDays < 30) return `Updated ${diffDays} days ago`;
+  if (diffDays < 365) return `Updated ${Math.floor(diffDays / 30)} months ago`;
+  return `Updated ${Math.floor(diffDays / 365)} years ago`;
+};
+
+// Tag pill component
+const TagPill = ({ children, color = 'purple' }) => {
+  const colors = {
+    purple: { bg: 'rgba(98,37,255,0.2)', border: 'rgba(98,37,255,0.4)', text: '#fff' },
+    gray: { bg: 'rgba(255,255,255,0.08)', border: 'rgba(255,255,255,0.15)', text: '#ccc' },
+  };
+  const c = colors[color] || colors.purple;
+  return (
+    <span style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: '3px', padding: '2px 6px', fontSize: '8px', color: c.text, fontWeight: 600 }}>
+      {children}
+    </span>
+  );
+};
+
+const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, onItemSelect, epgData = {} }) => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [probeData, setProbeData] = useState(null);
   const [probing, setProbing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [posterOverlay, setPosterOverlay] = useState(false);
+  const [selectedSeason, setSelectedSeason] = useState(1);
   const gridRef = useRef(null);
 
-  // Grid layout
-  const COLUMN_COUNT = 6;
+  // Grid layout — responsive columns
+  const COLUMN_COUNT = useMemo(() => {
+    const w = window.innerWidth - 280;
+    if (w < 500) return 3;
+    if (w < 800) return 4;
+    return 6;
+  }, []);
   const ITEM_WIDTH = Math.floor((window.innerWidth - 280) / COLUMN_COUNT);
-  const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.5); // Poster ratio
+  const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.5);
   const ROW_COUNT = Math.ceil(items.length / COLUMN_COUNT);
 
   // Reset on items change
@@ -28,15 +96,17 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
     setSelectedItem(null);
     setDetailData(null);
     setProbeData(null);
+    setSelectedSeason(1);
   }, [items]);
 
-  // Fetch TMDB info + probe stream
+  // Fetch detail info + probe stream
   const handleThumbnailClick = useCallback(async (item) => {
     setSelectedItem(item);
     setDetailData(null);
     setProbeData(null);
+    setSelectedSeason(1);
+    setPosterOverlay(false);
 
-    // 1. Fetch detail info (TMDB)
     setLoading(true);
     try {
       if (type === 'movies' && xtreamService) {
@@ -52,7 +122,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
       setLoading(false);
     }
 
-    // 2. Probe stream for audio/subtitle tracks (fire & forget, non-blocking)
+    // Probe stream (fire & forget)
     if (item.streamUrl && videoRef?.current?.probeStream) {
       setProbing(true);
       try {
@@ -66,73 +136,162 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
     }
   }, [type, xtreamService, videoRef]);
 
-  // Back to grid
   const handleBack = useCallback(() => {
     setSelectedItem(null);
     setDetailData(null);
     setProbeData(null);
+    setPosterOverlay(false);
   }, []);
 
-  // Play button
   const handlePlay = useCallback(() => {
-    if (selectedItem) {
-      onItemSelect?.(selectedItem);
-    }
+    if (selectedItem) onItemSelect?.(selectedItem);
   }, [selectedItem, onItemSelect]);
 
-  const [posterOverlay, setPosterOverlay] = useState(false);
+  // Play a specific episode
+  const handlePlayEpisode = useCallback((episode) => {
+    if (!episode || !xtreamService) return;
+    const ext = episode.container_extension || 'mp4';
+    const epItem = {
+      ...episode,
+      name: episode.title || `Episode ${episode.episode_num}`,
+      streamUrl: `${xtreamService.server}/series/${xtreamService.username}/${xtreamService.password}/${episode.id}.${ext}`,
+      type: 'series',
+    };
+    onItemSelect?.(epItem);
+  }, [xtreamService, onItemSelect]);
 
-  // ========== DETAIL VIEW ==========
-  if (selectedItem) {
+  // Extract audio tracks: JSON info > probe fallback
+  const getAudioTracks = useCallback((info) => {
+    if (probeData?.audioTracks?.length > 0) return probeData.audioTracks.map(t => getLangName(t.language || t.name));
+    if (info?.audio) return [`${getLangName(info.audio.codec_name || '')} (${info.audio.channels || '?'}ch)`];
+    return [];
+  }, [probeData]);
+
+  // Extract subtitle tracks: JSON info > probe fallback
+  const getSubtitleTracks = useCallback((info) => {
+    if (info?.subtitles?.length > 0) return info.subtitles.map(s => getLangName(s.language));
+    if (probeData?.subtitleTracks?.length > 0) return probeData.subtitleTracks.map(t => getLangName(t.language || t.name));
+    return [];
+  }, [probeData]);
+
+  // ========== LIVE DETAIL VIEW ==========
+  if (selectedItem && type === 'live') {
+    const channelId = selectedItem.stream_id || selectedItem.id;
+    const epg = epgData[channelId] || epgData[String(channelId)];
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'rgba(0,0,0,0.75)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff' }}>{selectedItem.name}</div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+              <span style={{ fontSize: '9px', color: '#888', fontFamily: 'monospace' }}>#{selectedItem.num || '—'}</span>
+              <span style={{ fontSize: '9px', color: '#6225ff', fontWeight: 700 }}>ID: {channelId}</span>
+              {selectedItem.epgChannelId && <span style={{ fontSize: '9px', color: '#888' }}>EPG: {selectedItem.epgChannelId}</span>}
+            </div>
+          </div>
+          <button onClick={handlePlay} style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <span style={{ color: '#fff', fontSize: '14px', marginLeft: '2px' }}>▶</span>
+          </button>
+          <button onClick={handleBack} style={{ background: 'none', border: 'none', color: '#6225ff', fontSize: '18px', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+        </div>
+
+        <div style={{ padding: '0 20px 15px', display: 'flex', gap: '16px' }}>
+          {selectedItem.logo && (
+            <img src={selectedItem.logo} alt="" style={{ width: '120px', height: '60px', objectFit: 'contain', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+          )}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {epg?.epg_now && (
+              <div>
+                <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>NOW</span>
+                <div style={{ fontSize: '11px', color: '#fff', marginTop: '2px' }}>{epg.epg_now}</div>
+                {epg.progress > 0 && (
+                  <div style={{ height: '2px', borderRadius: '1px', background: 'rgba(255,255,255,0.1)', marginTop: '4px', width: '100%' }}>
+                    <div style={{ height: '100%', borderRadius: '1px', background: '#6225ff', width: `${Math.min(100, epg.progress)}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
+            {selectedItem.category && <div style={{ fontSize: '9px', color: '#666' }}>📁 {selectedItem.category}</div>}
+            {selectedItem.tvArchive && <div style={{ fontSize: '9px', color: '#888' }}>📼 Catch-up: {selectedItem.tvArchiveDuration || '?'} days</div>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ========== MOVIES / SERIES DETAIL VIEW ==========
+  if (selectedItem && (type === 'movies' || type === 'series')) {
     const info = detailData?.info || detailData?.movie_data || {};
     const poster = info.cover || info.movie_image || selectedItem.logo || selectedItem.cover;
+    const posterBig = info.cover_big || poster;
     const title = info.name || selectedItem.name || 'Untitled';
     const plot = info.plot || info.description || selectedItem.plot || '';
     const cast = info.cast || selectedItem.cast || '';
     const director = info.director || selectedItem.director || '';
     const genre = info.genre || selectedItem.genre || '';
     const rating = info.rating || selectedItem.rating || '';
-    const year = info.releasedate || info.release_date || selectedItem.year || '';
+    const year = info.releasedate || info.release_date || selectedItem.releaseDate || selectedItem.year || '';
     const duration = info.duration || selectedItem.duration || '';
+    const country = info.country || '';
+    const trailer = info.youtube_trailer || '';
+    const video = info.video || selectedItem.video || null;
+    const lastModified = info.last_modified || selectedItem.lastModified || null;
+    const episodeRunTime = info.episode_run_time || selectedItem.episodeRunTime || null;
+
+    const audioTracks = getAudioTracks(info);
+    const subtitleTracks = getSubtitleTracks(info);
+
+    // Series-specific
+    const seasons = detailData?.seasons || [];
+    const episodes = detailData?.episodes || {};
+    const currentSeasonEpisodes = episodes[String(selectedSeason)] || [];
+    const currentSeasonInfo = seasons.find(s => s.season_number === selectedSeason);
+    // Season cover: use season-specific cover if available
+    const seasonCover = currentSeasonInfo?.cover || currentSeasonInfo?.cover_big || poster;
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'rgba(0,0,0,0.75)' }}>
 
-        {/* Title row — title left, play + fav + back right */}
+        {/* Title row */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-              {year && <span style={{ fontSize: '10px', color: '#888' }}>{year}</span>}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
+              {year && <span style={{ fontSize: '10px', color: '#888' }}>{String(year).substring(0, 4)}</span>}
               {genre && <span style={{ fontSize: '9px', color: '#6225ff', fontWeight: 700 }}>{genre}</span>}
               {rating && <span style={{ fontSize: '9px', color: '#ffd700' }}>⭐ {rating}</span>}
               {duration && <span style={{ fontSize: '9px', color: '#666' }}>{duration}</span>}
+              {country && <span style={{ fontSize: '9px', color: '#555' }}>🌍 {country}</span>}
+              {video && <span style={{ fontSize: '9px', color: '#555' }}>{video.width}×{video.height}</span>}
+              {type === 'series' && episodeRunTime && <span style={{ fontSize: '9px', color: '#555' }}>~{episodeRunTime} min/ep</span>}
+              {type === 'series' && lastModified && <span style={{ fontSize: '9px', color: '#444' }}>{formatTimeAgo(lastModified)}</span>}
             </div>
           </div>
-          {/* Play button */}
           <button onClick={handlePlay} style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ color: '#fff', fontSize: '14px', marginLeft: '2px' }}>▶</span>
           </button>
-          {/* Favorite button */}
+          {trailer && (
+            <button onClick={() => window.open(trailer, '_blank')} style={{ background: 'rgba(255,0,0,0.2)', border: '1px solid rgba(255,0,0,0.4)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+              <span style={{ color: '#ff4444', fontSize: '10px', fontWeight: 800 }}>YT</span>
+            </button>
+          )}
           <button onClick={() => {/* TODO: toggle favorite */}} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ fontSize: '16px' }}>☆</span>
           </button>
-          {/* Back arrow */}
           <button onClick={handleBack} style={{ background: 'none', border: 'none', color: '#6225ff', fontSize: '18px', fontWeight: 700, cursor: 'pointer', padding: '0 0 0 8px', flexShrink: 0 }}>✕</button>
         </div>
 
-        {/* Poster + Description horizontal */}
+        {/* Poster + Description */}
         <div style={{ display: 'flex', gap: '16px', padding: '0 20px 15px', flexShrink: 0 }}>
-          {/* Poster — clickable for overlay */}
-          {poster && (
+          {(type === 'series' ? seasonCover : poster) && (
             <img
-              src={poster}
+              src={type === 'series' ? seasonCover : poster}
               alt=""
               onClick={() => setPosterOverlay(true)}
               style={{ width: '140px', height: '210px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, cursor: 'pointer' }}
             />
           )}
-          {/* Right side — plot, cast, director, tracks */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {director && <div style={{ fontSize: '10px', color: '#888' }}>🎬 {director}</div>}
             {plot && (
@@ -142,46 +301,117 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
             )}
             {cast && <div style={{ fontSize: '10px', color: '#666' }}>🎭 {cast.substring(0, 150)}</div>}
 
-            {/* Audio Tracks */}
+            {/* Language (audio) */}
             <div>
               <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>
-                🔊 AUDIO {probing ? '...' : probeData ? `(${probeData.audioTracks.length})` : ''}
+                🔊 LANGUAGE {probing ? '...' : audioTracks.length > 0 ? `(${audioTracks.length})` : ''}
               </span>
-              {probeData?.audioTracks?.length > 0 && (
+              {audioTracks.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                  {probeData.audioTracks.map((t, i) => (
-                    <span key={i} style={{ background: 'rgba(98,37,255,0.2)', border: '1px solid rgba(98,37,255,0.4)', borderRadius: '3px', padding: '2px 6px', fontSize: '8px', color: '#fff', fontWeight: 600 }}>
-                      {t.name || `Track ${t.id}`}
-                    </span>
-                  ))}
+                  {audioTracks.map((name, i) => <TagPill key={i} color="purple">{name}</TagPill>)}
                 </div>
               )}
             </div>
 
-            {/* Subtitle Tracks */}
+            {/* Subtitles */}
             <div>
               <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>
-                💬 SUBTITLES {probing ? '...' : probeData ? `(${probeData.subtitleTracks.length})` : ''}
+                💬 SUBTITLES {probing ? '...' : subtitleTracks.length > 0 ? `(${subtitleTracks.length})` : ''}
               </span>
-              {probeData?.subtitleTracks?.length > 0 && (
+              {subtitleTracks.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                  {probeData.subtitleTracks.map((t, i) => (
-                    <span key={i} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '3px', padding: '2px 6px', fontSize: '8px', color: '#ccc', fontWeight: 600 }}>
-                      {t.name || `Sub ${t.id}`}
-                    </span>
-                  ))}
+                  {subtitleTracks.map((name, i) => <TagPill key={i} color="gray">{name}</TagPill>)}
                 </div>
               )}
             </div>
           </div>
         </div>
 
+        {/* ========== SERIES: SEASON TABS + EPISODES ========== */}
+        {type === 'series' && seasons.length > 0 && (
+          <div style={{ padding: '0 20px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {/* Season tabs */}
+            <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '8px', flexShrink: 0 }}>
+              {seasons.map((s) => {
+                const isActive = s.season_number === selectedSeason;
+                const epCount = (episodes[String(s.season_number)] || []).length;
+                return (
+                  <button
+                    key={s.season_number}
+                    onClick={() => setSelectedSeason(s.season_number)}
+                    style={{
+                      background: isActive ? 'rgba(98,37,255,0.3)' : 'rgba(255,255,255,0.05)',
+                      border: isActive ? '1px solid #6225ff' : '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      padding: '6px 12px',
+                      color: isActive ? '#fff' : '#888',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    Season {s.season_number} ({epCount})
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Season info */}
+            {currentSeasonInfo && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexShrink: 0 }}>
+                {currentSeasonInfo.air_date && <span style={{ fontSize: '8px', color: '#666' }}>📅 {currentSeasonInfo.air_date}</span>}
+                {currentSeasonInfo.episode_count && <span style={{ fontSize: '8px', color: '#555' }}>{currentSeasonInfo.episode_count} episodes</span>}
+              </div>
+            )}
+
+            {/* Episodes list */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {currentSeasonEpisodes.map((ep) => {
+                const epInfo = ep.info || {};
+                const epDuration = epInfo.duration_secs ? formatDuration(epInfo.duration_secs) : (epInfo.duration || '');
+                const epVideo = epInfo.video || null;
+                const epSubs = epInfo.subtitles || [];
+
+                return (
+                  <div
+                    key={ep.id || ep.episode_num}
+                    onClick={() => handlePlayEpisode(ep)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      padding: '8px 0',
+                      borderBottom: '1px solid rgba(255,255,255,0.05)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#6225ff', minWidth: '24px', textAlign: 'center' }}>
+                      {ep.episode_num}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '10px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {ep.title || `Episode ${ep.episode_num}`}
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                        {epDuration && <span style={{ fontSize: '8px', color: '#666' }}>{epDuration}</span>}
+                        {epVideo && <span style={{ fontSize: '8px', color: '#555' }}>{epVideo.width}×{epVideo.height}</span>}
+                        {epSubs.length > 0 && <span style={{ fontSize: '8px', color: '#555' }}>💬 {epSubs.length}</span>}
+                      </div>
+                    </div>
+                    <span style={{ color: '#6225ff', fontSize: '12px', flexShrink: 0 }}>▶</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {loading && (
           <div style={{ padding: '10px', textAlign: 'center', color: '#6225ff', fontSize: '11px', fontWeight: 700 }}>LOADING...</div>
         )}
 
-        {/* Poster Overlay — fullscreen image */}
-        {posterOverlay && poster && (
+        {/* Poster Overlay — uses cover_big for max quality */}
+        {posterOverlay && (posterBig || poster) && (
           <div
             onClick={() => setPosterOverlay(false)}
             style={{
@@ -191,7 +421,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
               cursor: 'pointer',
             }}
           >
-            <img src={poster} alt="" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }} />
+            <img src={posterBig || poster} alt="" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }} />
           </div>
         )}
       </div>
@@ -207,11 +437,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
 
     return (
       <div
-        style={{
-          ...style,
-          padding: '4px',
-          cursor: 'pointer',
-        }}
+        style={{ ...style, padding: '4px', cursor: 'pointer' }}
         onClick={() => handleThumbnailClick(item)}
       >
         <div style={{
@@ -221,6 +447,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
           border: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', flexDirection: 'column',
           transition: 'border-color 0.2s',
+          position: 'relative',
         }}
         onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(98,37,255,0.5)'}
         onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'}
@@ -232,6 +459,16 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
               🎬
             </div>
           )}
+          {/* Rating badge — top left (series only) */}
+          {type === 'series' && item.rating && (
+            <div style={{
+              position: 'absolute', top: '6px', left: '6px',
+              background: 'rgba(0,0,0,0.7)', borderRadius: '3px',
+              padding: '1px 4px', fontSize: '8px', color: '#ffd700', fontWeight: 700,
+            }}>
+              ⭐ {item.rating}
+            </div>
+          )}
           <div style={{ padding: '6px 8px', flexShrink: 0 }}>
             <div style={{
               fontSize: '10px', fontWeight: 700, color: '#fff',
@@ -240,7 +477,7 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
               {item.name || 'Untitled'}
             </div>
             {item.year && <div style={{ fontSize: '8px', color: '#555' }}>{item.year}</div>}
-            {item.rating && <div style={{ fontSize: '8px', color: '#ffd700' }}>⭐ {item.rating}</div>}
+            {type === 'movies' && item.rating && <div style={{ fontSize: '8px', color: '#ffd700' }}>⭐ {item.rating}</div>}
           </div>
         </div>
       </div>
@@ -249,7 +486,6 @@ const MediaGallery = ({ items = [], type = 'movies', xtreamService, videoRef, on
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Grid — no header, full space */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {items.length > 0 ? (
           <Grid
