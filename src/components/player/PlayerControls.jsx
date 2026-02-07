@@ -167,6 +167,8 @@ export const PlayerControls = ({
   onJumpToLive,
   // Stream info
   streamInfo = null, // { category: 'FR| SPORT', resolution: '1080p', codec: 'HEVC', fps: '50fps', bitrate: '8.5 Mbps' }
+  // Media info (movie/series detail from parent)
+  currentMedia = null, // { title, season, episode, duration, resolution, audioTracks, subtitleTracks, type }
   // Settings overlay
   xtreamService,
   onServers,
@@ -464,13 +466,38 @@ export const PlayerControls = ({
               </button>
             </div>
             {currentChannel && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', minWidth: 0 }}>
-                {currentChannel.logo && (
-                  <img src={currentChannel.logo} alt="" style={styles.channelLogo} onError={(e) => { e.target.style.display = 'none'; }} />
-                )}
-                <span style={{ ...styles.channelName, ...styles.channelNameCurrent, display: 'block', maxWidth: '50vw' }}>
-                  {currentChannel.name}
-                </span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', padding: '4px 8px', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {currentChannel.logo && (
+                    <img src={currentChannel.logo} alt="" style={styles.channelLogo} onError={(e) => { e.target.style.display = 'none'; }} />
+                  )}
+                  <span style={{ ...styles.channelName, ...styles.channelNameCurrent, display: 'block', maxWidth: '50vw' }}>
+                    {currentChannel.name}
+                  </span>
+                </div>
+                {/* EPG now + metadata */}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {currentChannel.epg_now && (
+                    <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', maxWidth: '40vw', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {currentChannel.epg_now}
+                    </span>
+                  )}
+                  {currentChannel.stream_id && (
+                    <span style={{ fontSize: '7px', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
+                      ID:{currentChannel.stream_id}
+                    </span>
+                  )}
+                  {currentChannel.epgChannelId && (
+                    <span style={{ fontSize: '7px', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
+                      {currentChannel.epgChannelId}
+                    </span>
+                  )}
+                  {streamInfo?.resolution && (
+                    <span style={{ fontSize: '7px', color: 'rgba(98,37,255,0.6)', fontWeight: 700 }}>
+                      {streamInfo.resolution}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
             <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
@@ -560,6 +587,44 @@ export const PlayerControls = ({
                 <div className="w-5 h-5"><Icons.Minimize /></div>
               </button>
             )}
+          </div>
+        )}
+
+        {/* VOD/Series Media Info */}
+        {!isLive && currentMedia && (
+          <div style={{ marginBottom: '8px' }}>
+            {/* Title row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {currentMedia.type === 'series' && currentMedia.season && currentMedia.episode
+                  ? `S${currentMedia.season}E${currentMedia.episode} — ${currentMedia.title || ''}`
+                  : (currentMedia.title || '')
+                }
+              </span>
+              {currentMedia.duration && (
+                <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace', flexShrink: 0 }}>
+                  {currentMedia.duration}
+                </span>
+              )}
+            </div>
+            {/* Tech row */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {currentMedia.resolution && (
+                <span style={{ fontSize: '8px', color: 'rgba(98,37,255,0.7)', fontWeight: 700, background: 'rgba(98,37,255,0.15)', padding: '1px 5px', borderRadius: '3px' }}>
+                  {currentMedia.resolution}
+                </span>
+              )}
+              {currentMedia.audioTracks > 0 && (
+                <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.35)' }}>
+                  🔊 {currentMedia.audioTracks} tracks
+                </span>
+              )}
+              {currentMedia.subtitleTracks > 0 && (
+                <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.35)' }}>
+                  💬 {currentMedia.subtitleTracks} subs
+                </span>
+              )}
+            </div>
           </div>
         )}
 
