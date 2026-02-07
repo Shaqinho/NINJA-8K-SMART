@@ -91,13 +91,10 @@ const AppContent = () => {
     const loadFromNinja = async () => {
       try {
         await ninjaCentral.init();
-        const [live, vod, series, lc, vc, sc] = await Promise.all([
+        const [live, vod, series] = await Promise.all([
           ninjaCentral.getAll(STORES.LIVE),
           ninjaCentral.getAll(STORES.VOD),
           ninjaCentral.getAll(STORES.SERIES),
-          ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
-          ninjaCentral.getAll(STORES.VOD_CATEGORIES),
-          ninjaCentral.getAll(STORES.SERIES_CATEGORIES),
         ]);
         if (live.length > 0 || vod.length > 0 || series.length > 0) {
           setLiveData(live);
