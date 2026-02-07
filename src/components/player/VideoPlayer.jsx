@@ -119,6 +119,7 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
         libVLC.stop();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useNative, src]); // updatePos intentionally excluded — called inline, not as trigger
 
   // FULLSCREEN sync with native player - CRITICAL FIX

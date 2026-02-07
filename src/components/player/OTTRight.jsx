@@ -443,7 +443,7 @@ const OTTRight = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, vi
   const [mgSelectedItem, setMgSelectedItem] = useState(null);
   const [mgDetailData, setMgDetailData] = useState(null);
   const [mgProbeData, setMgProbeData] = useState(null);
-  const [mgProbing, setMgProbing] = useState(false);
+  const [, setMgProbing] = useState(false);
   const [mgLoading, setMgLoading] = useState(false);
   const [mgPosterOverlay, setMgPosterOverlay] = useState(false);
   const [mgSelectedSeason, setMgSelectedSeason] = useState(1);
@@ -554,6 +554,7 @@ const OTTRight = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, vi
     // ========== LIVE DETAIL VIEW (from MediaGallery) ==========
     if (mgSelectedItem && mgType === 'live') {
       const channelId = mgSelectedItem.stream_id || mgSelectedItem.id;
+      // eslint-disable-next-line no-unused-vars
       const epg = epgData[channelId] || epgData[String(channelId)];
 
       return (
@@ -577,6 +578,7 @@ const OTTRight = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, vi
       const info = mgDetailData?.info || mgDetailData || {};
       const poster = info.cover || info.movie_image || mgSelectedItem.logo || mgSelectedItem.cover || mgSelectedItem.stream_icon || '';
       const posterBig = info.cover_big || info.movie_image || poster;
+      // eslint-disable-next-line no-unused-vars
       const backdrop = info.backdrop_path?.[0] ? `https://image.tmdb.org/t/p/w780${info.backdrop_path[0]}` : null;
       const title = info.name || info.title || mgSelectedItem.name || '';
       const year = info.releasedate ? info.releasedate.substring(0, 4) : (info.year || mgSelectedItem.year || '');
