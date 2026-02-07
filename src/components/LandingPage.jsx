@@ -9,6 +9,7 @@ import { PlaylistForm } from './PlaylistForm';
 import ParticleThemes from './ParticleThemes';
 import { openDatabase } from '../database/NinjaLocalDB';
 import { insertChannels, insertProgramsBatch, cleanExpiredPrograms } from '../database/ProgramQueries';
+import { getDeviceId } from '../services/NinjaAPI';
 
 // ============================================================================
 // URL NORMALIZER - Auto-add http/https
@@ -80,6 +81,8 @@ const LandingPage = ({ onNavigateToPlayer }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ step: '', percent: 0 });
   const [error, setError] = useState(null);
+  const [token, setToken] = useState('');
+  const [tokenLoading, setTokenLoading] = useState(false);
   
   const containerRef = useRef(null);
   
@@ -87,7 +90,9 @@ const LandingPage = ({ onNavigateToPlayer }) => {
     return localStorage.getItem('ninja_particle_theme') || 'ultimate';
   });
 
-  // Lock landscape
+  const [deviceId, setDeviceId] = useState('loading...');
+
+  // Lock landscape + log Device ID
   useEffect(() => {
     const lockLandscape = async () => {
       try {
@@ -97,6 +102,14 @@ const LandingPage = ({ onNavigateToPlayer }) => {
       }
     };
     lockLandscape();
+
+    // Device ID debug — visible on screen
+    const loadDeviceId = async () => {
+      const id = await getDeviceId();
+      setDeviceId(id);
+      console.log('🔑 [Device ID]', id);
+    };
+    loadDeviceId();
   }, []);
 
   const handleLogoClick = () => {
@@ -109,6 +122,66 @@ const LandingPage = ({ onNavigateToPlayer }) => {
       localStorage.setItem('ninja_particle_theme', next);
       return next;
     });
+  };
+
+  // ============================================================================
+  // TOKEN LOGIN — Authenticate via Ninja CMS
+  // ============================================================================
+  const handleTokenConnect = async () => {
+    if (!token.trim()) {
+      setError('Enter your activation token');
+      return;
+    }
+    setTokenLoading(true);
+    setError(null);
+    try {
+      const { authWithToken } = await import('../services/NinjaAPI');
+      const data = await authWithToken(token.trim());
+      const xtream = data.xtream_info;
+      
+      console.log('✅ [CMS Auth] Success:', xtream.host, xtream.username);
+      console.log('📊 [CMS Auth] Devices:', data.active_devices, '/', data.device_limit);
+
+      // Inject into existing flow — same as Xtream manual connect
+      const server = normalizeServerUrl(xtream.host);
+      setForm(prev => ({
+        ...prev,
+        server: server,
+        username: xtream.username,
+        password: xtream.password,
+        name: xtream.playlist_name || 'NINJA 8K',
+      }));
+
+      // Auto-connect with received credentials
+      const service = new XtreamService(server, xtream.username, xtream.password);
+      const auth = await service.authenticate();
+      if (!auth?.user?.status === 'Active') throw new Error('Account not active');
+
+      // Save token for subscription checks
+      localStorage.setItem('ninja_cms_token', token.trim());
+
+      // Fetch data using existing flow
+      setTokenLoading(false);
+      setLoading(true);
+      const fetchedData = await fetchXtreamData(service, fetchOptions);
+      
+      setTimeout(() => onNavigateToPlayer({
+        name: xtream.playlist_name || 'NINJA 8K',
+        type: 'xtream',
+        server: server,
+        username: xtream.username,
+        password: xtream.password,
+        data: fetchedData,
+        userInfo: auth.user,
+        expirationDate: xtream.exp_date || auth.expirationDate,
+        addedAt: new Date().toISOString(),
+      }), 500);
+
+    } catch (err) {
+      console.error('❌ [CMS Auth] Error:', err);
+      setError(err.message || 'Token authentication failed');
+      setTokenLoading(false);
+    }
   };
 
   const handleNinjaPaste = async () => {
@@ -403,9 +476,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
     <div 
       ref={containerRef}
       className="fixed inset-0 flex overflow-hidden relative" 
-      style={{ 
-        background: THEME.colors.bg,
-      }}
+      style={{ background: THEME.colors.bg }}
     >
       {/* Particles */}
       {particleTheme !== 'off' && (
@@ -414,12 +485,12 @@ const LandingPage = ({ onNavigateToPlayer }) => {
         </div>
       )}
       
-      <div className="relative z-10 flex w-full h-full items-center justify-center gap-10 px-8">
-        {/* Left — Logo + Disclaimer */}
-        <div className="flex flex-col items-center justify-center" style={{ minWidth: '220px' }}>
+      <div className="relative z-10 flex w-full h-full items-center justify-center gap-8 px-8">
+        {/* Left — Logo + Token Login */}
+        <div className="flex flex-col items-center justify-center" style={{ minWidth: '280px', maxWidth: '320px' }}>
           <h1 
             onClick={handleLogoClick}
-            className="text-white text-4xl font-black italic tracking-tighter cursor-pointer select-none active:scale-95 transition-transform mb-4"
+            className="text-white text-4xl font-black italic tracking-tighter cursor-pointer select-none active:scale-95 transition-transform mb-6"
             style={{ 
               textShadow: particleTheme !== 'off' 
                 ? `0 0 15px ${PARTICLE_THEME_COLORS[particleTheme]}50` 
@@ -429,9 +500,9 @@ const LandingPage = ({ onNavigateToPlayer }) => {
             NINJA <span style={{ color: PARTICLE_THEME_COLORS[particleTheme] }}>8K</span>
           </h1>
 
-          {/* Disclaimer */}
+          {/* Token Login Card */}
           <div 
-            className="rounded-xl p-3 flex items-center justify-center gap-2"
+            className="w-full rounded-xl p-4"
             style={{ 
               background: 'rgba(18, 18, 31, 0.45)',
               backdropFilter: 'blur(16px)',
@@ -440,16 +511,60 @@ const LandingPage = ({ onNavigateToPlayer }) => {
               boxShadow: '0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04)',
             }}
           >
-            <div className="w-3.5 h-3.5 text-gray-500"><Icons.Info/></div>
-            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">We do not provide any content.</p>
+            <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: '#6225ff' }}>
+              ACTIVATION TOKEN
+            </p>
+            <input
+              type="text"
+              placeholder="26-02-XXXXXX"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              style={{
+                width: '100%', padding: '12px', background: '#0a0a0f',
+                border: '1px solid rgba(98, 37, 255, 0.3)', borderRadius: '6px',
+                color: '#fff', fontSize: '14px', fontFamily: 'monospace',
+                fontWeight: 800, letterSpacing: '2px', textAlign: 'center',
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={handleTokenConnect}
+              disabled={tokenLoading || !token.trim()}
+              style={{
+                width: '100%', marginTop: '10px', padding: '12px',
+                background: token.trim() ? 'linear-gradient(135deg, #6225ff 0%, #a020f0 100%)' : 'rgba(255,255,255,0.06)',
+                color: '#fff', border: 'none', borderRadius: '6px',
+                fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px',
+                fontSize: '11px', cursor: token.trim() ? 'pointer' : 'not-allowed',
+                opacity: tokenLoading ? 0.5 : 1,
+              }}
+            >
+              {tokenLoading ? 'CONNECTING...' : 'ENTER SYSTEM'}
+            </button>
           </div>
 
-          <p className="text-gray-600 text-[10px] font-bold mt-6">Ninja 8K | All Rights Reserved</p>
+          {/* Disclaimer */}
+          <div 
+            className="w-full rounded-xl p-2 flex items-center justify-center gap-2 mt-3"
+            style={{ 
+              background: 'rgba(18, 18, 31, 0.3)',
+              border: '1px solid rgba(98, 37, 255, 0.1)',
+            }}
+          >
+            <div className="w-3 h-3 text-gray-600"><Icons.Info/></div>
+            <p className="text-gray-600 text-[9px] font-bold uppercase tracking-wider">We do not provide any content.</p>
+          </div>
+
+          <p className="text-gray-600 text-[10px] font-bold mt-4">Ninja 8K | All Rights Reserved</p>
           <p className="text-gray-700 text-[9px]">Version 2.0</p>
+          <p className="text-gray-700 text-[8px] mt-1 font-mono" style={{ opacity: 0.4 }}>ID: {deviceId}</p>
         </div>
 
-        {/* Right — Form */}
-        <div style={{ width: '380px', maxHeight: '100vh', overflowY: 'auto' }}>
+        {/* Divider */}
+        <div style={{ width: '1px', height: '60%', background: 'rgba(98, 37, 255, 0.15)' }} />
+
+        {/* Right — Manual / Advanced */}
+        <div style={{ width: '380px', maxHeight: '90vh', overflowY: 'auto' }}>
           {/* Error */}
           {error && (
             <div 
