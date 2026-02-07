@@ -5,9 +5,8 @@ import PlayerControls from './PlayerControls';
 
 import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
-import OTTSidebar from './OTTSidebar';      // OTTLeft
-import EPGSearch from './EPGSearch';         // OTTRight (live tab)
-import MediaGallery from './MediaGallery';   // OTTRight (movies/series tab)
+import OTTLeft from './OTTLeft';             // OTTLeft
+import OTTRight from './OTTRight';           // OTTRight (live: EPG search, movies/series: poster grid)
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -30,6 +29,10 @@ const Player = memo(({
   onTabChange,
   xtreamService,
   onServers,
+  // EPG sync props from App.jsx
+  epgSyncProgress = 0,
+  epgSyncingFolders = new Set(),
+  userLangs = [],
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -365,7 +368,7 @@ const Player = memo(({
 
       {/* OTTLeft — Channel list sidebar */}
       {(isFullscreen || isSmartFullscreen) && (
-        <OTTSidebar
+        <OTTLeft
           ref={sidebarRef}
           selectedChannel={channel}
           onChannelSelect={onChannelChange}
@@ -373,6 +376,8 @@ const Player = memo(({
           onToggle={onOttSidebarChange}
           onTabChange={(tab) => setSidebarTab(tab)}
           xtreamService={xtreamService}
+          epgSyncProgress={epgSyncProgress}
+          epgSyncingFolders={epgSyncingFolders}
         />
       )}
 
@@ -381,9 +386,7 @@ const Player = memo(({
         <div style={{
           position: 'absolute',
           top: 0, bottom: 0, left: '280px', right: 0,
-          background: 'rgba(0, 0, 0, 0.50)',
-          backdropFilter: 'blur(15px) saturate(150%)',
-          WebkitBackdropFilter: 'blur(15px) saturate(150%)',
+          background: 'rgba(0,0,0,0.75)',
           borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
           zIndex: 10001,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -391,26 +394,21 @@ const Player = memo(({
           transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
           pointerEvents: ottSidebarOpen ? 'auto' : 'none',
         }}>
-          {sidebarTab === 'live' ? (
-            <EPGSearch
-              xtreamService={xtreamService}
-              onChannelSelect={(ch) => {
-                onChannelChange?.(ch);
-                sidebarRef.current?.scrollToChannel(ch.stream_id);
-              }}
-            />
-          ) : (
-            <MediaGallery
-              items={sidebarRef.current?.getFilteredItems() || []}
-              type={sidebarTab}
-              xtreamService={xtreamService}
-              videoRef={videoRef}
-              onItemSelect={(item) => {
-                onChannelChange?.(item);
-                sidebarRef.current?.scrollToChannel(item.stream_id || item.id);
-              }}
-            />
-          )}
+          <OTTRight
+            xtreamService={xtreamService}
+            currentChannel={channel}
+            sidebarTab={sidebarTab}
+            items={sidebarRef.current?.getFilteredItems() || []}
+            videoRef={videoRef}
+            onChannelSelect={(ch) => {
+              onChannelChange?.(ch);
+              sidebarRef.current?.scrollToChannel(ch.stream_id);
+            }}
+            onItemSelect={(item) => {
+              onChannelChange?.(item);
+              sidebarRef.current?.scrollToChannel(item.stream_id || item.id);
+            }}
+          />
         </div>
       )}
     </div>

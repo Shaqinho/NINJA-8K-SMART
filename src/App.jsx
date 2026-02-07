@@ -9,12 +9,75 @@ import ParticleThemes from './components/ParticleThemes';
 import { XtreamService } from './services/XtreamService';
 import { ninjaCentral, STORES } from './services/NinjaCentral';
 import { useGestures } from './hooks/useGestures';
+import { openDatabase, extractLangPrefix } from './database/NinjaLocalDB';
+import { insertProgramsBatch, cleanExpiredPrograms } from './database/ProgramQueries';
 
 // ============================================================================
 // NINJA 8K — App Root
 // Flow: Tutorial → Landing → Player (fullscreen OTT)
 // No more Smart.jsx — Player handles everything with OTTLeft + OTTRight
+//
+// EPG Background Sync runs here (access to xtreamService + categories)
+// Detects user language from first 10 live categories → syncs only those + VIP
 // ============================================================================
+
+// ============================================================================
+// DETECT USER LANGUAGES — Top 2 from first 10 categories + VIP if exists
+// Uses extractLangPrefix from NinjaLocalDB (single source of truth)
+// ============================================================================
+const detectUserLangs = (liveCategories) => {
+  if (!Array.isArray(liveCategories) || liveCategories.length === 0) return [];
+
+  const first10 = liveCategories.slice(0, 10);
+  const langCounts = {};
+  let hasVip = false;
+
+  // Count lang prefixes in first 10 categories
+  first10.forEach(cat => {
+    const prefix = extractLangPrefix(cat.category_name);
+    if (prefix === 'VIP') {
+      hasVip = true;
+    } else if (prefix !== 'OTHER') {
+      langCounts[prefix] = (langCounts[prefix] || 0) + 1;
+    }
+  });
+
+  // Also check all categories for VIP (might not be in top 10)
+  if (!hasVip) {
+    hasVip = liveCategories.some(cat => extractLangPrefix(cat.category_name) === 'VIP');
+  }
+
+  // Sort by frequency, take top 2
+  const sorted = Object.entries(langCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([lang]) => lang);
+
+  // Add VIP as 3rd if it exists
+  if (hasVip) {
+    sorted.push('VIP');
+  }
+
+  return sorted; // e.g. ['FR', 'BE', 'VIP'] or ['DE', 'AT'] (no VIP in abo)
+};
+
+// ============================================================================
+// FILTER CHANNELS BY LANGUAGE — match category lang prefix
+// ============================================================================
+const filterChannelsByLangs = (channels, categories, langs) => {
+  if (!langs || langs.length === 0) return channels;
+
+  // Get category IDs that match our langs
+  const matchingCatIds = new Set();
+  (categories || []).forEach(cat => {
+    const prefix = extractLangPrefix(cat.category_name);
+    if (langs.includes(prefix)) {
+      matchingCatIds.add(String(cat.category_id));
+    }
+  });
+
+  return channels.filter(ch => matchingCatIds.has(String(ch.categoryId)));
+};
 
 const AppContent = () => {
   const { playlist, setPlaylist, clearPlaylist, isRestored } = usePlaylistContext();
@@ -24,6 +87,15 @@ const AppContent = () => {
   // NinjaCentral data (persisted)
   const [liveData, setLiveData] = useState([]);
   const [ninjaReady, setNinjaReady] = useState(false);
+
+  // Detected user languages (for EPG sync + OTTLeft)
+  const [userLangs, setUserLangs] = useState([]);
+
+  // EPG background sync state
+  const [epgSyncProgress, setEpgSyncProgress] = useState(0);
+  const [epgSyncingFolders, setEpgSyncingFolders] = useState(new Set()); // category_ids being synced
+  const epgAbortRef = useRef(null);
+  const epgIntervalRef = useRef(null);
 
   // Player state
   const [selectedItem, setSelectedItem] = useState(null);
@@ -79,7 +151,6 @@ const AppContent = () => {
   useEffect(() => {
     const initSql = async () => {
       try {
-        const { openDatabase } = await import('./database/NinjaLocalDB');
         const db = await openDatabase();
         window.db = db;
         console.log('✅ SQLite ready for search');
@@ -97,14 +168,30 @@ const AppContent = () => {
     const loadFromNinja = async () => {
       try {
         await ninjaCentral.init();
-        const [live, vod, series] = await Promise.all([
+        const [live, vod, series, liveCats] = await Promise.all([
           ninjaCentral.getAll(STORES.LIVE),
           ninjaCentral.getAll(STORES.VOD),
           ninjaCentral.getAll(STORES.SERIES),
+          ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
         ]);
         if (live.length > 0 || vod.length > 0 || series.length > 0) {
           setLiveData(live);
           console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+
+          // Detect user languages from persisted categories
+          if (liveCats.length > 0) {
+            const langs = detectUserLangs(liveCats);
+            setUserLangs(langs);
+            console.log('[NinjaCentral] User langs detected:', langs);
+          }
+
+          // Auto-play first live channel from NinjaCentral (returning user)
+          if (live.length > 0 && !autoPlayedRef.current) {
+            autoPlayedRef.current = true;
+            setSelectedItem(live[0]);
+            setIsPlaying(true);
+            console.log('[AutoPlay] From NinjaCentral:', live[0].name);
+          }
         }
         setNinjaReady(true);
       } catch (err) {
@@ -141,6 +228,13 @@ const AppContent = () => {
         }
         console.log('[NinjaCentral] Saved playlist.data');
 
+        // Detect user languages from fresh categories
+        if (liveCategories?.length > 0) {
+          const langs = detectUserLangs(liveCategories);
+          setUserLangs(langs);
+          console.log('[App] User langs detected:', langs);
+        }
+
         // Auto-play first live channel
         if (live?.length > 0 && !autoPlayedRef.current) {
           autoPlayedRef.current = true;
@@ -162,6 +256,161 @@ const AppContent = () => {
     if (!playlist?.server || !playlist?.username || !playlist?.password) return null;
     return new XtreamService(playlist.server, playlist.username, playlist.password);
   }, [playlist]);
+
+  // ============================================================================
+  // EPG BACKGROUND SYNC — Concentric, lang-filtered, every 30 minutes
+  //
+  // - Reads channels from NinjaCentral (no refetch)
+  // - Filters by userLangs (top 2 + VIP)
+  // - Batches of 20, limit=1, no pause
+  // - Stores in SQLite for search
+  // - Exposes progress via epgSyncProgress + epgSyncingFolders
+  // - Repeats every 30 minutes
+  // ============================================================================
+  const runEpgSync = useCallback(async (service, langs) => {
+    if (!service) return;
+
+    // Abort previous sync if running
+    if (epgAbortRef.current) {
+      epgAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    epgAbortRef.current = abortController;
+    const signal = abortController.signal;
+
+    try {
+      // Read channels + categories from NinjaCentral
+      await ninjaCentral.init();
+      const [allChannels, liveCats] = await Promise.all([
+        ninjaCentral.getAll(STORES.LIVE),
+        ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
+      ]);
+
+      if (allChannels.length === 0) {
+        console.log('[EPG Sync] No channels in NinjaCentral, skipping');
+        return;
+      }
+
+      // Filter by user languages
+      const channels = langs.length > 0
+        ? filterChannelsByLangs(allChannels, liveCats, langs)
+        : allChannels;
+
+      console.log(`[EPG Sync] Starting: ${channels.length} channels (filtered from ${allChannels.length}) | Langs: ${langs.join(', ')}`);
+
+      // Group channels by category for folder-level tracking
+      const categoryMap = {};
+      channels.forEach(ch => {
+        const catId = String(ch.categoryId || 'unknown');
+        if (!categoryMap[catId]) categoryMap[catId] = [];
+        categoryMap[catId].push(ch);
+      });
+      const categoryIds = Object.keys(categoryMap);
+
+      // Clean expired programs
+      try {
+        await cleanExpiredPrograms();
+      } catch (e) {
+        console.warn('[EPG Sync] Cleanup skipped:', e);
+      }
+
+      const BATCH_SIZE = 20;
+      let totalProcessed = 0;
+      const totalChannels = channels.length;
+
+      // Process folder by folder (concentric)
+      for (const catId of categoryIds) {
+        if (signal.aborted) break;
+
+        const catChannels = categoryMap[catId];
+        const streamIds = catChannels.map(ch => ch.id || ch.stream_id).filter(Boolean);
+
+        // Mark folder as syncing
+        setEpgSyncingFolders(prev => new Set([...prev, catId]));
+
+        // Batch within folder
+        for (let i = 0; i < streamIds.length; i += BATCH_SIZE) {
+          if (signal.aborted) break;
+
+          const batchIds = streamIds.slice(i, i + BATCH_SIZE);
+
+          try {
+            const epgResults = await service.getShortEPGBatch(batchIds, 1, 20);
+
+            if (signal.aborted) break;
+
+            // Transform for SQLite insert
+            const epgForInsert = {};
+            Object.entries(epgResults).forEach(([streamId, data]) => {
+              if (data.epg_now) {
+                epgForInsert[streamId] = [{
+                  title: data.epg_now,
+                  start: data.epg_start || '',
+                  end: data.epg_end || '',
+                  startTimestamp: data.epg_start_timestamp || null,
+                  stopTimestamp: data.epg_end_timestamp || null,
+                  description: '',
+                }];
+              }
+            });
+
+            if (Object.keys(epgForInsert).length > 0) {
+              await insertProgramsBatch(epgForInsert);
+            }
+          } catch (batchErr) {
+            console.warn(`[EPG Sync] Batch failed (cat ${catId}):`, batchErr);
+          }
+
+          totalProcessed += batchIds.length;
+          const progress = Math.round((totalProcessed / totalChannels) * 100);
+          setEpgSyncProgress(progress);
+        }
+
+        // Unmark folder
+        setEpgSyncingFolders(prev => {
+          const next = new Set(prev);
+          next.delete(catId);
+          return next;
+        });
+      }
+
+      if (!signal.aborted) {
+        setEpgSyncProgress(100);
+        console.log(`✅ [EPG Sync] Complete: ${totalProcessed} channels indexed`);
+
+        // Reset progress after 3 seconds
+        setTimeout(() => {
+          if (!signal.aborted) setEpgSyncProgress(0);
+        }, 3000);
+      }
+    } catch (err) {
+      if (!signal.aborted) {
+        console.error('[EPG Sync] Failed:', err);
+        setEpgSyncProgress(0);
+      }
+    }
+  }, []);
+
+  // Start EPG sync when xtreamService + userLangs are ready
+  useEffect(() => {
+    if (!xtreamService || userLangs.length === 0) return;
+
+    // Initial sync (small delay to let UI settle)
+    const initialTimer = setTimeout(() => {
+      runEpgSync(xtreamService, userLangs);
+    }, 2000);
+
+    // Repeat every 30 minutes
+    epgIntervalRef.current = setInterval(() => {
+      runEpgSync(xtreamService, userLangs);
+    }, 30 * 60 * 1000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(epgIntervalRef.current);
+      if (epgAbortRef.current) epgAbortRef.current.abort();
+    };
+  }, [xtreamService, userLangs, runEpgSync]);
 
   // ============================================================================
   // GESTURES — attached to playerRef
@@ -225,6 +474,13 @@ const AppContent = () => {
   }, [setPlaylist]);
 
   const handleLogout = useCallback(() => {
+    // Stop EPG sync
+    if (epgAbortRef.current) epgAbortRef.current.abort();
+    clearInterval(epgIntervalRef.current);
+    setEpgSyncProgress(0);
+    setEpgSyncingFolders(new Set());
+    setUserLangs([]);
+
     clearPlaylist();
     autoPlayedRef.current = false;
     setSelectedItem(null);
@@ -324,6 +580,9 @@ const AppContent = () => {
         onTabChange={setSidebarTab}
         xtreamService={xtreamService}
         onServers={handleLogout}
+        epgSyncProgress={epgSyncProgress}
+        epgSyncingFolders={epgSyncingFolders}
+        userLangs={userLangs}
       />
     </div>
   );

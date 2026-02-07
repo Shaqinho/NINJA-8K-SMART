@@ -557,14 +557,25 @@ const LandingPage = ({ onNavigateToPlayer }) => {
 
           <p className="text-gray-600 text-[10px] font-bold mt-4">Ninja 8K | All Rights Reserved</p>
           <p className="text-gray-700 text-[9px]">Version 2.0</p>
-          <p className="text-gray-700 text-[8px] mt-1 font-mono" style={{ opacity: 0.4 }}>ID: {deviceId}</p>
+          <p
+            className="text-gray-500 text-[11px] mt-1 font-mono font-bold cursor-pointer active:scale-95 transition-transform"
+            onClick={async () => {
+              try {
+                await Clipboard.write({ string: deviceId });
+                const el = document.getElementById('device-id-label');
+                if (el) { el.textContent = 'COPIED!'; setTimeout(() => { el.textContent = `ID: ${deviceId}`; }, 1500); }
+              } catch { /* fallback */ }
+            }}
+          >
+            <span id="device-id-label">ID: {deviceId}</span>
+          </p>
         </div>
 
         {/* Divider */}
         <div style={{ width: '1px', height: '60%', background: 'rgba(98, 37, 255, 0.15)' }} />
 
         {/* Right — Manual / Advanced */}
-        <div style={{ width: '380px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ width: '380px', maxHeight: '70vh', overflowY: 'auto' }}>
           {/* Error */}
           {error && (
             <div 

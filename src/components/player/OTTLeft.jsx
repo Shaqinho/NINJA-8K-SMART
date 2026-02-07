@@ -281,7 +281,7 @@ const NinjaKeyboard = ({ position, onPositionChange, onInput, onBackspace, onClo
   );
 };
 
-const OTTSidebar = forwardRef(({ 
+const OTTLeft = forwardRef(({ 
   selectedCategory,
   selectedChannel,
   onCategorySelect,
@@ -291,6 +291,8 @@ const OTTSidebar = forwardRef(({
   onToggle: externalOnToggle,
   onTabChange,
   xtreamService,
+  epgSyncProgress: externalEpgSyncProgress = 0,
+  epgSyncingFolders = new Set(),
 }, ref) => {
   // States
   const [isVisible, setIsVisible] = useState(true);
@@ -324,7 +326,6 @@ const OTTSidebar = forwardRef(({
   const [sqliteEpg, setSqliteEpg] = useState({}); // { streamId: { title, progress } }
   const circle1FetchingRef = useRef(new Set()); // IDs currently being fetched
   const circle1ErrorCacheRef = useRef(new Map()); // ID → timestamp (TTL 60s)
-  const [epgSyncProgress, setEpgSyncProgress] = useState(0);
   
   // Favorites (persisted in localStorage)
   const [favorites, setFavorites] = useState(() => {
@@ -423,15 +424,6 @@ const OTTSidebar = forwardRef(({
 
   // ========== EPG BATCH LOAD (same method as Smart) ==========
   const epgLoadedCategoriesRef = useRef(new Set());
-
-  // ========== SYNC PROGRESS POLLING ==========
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const progress = window.__epgSyncProgress || 0;
-      setEpgSyncProgress(prev => prev !== progress ? progress : prev);
-    }, 500);
-    return () => clearInterval(interval);
-  }, []);
 
   // ========== CERCLE 1: SQLite READ for visible channels ==========
   const loadSqliteEpgForItems = useCallback(async (items) => {
@@ -554,16 +546,44 @@ const OTTSidebar = forwardRef(({
     return [...systemFolders, ...cats];
   }, [activeTab, liveCategories, vodCategories, seriesCategories, systemFolders]);
 
-  // ========== LOAD DATA FROM XTREAM (direct fetch) ==========
+  // ========== LOAD DATA: NinjaCentral FIRST → Xtream fallback ==========
   useEffect(() => {
     if (!xtreamService || dataLoaded) return;
 
     const loadData = async () => {
       try {
-        console.log('[OTT] Fetching data from Xtream...');
+        // STEP 1: Try NinjaCentral first (instant, already populated by App.jsx)
+        await ninjaCentral.init();
         const counts = {};
 
-        // Fetch all 6 lists in parallel
+        const [live, vod, series, lc, vc, sc] = await Promise.all([
+          ninjaCentral.getAll(STORES.LIVE),
+          ninjaCentral.getAll(STORES.VOD),
+          ninjaCentral.getAll(STORES.SERIES),
+          ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
+          ninjaCentral.getAll(STORES.VOD_CATEGORIES),
+          ninjaCentral.getAll(STORES.SERIES_CATEGORIES),
+        ]);
+
+        if (live.length > 0 || vod.length > 0 || series.length > 0) {
+          live.forEach(ch => { counts[`live_${String(ch.categoryId)}`] = (counts[`live_${String(ch.categoryId)}`] || 0) + 1; });
+          vod.forEach(item => { counts[`vod_${String(item.categoryId)}`] = (counts[`vod_${String(item.categoryId)}`] || 0) + 1; });
+          series.forEach(item => { counts[`series_${String(item.categoryId)}`] = (counts[`series_${String(item.categoryId)}`] || 0) + 1; });
+
+          setLiveChannels(live);
+          setLiveCategories(lc);
+          setVodItems(vod);
+          setVodCategories(vc);
+          setSeriesItems(series);
+          setSeriesCategories(sc);
+          setCategoryCounts(counts);
+          setDataLoaded(true);
+          console.log(`[OTT] NinjaCentral: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+          return; // Done — no Xtream fetch needed
+        }
+
+        // STEP 2: NinjaCentral empty → fallback to Xtream fetch
+        console.log('[OTT] NinjaCentral empty, fetching from Xtream...');
         const [
           rawLive, rawLiveCats,
           rawVod, rawVodCats,
@@ -579,47 +599,47 @@ const OTTSidebar = forwardRef(({
 
         // Parse live
         const liveCats = Array.isArray(rawLiveCats) ? rawLiveCats : [];
-        const live = xtreamService.parseLiveStreams(rawLive, liveCats);
-        live.forEach(ch => {
+        const liveParsed = xtreamService.parseLiveStreams(rawLive, liveCats);
+        liveParsed.forEach(ch => {
           const catId = String(ch.categoryId);
           counts[`live_${catId}`] = (counts[`live_${catId}`] || 0) + 1;
         });
-        setLiveChannels(live);
+        setLiveChannels(liveParsed);
         setLiveCategories(liveCats);
 
         // Parse VOD
         const vodCats = Array.isArray(rawVodCats) ? rawVodCats : [];
-        const vod = xtreamService.parseVodStreams(rawVod, vodCats);
-        vod.forEach(item => {
+        const vodParsed = xtreamService.parseVodStreams(rawVod, vodCats);
+        vodParsed.forEach(item => {
           const catId = String(item.categoryId);
           counts[`vod_${catId}`] = (counts[`vod_${catId}`] || 0) + 1;
         });
-        setVodItems(vod);
+        setVodItems(vodParsed);
         setVodCategories(vodCats);
 
         // Parse Series
         const seriesCats = Array.isArray(rawSeriesCats) ? rawSeriesCats : [];
-        const series = xtreamService.parseSeries(rawSeries, seriesCats);
-        series.forEach(item => {
+        const seriesParsed = xtreamService.parseSeries(rawSeries, seriesCats);
+        seriesParsed.forEach(item => {
           const catId = String(item.categoryId);
           counts[`series_${catId}`] = (counts[`series_${catId}`] || 0) + 1;
         });
-        setSeriesItems(series);
+        setSeriesItems(seriesParsed);
         setSeriesCategories(seriesCats);
 
         setCategoryCounts(counts);
         setDataLoaded(true);
-        console.log(`[OTT] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+        console.log(`[OTT] Xtream fallback: ${liveParsed.length} live, ${vodParsed.length} vod, ${seriesParsed.length} series`);
 
         // Save to NinjaCentral in background (non-blocking)
         ninjaCentral.init().then(async () => {
           try {
             await Promise.all([
-              ninjaCentral.saveItems(STORES.LIVE, live),
+              ninjaCentral.saveItems(STORES.LIVE, liveParsed),
               ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, liveCats),
-              ninjaCentral.saveItems(STORES.VOD, vod),
+              ninjaCentral.saveItems(STORES.VOD, vodParsed),
               ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, vodCats),
-              ninjaCentral.saveItems(STORES.SERIES, series),
+              ninjaCentral.saveItems(STORES.SERIES, seriesParsed),
               ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, seriesCats),
             ]);
             console.log('[OTT] Saved to NinjaCentral');
@@ -629,37 +649,7 @@ const OTTSidebar = forwardRef(({
         });
 
       } catch (err) {
-        console.error('[OTT] Xtream fetch failed, falling back to NinjaCentral...', err);
-        // Fallback: try NinjaCentral
-        try {
-          await ninjaCentral.init();
-          const counts = {};
-
-          const [live, vod, series, lc, vc, sc] = await Promise.all([
-            ninjaCentral.getAll(STORES.LIVE),
-            ninjaCentral.getAll(STORES.VOD),
-            ninjaCentral.getAll(STORES.SERIES),
-            ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
-            ninjaCentral.getAll(STORES.VOD_CATEGORIES),
-            ninjaCentral.getAll(STORES.SERIES_CATEGORIES),
-          ]);
-
-          live.forEach(ch => { counts[`live_${String(ch.categoryId)}`] = (counts[`live_${String(ch.categoryId)}`] || 0) + 1; });
-          vod.forEach(item => { counts[`vod_${String(item.categoryId)}`] = (counts[`vod_${String(item.categoryId)}`] || 0) + 1; });
-          series.forEach(item => { counts[`series_${String(item.categoryId)}`] = (counts[`series_${String(item.categoryId)}`] || 0) + 1; });
-
-          setLiveChannels(live);
-          setLiveCategories(lc);
-          setVodItems(vod);
-          setVodCategories(vc);
-          setSeriesItems(series);
-          setSeriesCategories(sc);
-          setCategoryCounts(counts);
-          setDataLoaded(true);
-          console.log(`[OTT] Fallback NinjaCentral: ${live.length} live, ${vod.length} vod, ${series.length} series`);
-        } catch (fallbackErr) {
-          console.error('[OTT] NinjaCentral fallback also failed:', fallbackErr);
-        }
+        console.error('[OTT] Load failed:', err);
       }
     };
 
@@ -1449,9 +1439,7 @@ const OTTSidebar = forwardRef(({
     top: 0,
     bottom: 0,
     width: '280px',
-    background: 'rgba(0, 0, 0, 0.50)',
-    backdropFilter: 'blur(15px) saturate(150%)',
-    WebkitBackdropFilter: 'blur(15px) saturate(150%)',
+    background: 'rgba(0,0,0,0.75)',
     transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
     transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
     zIndex: 10000,
@@ -1531,12 +1519,14 @@ const OTTSidebar = forwardRef(({
                   {filteredItems.length} {activeTab === 'live' ? 'channels' : activeTab === 'movies' ? 'movies' : 'series'}
                 </div>
               </div>
-              {/* EPG force fetch button */}
+              {/* EPG NOW button (manual fetch, always from Xtream) */}
               {activeTab === 'live' && (
                 <button
                   ref={(el) => { if (el) el.__forceEpgBtn = true; }}
+                  disabled={currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))}
                   onClick={async (e) => {
                     if (!xtreamService || !filteredItems.length) return;
+                    if (currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))) return;
                     const btn = e.currentTarget;
                     const originalText = btn.textContent;
                     btn.textContent = 'LOADING...';
@@ -1546,36 +1536,51 @@ const OTTSidebar = forwardRef(({
                         btn.textContent = originalText;
                         return;
                       }
-                      console.log('[EPG Force] Fetching for', streamIds.length, 'channels');
+                      console.log('[EPG NOW] Fetching for', streamIds.length, 'channels');
                       
                       const epgResults = await xtreamService.getShortEPGBatch(streamIds, 2, 50);
-                      console.log('[EPG Force] Got results:', epgResults ? Object.keys(epgResults).length : 0);
+                      console.log('[EPG NOW] Got results:', epgResults ? Object.keys(epgResults).length : 0);
                       
                       if (epgResults && Object.keys(epgResults).length > 0) {
                         setEpgData(prev => ({ ...prev, ...epgResults }));
                         navigator.vibrate?.(30);
-                        console.log('[EPG Force] Loaded', Object.keys(epgResults).length, 'programs');
+                        console.log('[EPG NOW] Loaded', Object.keys(epgResults).length, 'programs');
                       }
                     } catch (err) {
-                      console.warn('[EPG Force] Error:', err);
+                      console.warn('[EPG NOW] Error:', err);
                     } finally {
                       btn.textContent = originalText;
                     }
                   }}
                   style={{
-                    background: 'rgba(98,37,255,0.25)',
-                    border: '1px solid #6225ff',
+                    background: currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))
+                      ? 'rgba(255,255,255,0.06)'
+                      : 'rgba(98,37,255,0.25)',
+                    border: currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))
+                      ? '1px solid rgba(255,255,255,0.1)'
+                      : '1px solid #6225ff',
                     borderRadius: '4px',
                     padding: '4px 10px',
-                    color: '#fff',
+                    color: currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))
+                      ? '#666'
+                      : '#fff',
                     fontSize: '9px',
                     fontWeight: 800,
-                    cursor: 'pointer',
+                    cursor: currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))
+                      ? 'not-allowed'
+                      : 'pointer',
                     flexShrink: 0,
-                    boxShadow: '0 0 10px rgba(98, 37, 255, 0.3)',
+                    boxShadow: currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))
+                      ? 'none'
+                      : '0 0 10px rgba(98, 37, 255, 0.3)',
+                    opacity: currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))
+                      ? 0.5
+                      : 1,
                   }}
                 >
-                  FORCE EPG
+                  {currentCategory && epgSyncingFolders.has(String(currentCategory.category_id))
+                    ? 'LOADING...'
+                    : 'EPG NOW'}
                 </button>
               )}
             </div>
@@ -1661,7 +1666,7 @@ const OTTSidebar = forwardRef(({
             padding: '0 12px',
             gap: '8px',
             flexShrink: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'rgba(0,0,0,0.75)',
           }}>
             <button
               onClick={() => {
@@ -1710,7 +1715,7 @@ const OTTSidebar = forwardRef(({
         )}
 
         {/* ========== EPG SYNC PROGRESS BAR (2px, bottom) ========== */}
-        {epgSyncProgress > 0 && epgSyncProgress < 100 && (
+        {externalEpgSyncProgress > 0 && externalEpgSyncProgress < 100 && (
           <div style={{
             position: 'absolute',
             bottom: 0,
@@ -1722,7 +1727,7 @@ const OTTSidebar = forwardRef(({
           }}>
             <div style={{
               height: '100%',
-              width: `${epgSyncProgress}%`,
+              width: `${externalEpgSyncProgress}%`,
               background: '#6225ff',
               borderRadius: '0 1px 1px 0',
               transition: 'width 0.5s ease-out',
@@ -1763,4 +1768,4 @@ const OTTSidebar = forwardRef(({
   );
 });
 
-export default OTTSidebar;
+export default OTTLeft;
