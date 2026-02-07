@@ -5,7 +5,6 @@ import PlayerControls from './PlayerControls';
 
 import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
-import MultiGrid from './MultiGrid';
 import OTTSidebar from './OTTSidebar';      // OTTLeft
 import EPGSearch from './EPGSearch';         // OTTRight (live tab)
 import MediaGallery from './MediaGallery';   // OTTRight (movies/series tab)
@@ -23,11 +22,6 @@ const Player = memo(({
   onChannelChange,
   isLive = true,
   onSearchEPG,
-  multiGridItems = [],
-  onMultiGridAdd,
-  onMultiGridRemove,
-  showMultiGrid = false,
-  onMultiGridToggle,
   isSmartFullscreen = false,
   volume: externalVolume,
   onVolumeChange: externalVolumeChange,
@@ -54,14 +48,6 @@ const Player = memo(({
   const [timeshiftOffset, setTimeshiftOffset] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [aspectRatio, setAspectRatio] = useState('Auto');
-
-  const [internalMultiGridItems, setInternalMultiGridItems] = useState([]);
-  const [internalShowMultiGrid, setInternalShowMultiGrid] = useState(false);
-  const [multiGridActiveIndex, setMultiGridActiveIndex] = useState(0);
-  const [multiGridSize, setMultiGridSize] = useState(2);
-
-  const actualMultiGridItems = multiGridItems.length > 0 ? multiGridItems : internalMultiGridItems;
-  const actualShowMultiGrid = showMultiGrid !== undefined ? showMultiGrid : internalShowMultiGrid;
 
   const [isInvertedGravity, setIsInvertedGravity] = useState(false);
 
@@ -252,36 +238,6 @@ const Player = memo(({
     };
   }, []);
 
-  const handleMultiGridToggle = useCallback(() => {
-    if (onMultiGridToggle) { onMultiGridToggle(); }
-    else { setInternalShowMultiGrid(!internalShowMultiGrid); }
-  }, [onMultiGridToggle, internalShowMultiGrid]);
-
-  const handleMultiGridSelect = useCallback((index) => {
-    setMultiGridActiveIndex(index);
-    const item = actualMultiGridItems[index];
-    if (item) onChannelChange?.(item);
-  }, [actualMultiGridItems, onChannelChange]);
-
-  const handleMultiGridRemove = useCallback((index) => {
-    if (onMultiGridRemove) { onMultiGridRemove(index); }
-    else { setInternalMultiGridItems(prev => prev.filter((_, i) => i !== index)); }
-  }, [onMultiGridRemove]);
-
-  const handleMultiGridAdd = useCallback(() => {
-    if (onMultiGridToggle) { onMultiGridToggle(); }
-    else { setInternalShowMultiGrid(false); }
-  }, [onMultiGridToggle]);
-
-  void onMultiGridAdd;
-
-  const renderMultiGridVideo = useCallback((item, index) => {
-    const itemSrc = item?.streamUrl || item?.url;
-    if (!itemSrc) return null;
-    void index;
-    return <VideoPlayer src={itemSrc} aspectRatio="auto" className="w-full h-full" />;
-  }, []);
-
   const handleTimeshiftSeek = useCallback((offset) => {
     setTimeshiftOffset(offset);
   }, []);
@@ -384,8 +340,6 @@ const Player = memo(({
           onFullscreenToggle={toggleFullscreen}
           fullscreen={isFullscreen}
           onSearchEPG={onSearchEPG}
-          onMultiGridToggle={actualMultiGridItems.length > 0 ? handleMultiGridToggle : undefined}
-          hasMultiGrid={actualMultiGridItems.length > 0}
           visible={showControls}
           isLive={isLive}
           // Channel navigation (from OTTLeft list)
@@ -415,20 +369,6 @@ const Player = memo(({
           onTapDismiss={() => setShowControls(false)}
         />
       </div>
-
-      {/* MultiGrid */}
-      <MultiGrid
-        visible={actualShowMultiGrid}
-        onClose={handleMultiGridToggle}
-        items={actualMultiGridItems}
-        activeIndex={multiGridActiveIndex}
-        gridSize={multiGridSize}
-        onSelect={handleMultiGridSelect}
-        onRemove={handleMultiGridRemove}
-        onAdd={handleMultiGridAdd}
-        onGridSizeChange={setMultiGridSize}
-        renderVideo={renderMultiGridVideo}
-      />
 
       {/* Settings */}
       <PlayerSettings
