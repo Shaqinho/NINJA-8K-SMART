@@ -402,10 +402,9 @@ const LandingPage = ({ onNavigateToPlayer }) => {
   return (
     <div 
       ref={containerRef}
-      className="min-h-screen flex flex-col overflow-y-auto pb-8 relative" 
+      className="fixed inset-0 flex overflow-hidden relative" 
       style={{ 
         background: THEME.colors.bg,
-        paddingTop: 'env(safe-area-inset-top)',
       }}
     >
       {/* Particles */}
@@ -415,12 +414,12 @@ const LandingPage = ({ onNavigateToPlayer }) => {
         </div>
       )}
       
-      <div className="relative z-10">
-        {/* Logo — tap to cycle particle themes */}
-        <div className="text-center pt-8 pb-4">
+      <div className="relative z-10 flex w-full h-full items-center justify-center gap-10 px-8">
+        {/* Left — Logo + Disclaimer */}
+        <div className="flex flex-col items-center justify-center" style={{ minWidth: '220px' }}>
           <h1 
             onClick={handleLogoClick}
-            className="text-white text-4xl font-black italic tracking-tighter cursor-pointer select-none active:scale-95 transition-transform"
+            className="text-white text-4xl font-black italic tracking-tighter cursor-pointer select-none active:scale-95 transition-transform mb-4"
             style={{ 
               textShadow: particleTheme !== 'off' 
                 ? `0 0 15px ${PARTICLE_THEME_COLORS[particleTheme]}50` 
@@ -429,9 +428,6 @@ const LandingPage = ({ onNavigateToPlayer }) => {
           >
             NINJA <span style={{ color: PARTICLE_THEME_COLORS[particleTheme] }}>8K</span>
           </h1>
-        </div>
-
-        <div className="max-w-md mx-auto w-full px-4 space-y-4">
 
           {/* Disclaimer */}
           <div 
@@ -448,10 +444,16 @@ const LandingPage = ({ onNavigateToPlayer }) => {
             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">We do not provide any content.</p>
           </div>
 
+          <p className="text-gray-600 text-[10px] font-bold mt-6">Ninja 8K | All Rights Reserved</p>
+          <p className="text-gray-700 text-[9px]">Version 2.0</p>
+        </div>
+
+        {/* Right — Form */}
+        <div style={{ width: '380px', maxHeight: '100vh', overflowY: 'auto' }}>
           {/* Error */}
           {error && (
             <div 
-              className="rounded-xl p-3"
+              className="rounded-xl p-3 mb-3"
               style={{
                 background: 'rgba(239, 68, 68, 0.08)',
                 backdropFilter: 'blur(12px)',
@@ -472,12 +474,6 @@ const LandingPage = ({ onNavigateToPlayer }) => {
             onNinjaPaste={handleNinjaPaste} 
             onAddServer={handleAddServer}
           />
-
-          {/* Footer */}
-          <div className="pt-8 pb-2 text-center">
-            <p className="text-gray-600 text-[10px] font-bold">Ninja 8K | All Rights Reserved</p>
-            <p className="text-gray-700 text-[9px]">Version 2.0</p>
-          </div>
         </div>
       </div>
     </div>

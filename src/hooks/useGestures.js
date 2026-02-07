@@ -55,8 +55,6 @@ export const useGestures = (containerRef, callbacks = {}) => {
   const [touchStartX, setTouchStartX] = useState(null);
   const [initialPinchDistance, setInitialPinchDistance] = useState(null);
   const [initialVolume, setInitialVolume] = useState(1);
-  const [orientation, setOrientation] = useState(0);
-  const [isInvertedGravity, setIsInvertedGravity] = useState(false);
   const [volume, setVolume] = useState(1);
 
   // Touch refs
@@ -77,26 +75,6 @@ export const useGestures = (containerRef, callbacks = {}) => {
   useEffect(() => {
     containerRefInternal.current = containerRef;
   }, [containerRef]);
-
-  // ========================================
-  // ORIENTATION DETECTION
-  // ========================================
-  useEffect(() => {
-    const handleOrientationChange = () => {
-      const angle = window.innerWidth > window.innerHeight ? 90 : 0;
-      setOrientation(angle);
-      setIsInvertedGravity(angle === 180 || angle === 270);
-    };
-
-    window.addEventListener('orientationchange', handleOrientationChange);
-    window.addEventListener('resize', handleOrientationChange);
-    handleOrientationChange();
-
-    return () => {
-      window.removeEventListener('orientationchange', handleOrientationChange);
-      window.removeEventListener('resize', handleOrientationChange);
-    };
-  }, []);
 
   // ========================================
   // GESTURE HELPERS
@@ -391,8 +369,6 @@ export const useGestures = (containerRef, callbacks = {}) => {
   }, [handleKeyDown, handleKeyUp, clearDpadTimers]);
 
   return {
-    orientation,
-    isInvertedGravity,
     volume,
     touchStartY,
     initialPinchDistance,

@@ -356,73 +356,74 @@ const GestureTutorial = ({ onComplete }) => {
       onTouchEnd={handleTouchEnd}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4">
+      <div className="flex items-center justify-between px-6 py-2" style={{ flexShrink: 0 }}>
         <div className="flex items-baseline">
-          <span className="text-white font-black text-xl">NINJA</span>
-          <span className="font-black text-xl ml-1" style={{ color: '#6225ff' }}>8K</span>
+          <span className="text-white font-black text-lg">NINJA</span>
+          <span className="font-black text-lg ml-1" style={{ color: '#6225ff' }}>8K</span>
         </div>
-        <button onClick={handleSkip} className="px-4 py-2 text-gray-400 text-sm">Skip</button>
+        {/* Progress bar inline */}
+        <div className="flex-1 mx-6">
+          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #6225ff, #8b5cf6)' }}
+            />
+          </div>
+        </div>
+        <span className="text-gray-500 text-xs mr-4">{currentStep + 1} / {GESTURES.length}</span>
+        <button onClick={handleSkip} className="px-3 py-1 text-gray-400 text-sm">Skip</button>
       </div>
 
-      {/* Progress bar */}
-      <div className="px-4 mb-6">
-        <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #6225ff, #8b5cf6)' }}
-          />
-        </div>
-        <div className="flex justify-between mt-2">
-          <span className="text-gray-500 text-xs">{currentStep + 1} / {GESTURES.length}</span>
-          <span className="text-gray-500 text-xs">Controls</span>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8">
+      {/* Main content — landscape row */}
+      <div className="flex-1 flex items-center justify-center px-8 gap-10" style={{ minHeight: 0 }}>
         {isSuccess ? (
           <div className="flex flex-col items-center animate-pulse">
             <div
-              className="w-24 h-24 rounded-full flex items-center justify-center mb-6"
+              className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
               style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}
             >
-              <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+              <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <p className="text-green-400 text-xl font-bold">Perfect!</p>
+            <p className="text-green-400 text-lg font-bold">Perfect!</p>
           </div>
         ) : (
           <>
-            {/* Scene mockup */}
+            {/* Left: Scene mockup */}
             <div
-              className="w-full max-w-xs h-52 rounded-2xl flex items-center justify-center mb-6"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+              className="rounded-2xl flex items-center justify-center flex-shrink-0"
+              style={{
+                width: '280px', height: '180px',
+                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+              }}
             >
               {renderScene()}
             </div>
 
-            {/* Gesture name + description */}
-            <h2 className="text-white text-xl font-bold mb-1">{currentGesture.name}</h2>
-            <p className="text-gray-400 text-center text-sm mb-6">{currentGesture.description}</p>
+            {/* Right: Info + finger hint */}
+            <div className="flex flex-col items-center justify-center" style={{ maxWidth: '300px' }}>
+              <h2 className="text-white text-xl font-bold mb-1">{currentGesture.name}</h2>
+              <p className="text-gray-400 text-center text-sm mb-4">{currentGesture.description}</p>
 
-            {/* Finger hint */}
-            <div
-              className="w-full max-w-xs h-20 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.15)' }}
-            >
-              <FingerHint count={currentGesture.fingers} />
+              {/* Finger hint */}
+              <div
+                className="w-full h-16 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.15)' }}
+              >
+                <FingerHint count={currentGesture.fingers} />
+              </div>
+
+              <p className="text-gray-600 text-xs mt-3 text-center">
+                Perform the gesture anywhere on screen
+              </p>
             </div>
-
-            <p className="text-gray-600 text-xs mt-4 text-center">
-              Perform the gesture anywhere on screen
-            </p>
           </>
         )}
       </div>
 
       {/* Dots */}
-      <div className="flex justify-center gap-2 pb-8">
+      <div className="flex justify-center gap-2 pb-4" style={{ flexShrink: 0 }}>
         {GESTURES.map((_, index) => (
           <div
             key={index}
