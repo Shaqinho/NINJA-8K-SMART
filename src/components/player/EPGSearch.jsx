@@ -371,7 +371,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
   if (visible === false) return null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'rgba(0,0,0,0.75)' }}>
       {/* ========== HEADER ========== */}
       <div style={{ padding: '25px 20px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         {/* Search input */}
@@ -572,8 +572,8 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
 
       {/* ========== CATEGORY SELECTION ========== */}
       {showCategorySelect && (
-        <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ maxHeight: '200px', overflow: 'auto', padding: '8px 20px' }}>
+        <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', maxHeight: 'calc(100vh - 280px)', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ maxHeight: '200px', overflow: 'auto', padding: '8px 20px', flex: '1 1 auto' }}>
             {loadingCats ? (
               <div style={{ fontSize: '10px', color: '#6225ff', fontWeight: 700, textAlign: 'center', padding: '10px' }}>LOADING...</div>
             ) : allCategories.length === 0 ? (
@@ -601,7 +601,7 @@ const EPGSearch = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, v
             )}
           </div>
           {/* CONFIRM + SAVE AS PRESET */}
-          <div style={{ display: 'flex', gap: '8px', padding: '8px 20px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'flex', gap: '8px', padding: '8px 20px', borderTop: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
             <button
               onClick={handleConfirmSelection}
               disabled={selectedCategoryIds.length === 0 || fetchingEpg}
