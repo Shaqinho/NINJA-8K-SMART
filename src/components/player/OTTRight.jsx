@@ -449,6 +449,14 @@ const OTTRight = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, vi
   const [mgSelectedSeason, setMgSelectedSeason] = useState(1);
   const mgGridRef = useRef(null);
 
+  // Custom outer element for Grid — allows 3-finger gestures to propagate
+  // instead of being swallowed by react-window's scroll container
+  const GridOuterElement = useMemo(() => {
+    return React.forwardRef((props, ref) => (
+      <div ref={ref} {...props} style={{ ...props.style, touchAction: 'pan-y' }} />
+    ));
+  }, []);
+
   // Grid layout — responsive columns
   const MG_COLUMN_COUNT = useMemo(() => {
     const w = window.innerWidth - 280;
@@ -852,6 +860,7 @@ const OTTRight = ({ xtreamService, onChannelSelect, onSelectChannel, onClose, vi
           {items.length > 0 ? (
             <Grid
               ref={mgGridRef}
+              outerElementType={GridOuterElement}
               columnCount={MG_COLUMN_COUNT}
               columnWidth={MG_ITEM_WIDTH}
               height={window.innerHeight}
