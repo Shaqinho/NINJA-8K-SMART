@@ -205,79 +205,310 @@ export const getStreamIdsByCategories = async (categoryIds = []) => {
   return results.map(r => r.stream_id);
 };
 
+// ============================================================================
+// EPG FETCHING - JSON API (getShortEPG via XtreamService)
+// ============================================================================
+
 /**
- * VERSION SÉLECTIVE & ULTRA-FAST : Ingestion massive EPG NOW
- * Permet de choisir d'inclure ou non la description et les horaires pour gagner du temps.
- * @param {Object} epgDataMap - Données JSON Xtream
- * @param {Object} options - { includeDesc: bool, includeTime: bool }
+ * Parse EPG date "2026-02-08 22:50:00" to Unix timestamp
+ * @param {string} dateStr - Date format "YYYY-MM-DD HH:MM:SS"
+ * @returns {number|null} Unix timestamp in seconds
  */
-export const insertMassiveEpgNow = async (epgDataMap, options = { includeDesc: false, includeTime: true }) => {
-  const entries = Object.entries(epgDataMap);
-  if (!entries.length) return 0;
-
-  const db = getDatabase();
-  const now = Math.floor(Date.now() / 1000);
-
+const parseEPGDate = (dateStr) => {
+  if (!dateStr) return null;
   try {
-    await db.execute('BEGIN TRANSACTION');
-    await db.execute('DELETE FROM programs');
-
-    const statements = entries.map(([streamId, data]) => {
-      const title = data.epg_now || 'Sans titre';
-      const description = options.includeDesc ? (data.epg_description || '') : '';
-      const searchContent = options.includeDesc ? `${title} ${description}` : title;
-      const start = options.includeTime ? (data.epg_start_timestamp || null) : null;
-      const end = options.includeTime ? (data.epg_end_timestamp || null) : null;
-      const isLive = (start && end && start <= now && end > now) ? 1 : 0;
-
-      return {
-        statement: `INSERT INTO programs (stream_id, title, title_normalized, description, start_time, end_time, is_live) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        values: [parseInt(streamId), title, normalizeText(searchContent), description, start, end, isLive]
-      };
-    });
-
-    await db.executeSet(statements);
-    await db.execute('COMMIT');
-    console.log(`🚀 NinjaIngest: ${entries.length} programmes (Desc: ${options.includeDesc}, Time: ${options.includeTime})`);
-    
-    // Fire & Forget : maintenance après ingestion
-    runSilentMaintenance();
-    
-    return entries.length;
+    const date = new Date(dateStr.replace(' ', 'T'));
+    return Math.floor(date.getTime() / 1000);
   } catch (err) {
-    try { await db.execute('ROLLBACK'); } catch (e) {}
-    console.error('❌ NinjaIngest Selective Error:', err);
-    throw err;
+    console.warn('⚠️ Invalid EPG date:', dateStr);
+    return null;
   }
 };
 
 /**
- * DÉCLENCHEUR DE NETTOYAGE INTELLIGENT
- * À lancer après une grosse ingestion ou au démarrage.
+ * Fetch EPG from Xtream API and store in DB
+ * Uses XtreamService.getShortEPG() which already decodes Base64
+ * @param {XtreamService} xtreamService - Instance of XtreamService
+ * @param {number} streamId - Channel stream ID
+ * @param {number} limit - Number of programs (1, 2, or 4)
+ * @returns {Promise<{success: boolean, count: number}>}
  */
-export const runSilentMaintenance = () => {
-  setTimeout(async () => {
-    try {
-      console.log('🧼 NinjaMaintenance: Démarrage du nettoyage de fond...');
-      await cleanExpiredPrograms();
+export const fetchAndStoreEPG = async (xtreamService, streamId, limit = 4) => {
+  if (!xtreamService) {
+    throw new Error('XtreamService instance required');
+  }
 
-      const db = getDatabase();
-      const countRes = await db.query('SELECT COUNT(*) as count FROM programs');
-      const total = countRes.values?.[0]?.count || 0;
-
-      if (total > 100000) {
-        const toDelete = total - 80000;
-        await db.run(
-          `DELETE FROM programs WHERE id IN (SELECT id FROM programs ORDER BY start_time ASC LIMIT ?)`,
-          [toDelete]
-        );
-        console.log(`🧹 GC: Base allégée de ${toDelete} entrées.`);
-      }
-    } catch (e) {
-      console.warn('Maintenance silent fail (non-critical)');
+  try {
+    // XtreamService.getShortEPG already decodes Base64
+    const programs = await xtreamService.getShortEPG(streamId, limit);
+    
+    if (!programs || programs.length === 0) {
+      console.log(`ℹ️ No EPG found for stream ${streamId}`);
+      return { success: false, count: 0 };
     }
-  }, 2000);
+
+    const db = getDatabase();
+    const now = Math.floor(Date.now() / 1000);
+
+    // Delete old programs for this channel
+    await db.run('DELETE FROM programs WHERE stream_id = ?', [streamId]);
+
+    // Insert new programs
+    for (const prog of programs) {
+      // Parse dates (NOT timestamps)
+      const startTime = parseEPGDate(prog.start);
+      const endTime = parseEPGDate(prog.end);
+      
+      if (!startTime || !endTime) {
+        console.warn(`⚠️ Invalid dates for stream ${streamId}, skipping program`);
+        continue;
+      }
+
+      const isLive = (startTime <= now && endTime > now) ? 1 : 0;
+
+      await db.run(
+        `INSERT INTO programs (stream_id, title, title_normalized, description, start_time, end_time, is_live) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          streamId,
+          prog.title || 'Sans titre',
+          normalizeText(prog.title),
+          prog.description || '',
+          startTime,
+          endTime,
+          isLive
+        ]
+      );
+    }
+
+    console.log(`✅ Stored ${programs.length} programs for stream ${streamId}`);
+    return { success: true, count: programs.length };
+
+  } catch (err) {
+    console.error(`❌ Failed to fetch/store EPG for stream ${streamId}:`, err);
+    return { success: false, count: 0, error: err.message };
+  }
 };
 
-const ProgramQueriesExports = { insertChannels, insertProgramsBatch, insertMassiveEpgNow, cleanExpiredPrograms, runSilentMaintenance, searchChannelsByName, getChannelsByLang, getAvailableLanguages, searchProgramsByTitle, searchProgramsByCategories, getNowByCategories, getStreamIdsByCategories, getProgramsForChannel, updateSyncStatus, getSyncStatus, isSyncNeeded };
+/**
+ * Deep Search - Try to find EPG with limit=2 (minimum for auto-refresh)
+ * Used when channel has no EPG in XMLTV
+ * Fetches 2 programs minimum to enable auto-refresh (NOW + NEXT)
+ * @param {XtreamService} xtreamService 
+ * @param {number} streamId 
+ * @returns {Promise<{success: boolean, count: number}>}
+ */
+export const deepSearchEPG = async (xtreamService, streamId) => {
+  console.log(`🔍 Deep Search EPG for stream ${streamId}`);
+  return await fetchAndStoreEPG(xtreamService, streamId, 2);  // Minimum 2 for auto-refresh
+};
+
+// ============================================================================
+// XMLTV LOADING & PARSING
+// ============================================================================
+
+/**
+ * Load XMLTV from Xtream API and store in DB
+ * @param {XtreamService} xtreamService - Instance of XtreamService
+ * @returns {Promise<{success: boolean, channelsCount: number, programsCount: number}>}
+ */
+export const loadXMLTV = async (xtreamService) => {
+  if (!xtreamService) {
+    throw new Error('XtreamService instance required');
+  }
+
+  try {
+    console.log('🔄 Loading XMLTV...');
+    const startTime = Date.now();
+
+    // Fetch XMLTV data
+    const xmltvData = await xtreamService.getFullEPG();
+    
+    if (!xmltvData || !xmltvData.epg_listings) {
+      console.warn('⚠️ No XMLTV data returned');
+      return { success: false, channelsCount: 0, programsCount: 0 };
+    }
+
+    const db = getDatabase();
+    const now = Math.floor(Date.now() / 1000);
+    let programsCount = 0;
+    let channelsCount = 0;
+
+    // Single transaction for performance
+    await db.execute('BEGIN TRANSACTION');
+
+    try {
+      // Parse and store programs
+      for (const [streamId, programs] of Object.entries(xmltvData.epg_listings)) {
+        if (!programs || !Array.isArray(programs) || programs.length === 0) {
+          continue;
+        }
+
+        channelsCount++;
+
+        // Delete old programs for this channel
+        await db.run('DELETE FROM programs WHERE stream_id = ?', [parseInt(streamId)]);
+
+        // Insert new programs
+        for (const prog of programs) {
+          // Parse timestamps
+          const startTime = prog.start_timestamp ? parseInt(prog.start_timestamp) : parseEPGDate(prog.start);
+          const endTime = prog.stop_timestamp ? parseInt(prog.stop_timestamp) : parseEPGDate(prog.stop);
+
+          if (!startTime || !endTime) continue;
+
+          // Only store future programs (not expired)
+          if (endTime < now) continue;
+
+          const isLive = (startTime <= now && endTime > now) ? 1 : 0;
+
+          await db.run(
+            `INSERT INTO programs (stream_id, title, title_normalized, description, start_time, end_time, is_live) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              parseInt(streamId),
+              prog.title || 'Sans titre',
+              normalizeText(prog.title),
+              prog.description || '',
+              startTime,
+              endTime,
+              isLive
+            ]
+          );
+
+          programsCount++;
+        }
+      }
+
+      await db.execute('COMMIT');
+
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      console.log(`✅ XMLTV loaded: ${channelsCount} channels, ${programsCount} programs in ${elapsed}s`);
+
+      // Update sync status
+      await updateSyncStatus('xmltv', 'full', channelsCount, programsCount);
+
+      return { success: true, channelsCount, programsCount, elapsed };
+
+    } catch (err) {
+      await db.execute('ROLLBACK');
+      throw err;
+    }
+
+  } catch (err) {
+    console.error('❌ Failed to load XMLTV:', err);
+    return { success: false, channelsCount: 0, programsCount: 0, error: err.message };
+  }
+};
+
+/**
+ * Sync EPG for empty channels in folders 1-150
+ * Background task after XMLTV load
+ * @param {XtreamService} xtreamService 
+ * @param {Array} allFolders - All live categories/folders
+ * @returns {Promise<{synced: number, skipped: number}>}
+ */
+export const syncEmptyChannels = async (xtreamService, allFolders) => {
+  if (!xtreamService || !allFolders?.length) {
+    console.warn('⚠️ Invalid parameters for syncEmptyChannels');
+    return { synced: 0, skipped: 0 };
+  }
+
+  try {
+    console.log('🔄 Syncing empty channels (folders 1-150)...');
+
+    // Get folders 1-150
+    const targetFolders = allFolders.slice(0, 150);
+    
+    // Extract all stream IDs from these folders
+    const allStreamIds = [];
+    targetFolders.forEach(folder => {
+      if (folder.channels && Array.isArray(folder.channels)) {
+        folder.channels.forEach(ch => {
+          const streamId = ch.id || ch.stream_id;
+          if (streamId) allStreamIds.push(parseInt(streamId));
+        });
+      }
+    });
+
+    if (allStreamIds.length === 0) {
+      console.log('ℹ️ No channels found in folders 1-150');
+      return { synced: 0, skipped: 0 };
+    }
+
+    console.log(`📊 Checking ${allStreamIds.length} channels for empty EPG...`);
+
+    // Find empty channels (no programs in DB)
+    const emptyChannels = [];
+    for (const streamId of allStreamIds) {
+      const programs = await getProgramsForChannel(streamId, true);
+      if (programs.length === 0) {
+        emptyChannels.push(streamId);
+      }
+    }
+
+    console.log(`🔍 Found ${emptyChannels.length} empty channels`);
+
+    if (emptyChannels.length === 0) {
+      return { synced: 0, skipped: allStreamIds.length };
+    }
+
+    // Sync empty channels in batches
+    const BATCH_SIZE = 20;
+    const BATCH_DELAY = 1000; // 1 second pause
+    let synced = 0;
+
+    for (let i = 0; i < emptyChannels.length; i += BATCH_SIZE) {
+      const batch = emptyChannels.slice(i, i + BATCH_SIZE);
+      
+      console.log(`🔄 Syncing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(emptyChannels.length / BATCH_SIZE)} (${batch.length} channels)`);
+
+      // Fetch EPG for each channel in batch
+      for (const streamId of batch) {
+        try {
+          const result = await fetchAndStoreEPG(xtreamService, streamId, 4);
+          if (result.success) {
+            synced++;
+          }
+        } catch (err) {
+          console.warn(`⚠️ Failed to sync channel ${streamId}:`, err.message);
+        }
+      }
+
+      // Pause between batches (except last batch)
+      if (i + BATCH_SIZE < emptyChannels.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+      }
+    }
+
+    console.log(`✅ Empty channels sync complete: ${synced}/${emptyChannels.length} synced`);
+
+    return { synced, skipped: allStreamIds.length - emptyChannels.length };
+
+  } catch (err) {
+    console.error('❌ syncEmptyChannels failed:', err);
+    return { synced: 0, skipped: 0, error: err.message };
+  }
+};
+
+const ProgramQueriesExports = { 
+  insertChannels, 
+  insertProgramsBatch, 
+  fetchAndStoreEPG,
+  deepSearchEPG,
+  loadXMLTV,
+  syncEmptyChannels,
+  cleanExpiredPrograms, 
+  searchChannelsByName, 
+  getChannelsByLang, 
+  getAvailableLanguages, 
+  searchProgramsByTitle, 
+  searchProgramsByCategories, 
+  getNowByCategories, 
+  getStreamIdsByCategories, 
+  getProgramsForChannel, 
+  updateSyncStatus, 
+  getSyncStatus, 
+  isSyncNeeded 
+};
 export default ProgramQueriesExports;

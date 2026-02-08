@@ -76,6 +76,7 @@ const initSchema = async () => {
       category_name TEXT,
       epg_channel_id TEXT,
       logo TEXT,
+      is_hidden INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now')),
       updated_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
@@ -106,15 +107,24 @@ const initSchema = async () => {
       programs_count INTEGER DEFAULT 0
     )
   `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS hidden_folders (
+      category_id INTEGER PRIMARY KEY,
+      category_name TEXT,
+      hidden_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_lang ON channels(lang_prefix)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_cat ON channels(category_id)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_epg ON channels(epg_channel_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_hidden ON channels(is_hidden)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_stream ON programs(stream_id)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_title ON programs(title_normalized)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_start ON programs(start_time)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_live ON programs(is_live, start_time)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_end ON programs(end_time)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_timerange ON programs(start_time, end_time)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_hidden_folders_cat ON hidden_folders(category_id)`);
   
   // WAL mode pour perf lectures pendant écritures massives
   await db.execute(`PRAGMA journal_mode=WAL`);
