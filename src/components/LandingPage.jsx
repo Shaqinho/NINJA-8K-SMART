@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Clipboard } from '@capacitor/clipboard';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
-import { THEME } from '../constants/theme';
 import { XtreamService, parseXtreamUrl } from '../services/XtreamService';
+import { generateNinjaPIN } from '../services/ninjaAuth';
 import { Icons } from './Icons';
 import { LoadingScreen } from './LoadingScreen';
 import { PlaylistForm } from './PlaylistForm';
@@ -83,6 +83,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
   const [error, setError] = useState(null);
   const [token, setToken] = useState('');
   const [tokenLoading, setTokenLoading] = useState(false);
+  const [ninjaPin, setNinjaPin] = useState('----');
   
   const containerRef = useRef(null);
   
@@ -92,7 +93,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
 
   const [deviceId, setDeviceId] = useState('loading...');
 
-  // Lock landscape + log Device ID
+  // Lock landscape + log Device ID + Calculate PIN
   useEffect(() => {
     const lockLandscape = async () => {
       try {
@@ -107,7 +108,13 @@ const LandingPage = ({ onNavigateToPlayer }) => {
     const loadDeviceId = async () => {
       const id = await getDeviceId();
       setDeviceId(id);
+      
+      // Calculate NINJA PIN
+      const pin = generateNinjaPIN(id);
+      setNinjaPin(pin);
+      
       console.log('🔑 [Device ID]', id);
+      console.log('🔐 [NINJA PIN]', pin);
     };
     loadDeviceId();
   }, []);
@@ -476,7 +483,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
     <div 
       ref={containerRef}
       className="fixed inset-0 flex overflow-hidden relative" 
-      style={{ background: THEME.colors.bg }}
+      style={{ background: 'transparent' }}
     >
       {/* Particles */}
       {particleTheme !== 'off' && (
@@ -512,35 +519,37 @@ const LandingPage = ({ onNavigateToPlayer }) => {
             }}
           >
             <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: '#6225ff' }}>
-              ACTIVATION TOKEN
+              NINJA ID
             </p>
             <input
               type="text"
-              placeholder="26-02-XXXXXX"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
+              value={deviceId}
+              readOnly
               style={{
                 width: '100%', padding: '12px', background: '#0a0a0f',
                 border: '1px solid rgba(98, 37, 255, 0.3)', borderRadius: '6px',
-                color: '#fff', fontSize: '14px', fontFamily: 'monospace',
-                fontWeight: 800, letterSpacing: '2px', textAlign: 'center',
-                outline: 'none',
+                color: '#888', fontSize: '11px', fontFamily: 'monospace',
+                fontWeight: 700, letterSpacing: '1px', textAlign: 'center',
+                outline: 'none', cursor: 'default',
               }}
             />
-            <button
-              onClick={handleTokenConnect}
-              disabled={tokenLoading || !token.trim()}
-              style={{
-                width: '100%', marginTop: '10px', padding: '12px',
-                background: token.trim() ? 'linear-gradient(135deg, #6225ff 0%, #a020f0 100%)' : 'rgba(255,255,255,0.06)',
-                color: '#fff', border: 'none', borderRadius: '6px',
-                fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px',
-                fontSize: '11px', cursor: token.trim() ? 'pointer' : 'not-allowed',
-                opacity: tokenLoading ? 0.5 : 1,
-              }}
-            >
-              {tokenLoading ? 'CONNECTING...' : 'ENTER SYSTEM'}
-            </button>
+            <div style={{ marginTop: '10px' }}>
+              <p className="text-[9px] uppercase tracking-widest font-bold mb-2" style={{ color: '#6225ff' }}>
+                SECURITY PIN
+              </p>
+              <input
+                type="text"
+                value={ninjaPin}
+                readOnly
+                style={{
+                  width: '100%', padding: '14px', background: '#0a0a0f',
+                  border: '1px solid rgba(98, 37, 255, 0.3)', borderRadius: '6px',
+                  color: '#4ade80', fontSize: '24px', fontFamily: 'monospace',
+                  fontWeight: 900, letterSpacing: '8px', textAlign: 'center',
+                  outline: 'none', cursor: 'default',
+                }}
+              />
+            </div>
           </div>
 
           {/* Disclaimer */}
