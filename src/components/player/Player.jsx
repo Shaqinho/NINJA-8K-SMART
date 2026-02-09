@@ -395,17 +395,9 @@ const Player = memo(({
           <OTTRight
             xtreamService={xtreamService}
             currentChannel={channel}
-            sidebarTab={sidebarTab}
-            items={sidebarRef.current?.getFilteredItems() || []}
-            videoRef={videoRef}
-            onChannelSelect={(ch) => {
-              onChannelChange?.(ch);
-              sidebarRef.current?.scrollToChannel(ch.stream_id);
-            }}
-            onItemSelect={(item) => {
-              onChannelChange?.(item);
-              sidebarRef.current?.scrollToChannel(item.stream_id || item.id);
-            }}
+            currentFolder={sidebarRef.current?.getCurrentFolder?.()}
+            visible={ottSidebarOpen}
+            onClose={() => onOttSidebarChange?.(false)}
           />
         </div>
       )}
