@@ -421,12 +421,12 @@ const LandingPage = ({ onNavigateToPlayer }) => {
         </div>
       )}
       
-      <div className="relative z-10 flex w-full h-full items-center justify-center gap-8 px-8">
+      <div className="relative z-10 flex w-full h-full items-center justify-center gap-6 px-6">
         {/* Left — Logo + Token Login */}
-        <div className="flex flex-col items-center justify-center" style={{ minWidth: '280px', maxWidth: '320px' }}>
+        <div className="flex flex-col items-center justify-center" style={{ minWidth: '240px', maxWidth: '260px' }}>
           <h1 
             onClick={handleLogoClick}
-            className="text-white text-4xl font-black italic tracking-tighter cursor-pointer select-none active:scale-95 transition-transform mb-6"
+            className="text-white text-3xl font-black italic tracking-tighter cursor-pointer select-none active:scale-95 transition-transform mb-3"
             style={{ 
               textShadow: particleTheme !== 'off' 
                 ? `0 0 15px ${PARTICLE_THEME_COLORS[particleTheme]}50` 
@@ -438,7 +438,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
 
           {/* Token Login Card */}
           <div 
-            className="w-full rounded-xl p-4"
+            className="w-full rounded-lg p-3"
             style={{ 
               background: 'rgba(18, 18, 31, 0.45)',
               backdropFilter: 'blur(16px)',
@@ -447,7 +447,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
               boxShadow: '0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04)',
             }}
           >
-            <p className="text-[9px] uppercase tracking-widest font-bold mb-3" style={{ color: '#6225ff' }}>
+            <p className="text-[8px] uppercase tracking-widest font-bold mb-2" style={{ color: '#6225ff' }}>
               NINJA ID
             </p>
             <input
@@ -455,15 +455,15 @@ const LandingPage = ({ onNavigateToPlayer }) => {
               value={deviceId}
               readOnly
               style={{
-                width: '100%', padding: '12px', background: '#0a0a0f',
-                border: '1px solid rgba(98, 37, 255, 0.3)', borderRadius: '6px',
-                color: '#888', fontSize: '11px', fontFamily: 'monospace',
-                fontWeight: 700, letterSpacing: '1px', textAlign: 'center',
+                width: '100%', padding: '8px', background: '#0a0a0f',
+                border: '1px solid rgba(98, 37, 255, 0.3)', borderRadius: '4px',
+                color: '#888', fontSize: '9px', fontFamily: 'monospace',
+                fontWeight: 700, letterSpacing: '0.5px', textAlign: 'center',
                 outline: 'none', cursor: 'default',
               }}
             />
-            <div style={{ marginTop: '10px' }}>
-              <p className="text-[9px] uppercase tracking-widest font-bold mb-2" style={{ color: '#6225ff' }}>
+            <div style={{ marginTop: '8px' }}>
+              <p className="text-[8px] uppercase tracking-widest font-bold mb-2" style={{ color: '#6225ff' }}>
                 SECURITY PIN
               </p>
               <input
@@ -471,10 +471,10 @@ const LandingPage = ({ onNavigateToPlayer }) => {
                 value={ninjaPin}
                 readOnly
                 style={{
-                  width: '100%', padding: '14px', background: '#0a0a0f',
-                  border: '1px solid rgba(98, 37, 255, 0.3)', borderRadius: '6px',
-                  color: '#4ade80', fontSize: '24px', fontFamily: 'monospace',
-                  fontWeight: 900, letterSpacing: '8px', textAlign: 'center',
+                  width: '100%', padding: '10px', background: '#0a0a0f',
+                  border: '1px solid rgba(98, 37, 255, 0.3)', borderRadius: '4px',
+                  color: '#4ade80', fontSize: '18px', fontFamily: 'monospace',
+                  fontWeight: 900, letterSpacing: '6px', textAlign: 'center',
                   outline: 'none', cursor: 'default',
                 }}
               />
@@ -483,20 +483,20 @@ const LandingPage = ({ onNavigateToPlayer }) => {
 
           {/* Disclaimer */}
           <div 
-            className="w-full rounded-xl p-2 flex items-center justify-center gap-2 mt-3"
+            className="w-full rounded-lg p-1.5 flex items-center justify-center gap-1.5 mt-2"
             style={{ 
               background: 'rgba(18, 18, 31, 0.3)',
               border: '1px solid rgba(98, 37, 255, 0.1)',
             }}
           >
-            <div className="w-3 h-3 text-gray-600"><Icons.Info/></div>
-            <p className="text-gray-600 text-[9px] font-bold uppercase tracking-wider">We do not provide any content.</p>
+            <div className="w-2.5 h-2.5 text-gray-600"><Icons.Info/></div>
+            <p className="text-gray-600 text-[8px] font-bold uppercase tracking-wider">We do not provide any content.</p>
           </div>
 
-          <p className="text-gray-600 text-[10px] font-bold mt-4">Ninja 8K | All Rights Reserved</p>
-          <p className="text-gray-700 text-[9px]">Version 2.0</p>
+          <p className="text-gray-600 text-[9px] font-bold mt-2">Ninja 8K | All Rights Reserved</p>
+          <p className="text-gray-700 text-[8px]">Version 2.0</p>
           <p
-            className="text-gray-500 text-[11px] mt-1 font-mono font-bold cursor-pointer active:scale-95 transition-transform"
+            className="text-gray-500 text-[9px] mt-1 font-mono font-bold cursor-pointer active:scale-95 transition-transform"
             onClick={async () => {
               try {
                 await Clipboard.write({ string: deviceId });
@@ -510,10 +510,10 @@ const LandingPage = ({ onNavigateToPlayer }) => {
         </div>
 
         {/* Divider */}
-        <div style={{ width: '1px', height: '60%', background: 'rgba(98, 37, 255, 0.15)' }} />
+        <div style={{ width: '1px', height: '55%', background: 'rgba(98, 37, 255, 0.15)' }} />
 
         {/* Right — Manual / Advanced */}
-        <div style={{ width: '380px', maxHeight: '70vh', overflowY: 'auto' }}>
+        <div style={{ width: '360px', maxHeight: 'none', overflowY: 'visible' }}>
           {/* Error */}
           {error && (
             <div 
