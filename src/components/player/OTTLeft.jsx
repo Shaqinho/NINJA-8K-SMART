@@ -1268,7 +1268,7 @@ const OTTLeft = forwardRef(({
         )}
       </div>
     );
-  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId, focusedStreamId]);
+  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId, focusedStreamId, onOpenEPGGrid]);
 
   // ========== VIRTUALIZED MOVIE ROW ==========
   const MovieRow = useCallback(({ index, style }) => {

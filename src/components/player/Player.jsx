@@ -55,7 +55,6 @@ const Player = memo(({
   
   // EPGGrid state
   const [showEPGGrid, setShowEPGGrid] = useState(false);
-  const [currentFolder, setCurrentFolder] = useState(null);
   const [favorites, setFavorites] = useState([]);
 
   const src = channel?.streamUrl || channel?.url || null;
@@ -428,7 +427,7 @@ const Player = memo(({
       {/* EPGGrid Fullscreen */}
       {showEPGGrid && (
         <EPGGrid
-          folder={currentFolder}
+          folder={null}
           xtreamService={xtreamService}
           currentChannel={channel}
           favorites={favorites}

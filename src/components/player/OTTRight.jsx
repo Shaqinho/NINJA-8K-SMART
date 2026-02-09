@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 
 // ============================================================================
@@ -39,20 +39,6 @@ const formatDuration = (secs) => {
   const m = Math.floor((s % 3600) / 60);
   if (h > 0) return `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
   return `${m}min`;
-};
-
-// Format "Updated X days ago"
-const formatTimeAgo = (timestamp) => {
-  if (!timestamp) return '';
-  const now = Date.now() / 1000;
-  const ts = Number(timestamp);
-  if (!ts || !isFinite(ts)) return '';
-  const diffDays = Math.floor((now - ts) / 86400);
-  if (diffDays < 1) return 'Updated today';
-  if (diffDays === 1) return 'Updated yesterday';
-  if (diffDays < 30) return `Updated ${diffDays} days ago`;
-  if (diffDays < 365) return `Updated ${Math.floor(diffDays / 30)} months ago`;
-  return `Updated ${Math.floor(diffDays / 365)} years ago`;
 };
 
 // Tag pill component
@@ -261,10 +247,8 @@ const OTTRight = ({
     const rating = info.rating || selectedItem.rating || '';
     const year = info.releasedate || info.release_date || selectedItem.releaseDate || selectedItem.year || '';
     const duration = info.duration || selectedItem.duration || '';
-    const country = info.country || '';
     const trailer = info.youtube_trailer || '';
     const video = info.video || selectedItem.video || null;
-    const lastModified = info.last_modified || selectedItem.lastModified || null;
     const episodeRunTime = info.episode_run_time || selectedItem.episodeRunTime || null;
 
     const audioTracks = getAudioTracks(info);
