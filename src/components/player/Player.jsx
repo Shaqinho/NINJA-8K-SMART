@@ -253,10 +253,8 @@ const Player = memo(({
   return (
     <div
       ref={containerRef}
-      className="relative w-full"
+      className="relative w-full h-full"
       style={{
-        aspectRatio: isFullscreen ? 'auto' : '16/9',
-        height: isFullscreen ? '100%' : 'auto',
         backgroundColor: 'transparent',
       }}
       onClick={() => setShowControls(true)}

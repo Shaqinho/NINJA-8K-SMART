@@ -5,7 +5,7 @@ import { libVLC } from './libVLC';
 export const getPlayerMode = () => localStorage.getItem('ninja_player_mode') || 'both';
 export const setPlayerMode = (mode) => localStorage.setItem('ninja_player_mode', mode);
 
-export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScreen = false }, ref) => {
+export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScreen = false, aspectRatio = 'auto' }, ref) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const isAndroid = Capacitor.getPlatform() === 'android';
@@ -147,15 +147,38 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
     }
   }, [useNative, isFullScreen, updatePos]);
 
+  // Get container style based on aspect ratio
+  const getContainerStyle = () => {
+    const baseStyle = { background: 'transparent' };
+    
+    if (aspectRatio === '16:9') {
+      return { ...baseStyle, aspectRatio: '16/9' };
+    } else if (aspectRatio === '1:1') {
+      return { ...baseStyle, aspectRatio: '1/1' };
+    } else {
+      // 'auto' or 'fill' - use full container
+      return baseStyle;
+    }
+  };
+
   return (
     <div
       ref={containerRef}
       className={`relative w-full h-full overflow-hidden ${className}`}
       onClick={onTap}
-      style={{ background: 'transparent' }}
+      style={getContainerStyle()}
     >
       {!useNative && (
-        <video ref={videoRef} src={src} className="w-full h-full object-contain" playsInline autoPlay />
+        <video 
+          ref={videoRef} 
+          src={src} 
+          className="w-full h-full"
+          style={{
+            objectFit: aspectRatio === 'fill' ? 'cover' : 'contain'
+          }}
+          playsInline 
+          autoPlay 
+        />
       )}
     </div>
   );
