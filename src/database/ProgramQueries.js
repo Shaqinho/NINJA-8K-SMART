@@ -7,13 +7,31 @@ import { getDatabase, extractLangPrefix, normalizeText, querySql, executeSql } f
 export const insertChannels = async (channels) => {
   if (!channels?.length) return 0;
   const db = getDatabase();
-  const statements = channels.map(ch => ({
-    statement: `INSERT OR REPLACE INTO channels (stream_id, name, lang_prefix, category_id, category_name, epg_channel_id, logo, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))`,
-    values: [ch.id || ch.stream_id, ch.name || '', extractLangPrefix(ch.name), ch.categoryId || ch.category_id || null, ch.category || ch.category_name || null, ch.epgChannelId || ch.epg_channel_id || null, ch.logo || ch.stream_icon || null],
-  }));
-  await db.executeSet(statements);
-  console.log(`✅ ${channels.length} channels inserted`);
-  return channels.length;
+  
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    for (const ch of channels) {
+      await db.execute(
+        `INSERT OR REPLACE INTO channels (stream_id, name, lang_prefix, category_id, category_name, epg_channel_id, logo, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))`,
+        [
+          ch.id || ch.stream_id, 
+          ch.name || '', 
+          extractLangPrefix(ch.name), 
+          ch.categoryId || ch.category_id || null, 
+          ch.category || ch.category_name || null, 
+          ch.epgChannelId || ch.epg_channel_id || null, 
+          ch.logo || ch.stream_icon || null
+        ]
+      );
+    }
+    await db.execute('COMMIT');
+    console.log(`✅ ${channels.length} channels inserted (transactional)`);
+    return channels.length;
+  } catch (err) {
+    await db.execute('ROLLBACK');
+    console.error('❌ insertChannels failed:', err);
+    throw err;
+  }
 };
 
 // ============================================================================
@@ -24,95 +42,145 @@ export const insertChannels = async (channels) => {
 export const insertLiveCategories = async (categories) => {
   if (!categories?.length) return 0;
   const db = getDatabase();
-  const statements = categories.map(cat => ({
-    statement: `INSERT OR REPLACE INTO live_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
-    values: [
-      cat.category_id || cat.id,
-      cat.category_name || cat.name || '',
-      cat.parent_id || 0
-    ],
-  }));
-  await db.executeSet(statements);
-  console.log(`✅ ${categories.length} live categories inserted`);
-  return categories.length;
+  
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    for (const cat of categories) {
+      await db.execute(
+        `INSERT OR REPLACE INTO live_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+        [
+          cat.category_id || cat.id,
+          cat.category_name || cat.name || '',
+          cat.parent_id || 0
+        ]
+      );
+    }
+    await db.execute('COMMIT');
+    console.log(`✅ ${categories.length} live categories inserted (transactional)`);
+    return categories.length;
+  } catch (err) {
+    await db.execute('ROLLBACK');
+    console.error('❌ insertLiveCategories failed:', err);
+    throw err;
+  }
 };
 
 // Insert VOD Categories (bulk)
 export const insertVODCategories = async (categories) => {
   if (!categories?.length) return 0;
   const db = getDatabase();
-  const statements = categories.map(cat => ({
-    statement: `INSERT OR REPLACE INTO vod_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
-    values: [
-      cat.category_id || cat.id,
-      cat.category_name || cat.name || '',
-      cat.parent_id || 0
-    ],
-  }));
-  await db.executeSet(statements);
-  console.log(`✅ ${categories.length} VOD categories inserted`);
-  return categories.length;
+  
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    for (const cat of categories) {
+      await db.execute(
+        `INSERT OR REPLACE INTO vod_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+        [
+          cat.category_id || cat.id,
+          cat.category_name || cat.name || '',
+          cat.parent_id || 0
+        ]
+      );
+    }
+    await db.execute('COMMIT');
+    console.log(`✅ ${categories.length} VOD categories inserted (transactional)`);
+    return categories.length;
+  } catch (err) {
+    await db.execute('ROLLBACK');
+    console.error('❌ insertVODCategories failed:', err);
+    throw err;
+  }
 };
 
 // Insert Series Categories (bulk)
 export const insertSeriesCategories = async (categories) => {
   if (!categories?.length) return 0;
   const db = getDatabase();
-  const statements = categories.map(cat => ({
-    statement: `INSERT OR REPLACE INTO series_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
-    values: [
-      cat.category_id || cat.id,
-      cat.category_name || cat.name || '',
-      cat.parent_id || 0
-    ],
-  }));
-  await db.executeSet(statements);
-  console.log(`✅ ${categories.length} series categories inserted`);
-  return categories.length;
+  
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    for (const cat of categories) {
+      await db.execute(
+        `INSERT OR REPLACE INTO series_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+        [
+          cat.category_id || cat.id,
+          cat.category_name || cat.name || '',
+          cat.parent_id || 0
+        ]
+      );
+    }
+    await db.execute('COMMIT');
+    console.log(`✅ ${categories.length} series categories inserted (transactional)`);
+    return categories.length;
+  } catch (err) {
+    await db.execute('ROLLBACK');
+    console.error('❌ insertSeriesCategories failed:', err);
+    throw err;
+  }
 };
 
 // Insert VOD Items (bulk)
 export const insertVODItems = async (items) => {
   if (!items?.length) return 0;
   const db = getDatabase();
-  const statements = items.map(item => ({
-    statement: `INSERT OR REPLACE INTO vod_items (stream_id, name, category_id, category_name, logo, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    values: [
-      item.stream_id || item.id,
-      item.name || '',
-      item.categoryId || item.category_id || null,
-      item.category || item.category_name || null,
-      item.logo || item.stream_icon || null,
-      item.rating || null,
-      item.year || null,
-      item.genre || null
-    ],
-  }));
-  await db.executeSet(statements);
-  console.log(`✅ ${items.length} VOD items inserted`);
-  return items.length;
+  
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    for (const item of items) {
+      await db.execute(
+        `INSERT OR REPLACE INTO vod_items (stream_id, name, category_id, category_name, logo, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          item.stream_id || item.id,
+          item.name || '',
+          item.categoryId || item.category_id || null,
+          item.category || item.category_name || null,
+          item.logo || item.stream_icon || null,
+          item.rating || null,
+          item.year || null,
+          item.genre || null
+        ]
+      );
+    }
+    await db.execute('COMMIT');
+    console.log(`✅ ${items.length} VOD items inserted (transactional)`);
+    return items.length;
+  } catch (err) {
+    await db.execute('ROLLBACK');
+    console.error('❌ insertVODItems failed:', err);
+    throw err;
+  }
 };
 
 // Insert Series Items (bulk)
 export const insertSeriesItems = async (items) => {
   if (!items?.length) return 0;
   const db = getDatabase();
-  const statements = items.map(item => ({
-    statement: `INSERT OR REPLACE INTO series_items (series_id, name, category_id, category_name, cover, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    values: [
-      item.series_id || item.id,
-      item.name || '',
-      item.categoryId || item.category_id || null,
-      item.category || item.category_name || null,
-      item.cover || item.cover_big || null,
-      item.rating || null,
-      item.year || null,
-      item.genre || null
-    ],
-  }));
-  await db.executeSet(statements);
-  console.log(`✅ ${items.length} series items inserted`);
-  return items.length;
+  
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    for (const item of items) {
+      await db.execute(
+        `INSERT OR REPLACE INTO series_items (series_id, name, category_id, category_name, cover, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          item.series_id || item.id,
+          item.name || '',
+          item.categoryId || item.category_id || null,
+          item.category || item.category_name || null,
+          item.cover || item.cover_big || null,
+          item.rating || null,
+          item.year || null,
+          item.genre || null
+        ]
+      );
+    }
+    await db.execute('COMMIT');
+    console.log(`✅ ${items.length} series items inserted (transactional)`);
+    return items.length;
+  } catch (err) {
+    await db.execute('ROLLBACK');
+    console.error('❌ insertSeriesItems failed:', err);
+    throw err;
+  }
 };
 
 // Clean expired programs (end_time < now)
