@@ -168,10 +168,20 @@ const OTTRight = ({
     onItemSelect?.(epItem);
   }, [xtreamService, onItemSelect]);
 
-  // Extract audio tracks: JSON info > probe fallback
+  // Extract audio tracks: probe > JSON fallback
   const getAudioTracks = useCallback((info) => {
-    if (probeData?.audioTracks?.length > 0) return probeData.audioTracks.map(t => getLangName(t.language || t.name));
-    if (info?.audio) return [`${getLangName(info.audio.codec_name || '')} (${info.audio.channels || '?'}ch)`];
+    if (probeData?.audioTracks?.length > 0) {
+      return probeData.audioTracks.map(t => {
+        const lang = getLangName(t.language || t.name || 'unknown');
+        const channels = t.channels ? `${t.channels === 6 ? '5.1' : t.channels === 2 ? 'Stereo' : `${t.channels}ch`}` : '';
+        return channels ? `${lang} (${channels})` : lang;
+      });
+    }
+    if (info?.audio?.tags?.language) {
+      const lang = getLangName(info.audio.tags.language);
+      const channels = info.audio.channels ? `${info.audio.channels === 6 ? '5.1' : info.audio.channels === 2 ? 'Stereo' : `${info.audio.channels}ch`}` : '';
+      return channels ? [`${lang} (${channels})`] : [lang];
+    }
     return [];
   }, [probeData]);
 
@@ -313,27 +323,33 @@ const OTTRight = ({
             )}
             {cast && <div style={{ fontSize: '10px', color: '#666' }}>🎭 {cast.substring(0, 150)}</div>}
 
-            {/* Language (audio) */}
+            {/* Audio */}
             <div>
-              <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>
-                🔊 LANGUAGE {probing ? '...' : audioTracks.length > 0 ? `(${audioTracks.length})` : ''}
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#888' }}>
+                AUDIO {probing ? '...' : audioTracks.length > 0 ? `(${audioTracks.length})` : ''}
               </span>
               {audioTracks.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
                   {audioTracks.map((name, i) => <TagPill key={i} color="purple">{name}</TagPill>)}
                 </div>
               )}
+              {!probing && audioTracks.length === 0 && (
+                <div style={{ fontSize: '10px', color: '#555', marginTop: '4px' }}>No audio info</div>
+              )}
             </div>
 
             {/* Subtitles */}
             <div>
-              <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>
-                💬 SUBTITLES {probing ? '...' : subtitleTracks.length > 0 ? `(${subtitleTracks.length})` : ''}
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#888' }}>
+                SUBTITLES {probing ? '...' : subtitleTracks.length > 0 ? `(${subtitleTracks.length})` : ''}
               </span>
               {subtitleTracks.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
                   {subtitleTracks.map((name, i) => <TagPill key={i} color="gray">{name}</TagPill>)}
                 </div>
+              )}
+              {!probing && subtitleTracks.length === 0 && (
+                <div style={{ fontSize: '10px', color: '#555', marginTop: '4px' }}>No subtitles</div>
               )}
             </div>
           </div>
