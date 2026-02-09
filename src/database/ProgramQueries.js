@@ -590,24 +590,3 @@ export const syncEmptyChannels = async (xtreamService, allFolders) => {
   }
 };
 
-// ============================================================================
-// INSERT CATEGORIES (LIVE, VOD, SERIES)
-// ============================================================================
-
-/**
- * Insert Live Categories
- */
- */
-  const db = getDatabase();
-  
-  await db.execute('DELETE FROM vod_items');
-  
-  for (const item of items) {
-    await db.run(
-      `INSERT OR REPLACE INTO vod_items 
-       (stream_id, name, category_id, category_name, logo, rating, year, genre) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        item.id || item.stream_id,
-        item.name,
-        item.c
