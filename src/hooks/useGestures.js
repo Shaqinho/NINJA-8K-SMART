@@ -13,8 +13,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 // 3 FINGERS:
 //   - Swipe Right = Open OTTLeft + OTTRight
 //   - Swipe Left = Close OTTLeft + OTTRight
-//   - Pinch = Open OTTLeft + OTTRight
-//   - Spread = Close OTTLeft + OTTRight
 //
 // DPAD / REMOTE:
 //   - Arrows = Navigation
@@ -172,32 +170,18 @@ export const useGestures = (containerRef, callbacks = {}) => {
     }
 
     // ========================================
-    // 3 FINGERS — OTTLeft + OTTRight control
+    // 3 FINGERS — OTT Swipe only (no pinch/spread)
     // ========================================
     if (fingerCount === 3 && touchStartX !== null && touchStartY !== null) {
-      const currentDistance = getTouchDistance(e.touches);
-      const distanceChange = initialPinchDistance ? currentDistance - initialPinchDistance : 0;
       const deltaX = center.x - touchStartX;
       const deltaY = center.y - touchStartY;
 
-      // SWIPE horizontal
+      // SWIPE horizontal only
       if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY)) {
         if (deltaX > 0) {
           callbacks.onOTTOpen?.();
         } else {
           callbacks.onOTTClose?.();
-        }
-        setInitialPinchDistance(null);
-        setTouchStartY(null);
-        setTouchStartX(null);
-        gestureActiveRef.current = false;
-      }
-      // PINCH/SPREAD
-      else if (Math.abs(distanceChange) > 50) {
-        if (distanceChange > 0) {
-          callbacks.onOTTClose?.();
-        } else {
-          callbacks.onOTTOpen?.();
         }
         setInitialPinchDistance(null);
         setTouchStartY(null);

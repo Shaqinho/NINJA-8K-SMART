@@ -293,6 +293,7 @@ const OTTLeft = forwardRef(({
   xtreamService,
   epgSyncProgress: externalEpgSyncProgress = 0,
   epgSyncingFolders = new Set(),
+  onOpenEPGGrid,
 }, ref) => {
   // States
   const [isVisible, setIsVisible] = useState(true);
@@ -1205,9 +1206,30 @@ const OTTLeft = forwardRef(({
           </TickerText>
           {/* EPG under channel name (vertical layout) */}
           {epgTitle && (
-            <TickerText style={{ fontSize: '8px', color: '#888' }}>
-              {epgTitle}
-            </TickerText>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <TickerText style={{ fontSize: '8px', color: '#888', flex: 1, minWidth: 0 }}>
+                {epgTitle}
+              </TickerText>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenEPGGrid?.(channel);
+                }}
+                style={{
+                  background: 'rgba(98, 37, 255, 0.2)',
+                  border: '1px solid rgba(98, 37, 255, 0.4)',
+                  borderRadius: '3px',
+                  padding: '1px 4px',
+                  fontSize: '7px',
+                  color: '#b85cff',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  fontWeight: 600,
+                }}
+              >
+                EPG
+              </button>
+            </div>
           )}
           {/* Mini progress bar for live program */}
           {epgTitle && epgProgress > 0 && (
