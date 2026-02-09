@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAndStoreEPG, deepSearchEPG, getProgramsForChannel } from '../../database/ProgramQueries';
 import { toggleChannel, isChannelHidden } from '../../database/HiddenManager';
 import EPGGrid from './EPGGrid';

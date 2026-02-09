@@ -81,8 +81,8 @@ const LandingPage = ({ onNavigateToPlayer }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ step: '', percent: 0 });
   const [error, setError] = useState(null);
-  const [token, setToken] = useState('');
-  const [tokenLoading, setTokenLoading] = useState(false);
+  // const [token, setToken] = useState('');
+  // const [tokenLoading, setTokenLoading] = useState(false);
   const [ninjaPin, setNinjaPin] = useState('----');
   
   const containerRef = useRef(null);
@@ -134,6 +134,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
   // ============================================================================
   // TOKEN LOGIN — Authenticate via Ninja CMS
   // ============================================================================
+  /* DISABLED - Uncomment when needed
   const handleTokenConnect = async () => {
     if (!token.trim()) {
       setError('Enter your activation token');
@@ -190,6 +191,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
       setTokenLoading(false);
     }
   };
+  */
 
   const handleNinjaPaste = async () => {
     try {

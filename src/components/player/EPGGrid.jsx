@@ -125,7 +125,6 @@ const EPGGrid = ({ folder, xtreamService, onClose }) => {
   // ========== GET PROGRAM FOR TIME SLOT ==========
   const getProgramAtTime = (streamId, slotTimestamp) => {
     const programs = epgData[streamId] || [];
-    const slotEnd = slotTimestamp + 3600; // +1 hour
     
     return programs.find(prog => 
       prog.start_time <= slotTimestamp && prog.end_time > slotTimestamp

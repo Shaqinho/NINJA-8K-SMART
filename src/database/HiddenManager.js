@@ -1,7 +1,7 @@
 // ============================================================================
 // HIDDEN MANAGER - Manage hidden folders and channels
 // ============================================================================
-import { getDatabase, querySql, executeSql } from './NinjaLocalDB';
+import { querySql, executeSql } from './NinjaLocalDB';
 
 // ============================================================================
 // FOLDERS (Categories)
