@@ -7,6 +7,7 @@ import { PlayerSettings } from './PlayerSettings';
 import VideoPlayer from './VideoPlayer';
 import OTTLeft from './OTTLeft';             // OTTLeft
 import OTTRight from './OTTRight';           // OTTRight (live: EPG search, movies/series: poster grid)
+import EPGGrid from './EPGGrid';             // EPGGrid fullscreen (Planby temporal proportions)
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -51,6 +52,11 @@ const Player = memo(({
   const [timeshiftOffset, setTimeshiftOffset] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [aspectRatio, setAspectRatio] = useState('Auto');
+  
+  // EPGGrid state
+  const [showEPGGrid, setShowEPGGrid] = useState(false);
+  const [currentFolder, setCurrentFolder] = useState(null);
+  const [favorites, setFavorites] = useState([]);
 
   const src = channel?.streamUrl || channel?.url || null;
 
@@ -417,6 +423,36 @@ const Player = memo(({
             visible={ottSidebarOpen}
           />
         </div>
+      )}
+      
+      {/* EPGGrid Fullscreen */}
+      {showEPGGrid && (
+        <EPGGrid
+          folder={currentFolder}
+          xtreamService={xtreamService}
+          currentChannel={channel}
+          favorites={favorites}
+          onChannelSelect={(ch) => {
+            onChannelChange(ch);
+            setShowEPGGrid(false);
+          }}
+          onToggleFavorite={(streamId) => {
+            setFavorites(prev => 
+              prev.includes(streamId)
+                ? prev.filter(id => id !== streamId)
+                : [...prev, streamId]
+            );
+          }}
+          onFolderNext={() => {
+            // TODO: Implement folder navigation
+            console.log('Next folder');
+          }}
+          onFolderPrev={() => {
+            // TODO: Implement folder navigation
+            console.log('Prev folder');
+          }}
+          onClose={() => setShowEPGGrid(false)}
+        />
       )}
     </div>
   );
