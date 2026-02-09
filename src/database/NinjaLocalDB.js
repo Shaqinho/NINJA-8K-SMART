@@ -114,6 +114,66 @@ const initSchema = async () => {
       hidden_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `);
+  
+  // ========== LIVE CATEGORIES ==========
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS live_categories (
+      category_id TEXT PRIMARY KEY,
+      category_name TEXT NOT NULL,
+      parent_id INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  
+  // ========== VOD CATEGORIES ==========
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS vod_categories (
+      category_id TEXT PRIMARY KEY,
+      category_name TEXT NOT NULL,
+      parent_id INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  
+  // ========== SERIES CATEGORIES ==========
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS series_categories (
+      category_id TEXT PRIMARY KEY,
+      category_name TEXT NOT NULL,
+      parent_id INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  
+  // ========== VOD ITEMS ==========
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS vod_items (
+      stream_id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      category_id TEXT,
+      category_name TEXT,
+      logo TEXT,
+      rating TEXT,
+      year TEXT,
+      genre TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  
+  // ========== SERIES ITEMS ==========
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS series_items (
+      series_id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      category_id TEXT,
+      category_name TEXT,
+      cover TEXT,
+      rating TEXT,
+      year TEXT,
+      genre TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_lang ON channels(lang_prefix)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_cat ON channels(category_id)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_epg ON channels(epg_channel_id)`);
@@ -125,6 +185,10 @@ const initSchema = async () => {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_end ON programs(end_time)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_programs_timerange ON programs(start_time, end_time)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_hidden_folders_cat ON hidden_folders(category_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_items_cat ON vod_items(category_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_items_name ON vod_items(name)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_items_cat ON series_items(category_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_items_name ON series_items(name)`);
   
   // WAL mode pour perf lectures pendant écritures massives
   await db.execute(`PRAGMA journal_mode=WAL`);

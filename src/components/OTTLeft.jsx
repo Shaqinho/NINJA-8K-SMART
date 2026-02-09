@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { ninjaCentral, STORES } from '../../services/NinjaCentral';
-import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
+import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch, syncEmptyChannels } from '../../database/ProgramQueries';
 
 // ============================================================================
 // OTT SIDEBAR - Composant autonome pour mode paysage/fullscreen
@@ -356,6 +356,28 @@ const OTTLeft = forwardRef(({
     window.addEventListener('touchstart', onTouch, { passive: true });
     return () => window.removeEventListener('touchstart', onTouch);
   }, []);
+  
+  // ========== BACKGROUND SYNC EMPTY CHANNELS (folders 1-150) ==========
+  useEffect(() => {
+    if (!dataLoaded || !xtreamService || liveCategories.length === 0) return;
+    
+    // Start background sync 5 seconds after data loaded
+    const timer = setTimeout(async () => {
+      console.log('🔄 Starting background sync for empty channels (folders 1-150)...');
+      
+      try {
+        const result = await syncEmptyChannels(xtreamService, liveCategories);
+        
+        if (result) {
+          console.log(`✅ Background sync complete: ${result.synced} channels synced, ${result.skipped} skipped`);
+        }
+      } catch (err) {
+        console.error('❌ Background sync failed:', err);
+      }
+    }, 5000); // 5 seconds delay
+    
+    return () => clearTimeout(timer);
+  }, [dataLoaded, xtreamService, liveCategories]);
   
   // Use external control if provided, otherwise internal
   const isSidebarOpen = externalIsOpen !== undefined ? externalIsOpen : internalSidebarOpen;

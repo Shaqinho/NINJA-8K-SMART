@@ -11,6 +11,7 @@ import { ninjaCentral, STORES } from './services/NinjaCentral';
 import { useGestures } from './hooks/useGestures';
 import { openDatabase, extractLangPrefix } from './database/NinjaLocalDB';
 import { insertProgramsBatch, cleanExpiredPrograms } from './database/ProgramQueries';
+import XMLTVRefreshService from './services/XMLTVRefreshService';
 
 // ============================================================================
 // NINJA 8K — App Root
@@ -256,6 +257,23 @@ const AppContent = () => {
     if (!playlist?.server || !playlist?.username || !playlist?.password) return null;
     return new XtreamService(playlist.server, playlist.username, playlist.password);
   }, [playlist]);
+
+  // ============================================================================
+  // XMLTV BACKGROUND REFRESH - Every 5 minutes
+  // ============================================================================
+  useEffect(() => {
+    if (!xtreamService) return;
+    
+    console.log('🔄 Starting XMLTV background refresh service...');
+    
+    const xmltvRefresh = new XMLTVRefreshService(xtreamService);
+    xmltvRefresh.start();
+    
+    return () => {
+      console.log('🛑 Stopping XMLTV background refresh service...');
+      xmltvRefresh.stop();
+    };
+  }, [xtreamService]);
 
   // ============================================================================
   // EPG BACKGROUND SYNC — Concentric, lang-filtered, every 30 minutes
