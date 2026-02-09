@@ -249,6 +249,18 @@ const LandingPage = ({ onNavigateToPlayer }) => {
     let mappedLive = [], mappedVod = [], mappedSeries = [];
     let liveCategories = [], vodCategories = [], seriesCategories = [];
 
+    // ============================================================
+    // PARALLÉLISATION : Lancer XMLTV en background immédiatement
+    // ============================================================
+    let xmltvPromise = null;
+    if (fetchOptions.live) {
+      xmltvPromise = loadXMLTV(service).catch(err => {
+        console.warn('⚠️ Background XMLTV load failed:', err);
+        return { success: false };
+      });
+      console.log('🔄 XMLTV loading started in background...');
+    }
+
     if (fetchOptions.live) {
       setProgress({ step: 'Fetching Live TV...', percent: 30 });
       const [cats, streams] = await Promise.all([
@@ -281,36 +293,45 @@ const LandingPage = ({ onNavigateToPlayer }) => {
 
     setProgress({ step: 'Done!', percent: 100 });
 
-    // ========== STORE IN SQLITE FOR SEARCH ==========
+    // ========== STORE IN SQLITE FOR SEARCH (NON-BLOQUANT) ==========
     try {
       setProgress({ step: 'Indexing for search...', percent: 85 });
       await openDatabase();
       
-      // ========== SAVE LIVE CHANNELS & CATEGORIES ==========
-      if (mappedLive.length > 0) {
-        await insertChannels(mappedLive);
-        console.log(`✅ Indexed ${mappedLive.length} live channels for search`);
-      }
+      // ========== SAFETY TIMEOUT : 10 secondes max ==========
+      const indexingTimeout = new Promise((resolve) => 
+        setTimeout(() => {
+          console.warn('⏱️ Indexing timeout - continuing to Player');
+          resolve('timeout');
+        }, 10000)
+      );
       
-      if (liveCategories.length > 0) {
-        await insertLiveCategories(liveCategories);
-        console.log(`✅ Saved ${liveCategories.length} live categories`);
-      }
-      
-      // ========== SAVE VOD ITEMS & CATEGORIES ==========
-      if (mappedVod.length > 0) {
-        await insertVODItems(mappedVod);
-        console.log(`✅ Saved ${mappedVod.length} VOD items`);
-      }
-      
-      if (vodCategories.length > 0) {
-        await insertVODCategories(vodCategories);
-        console.log(`✅ Saved ${vodCategories.length} VOD categories`);
-      }
-      
-      // ========== SAVE SERIES ITEMS & CATEGORIES ==========
-      if (mappedSeries.length > 0) {
-        await insertSeriesItems(mappedSeries);
+      const indexingWork = (async () => {
+        // ========== SAVE LIVE CHANNELS & CATEGORIES ==========
+        if (mappedLive.length > 0) {
+          await insertChannels(mappedLive);
+          console.log(`✅ Indexed ${mappedLive.length} live channels for search`);
+        }
+        
+        if (liveCategories.length > 0) {
+          await insertLiveCategories(liveCategories);
+          console.log(`✅ Saved ${liveCategories.length} live categories`);
+        }
+        
+        // ========== SAVE VOD ITEMS & CATEGORIES ==========
+        if (mappedVod.length > 0) {
+          await insertVODItems(mappedVod);
+          console.log(`✅ Saved ${mappedVod.length} VOD items`);
+        }
+        
+        if (vodCategories.length > 0) {
+          await insertVODCategories(vodCategories);
+          console.log(`✅ Saved ${vodCategories.length} VOD categories`);
+        }
+        
+        // ========== SAVE SERIES ITEMS & CATEGORIES ==========
+        if (mappedSeries.length > 0) {
+          await insertSeriesItems(mappedSeries);
         console.log(`✅ Saved ${mappedSeries.length} series items`);
       }
       
@@ -318,14 +339,26 @@ const LandingPage = ({ onNavigateToPlayer }) => {
         await insertSeriesCategories(seriesCategories);
         console.log(`✅ Saved ${seriesCategories.length} series categories`);
       }
+        
+        return 'completed';
+      })();
+      
+      // ========== RACE : Timeout vs Indexation ==========
+      const result = await Promise.race([indexingWork, indexingTimeout]);
+      
+      if (result === 'timeout') {
+        console.log('⏱️ Indexing will continue in background');
+        // Laisser indexingWork continuer sans bloquer
+        indexingWork.catch(err => console.error('Background indexing error:', err));
+      }
       
       // ============================================================
-      // XMLTV EPG LOADING - Fast bulk load (34s for 70-80% channels)
+      // XMLTV EPG LOADING - Récupérer le résultat du background load
       // ============================================================
-      if (mappedLive.length > 0) {
+      if (mappedLive.length > 0 && xmltvPromise) {
         setProgress({ step: 'Loading XMLTV EPG...', percent: 90 });
         
-        const xmltvResult = await loadXMLTV(service);
+        const xmltvResult = await xmltvPromise; // ← Récupère la Promise lancée au début
         
         if (xmltvResult.success) {
           console.log(`✅ XMLTV loaded: ${xmltvResult.channelsCount} channels, ${xmltvResult.programsCount} programs in ${xmltvResult.elapsed}s`);
