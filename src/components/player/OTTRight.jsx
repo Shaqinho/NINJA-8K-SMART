@@ -107,11 +107,6 @@ const OTTRight = ({
     setSelectedSeason(1);
   }, [items]);
 
-  // Only render for movies/series tabs
-  if (!visible || (sidebarTab !== 'movies' && sidebarTab !== 'series')) {
-    return null;
-  }
-
   // Fetch detail info + probe stream
   const handleThumbnailClick = useCallback(async (item) => {
     setSelectedItem(item);
@@ -186,6 +181,11 @@ const OTTRight = ({
     if (probeData?.subtitleTracks?.length > 0) return probeData.subtitleTracks.map(t => getLangName(t.language || t.name));
     return [];
   }, [probeData]);
+
+  // Only render for movies/series tabs
+  if (!visible || (sidebarTab !== 'movies' && sidebarTab !== 'series')) {
+    return null;
+  }
 
   // ========== LIVE DETAIL VIEW ==========
   if (selectedItem && type === 'live') {
