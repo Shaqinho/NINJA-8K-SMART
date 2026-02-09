@@ -77,11 +77,6 @@ const OTTRight = ({
   onItemSelect,
   visible = false,
 }) => {
-  // Only render for movies/series tabs
-  if (!visible || (sidebarTab !== 'movies' && sidebarTab !== 'series')) {
-    return null;
-  }
-
   const type = sidebarTab; // 'movies' or 'series'
   
   const [selectedItem, setSelectedItem] = useState(null);
@@ -111,6 +106,11 @@ const OTTRight = ({
     setProbeData(null);
     setSelectedSeason(1);
   }, [items]);
+
+  // Only render for movies/series tabs
+  if (!visible || (sidebarTab !== 'movies' && sidebarTab !== 'series')) {
+    return null;
+  }
 
   // Fetch detail info + probe stream
   const handleThumbnailClick = useCallback(async (item) => {
@@ -190,7 +190,6 @@ const OTTRight = ({
   // ========== LIVE DETAIL VIEW ==========
   if (selectedItem && type === 'live') {
     const channelId = selectedItem.stream_id || selectedItem.id;
-    const epg = epgData[channelId] || epgData[String(channelId)];
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'rgba(0,0,0,0.75)' }}>
@@ -214,13 +213,13 @@ const OTTRight = ({
             <img src={selectedItem.logo} alt="" style={{ width: '120px', height: '60px', objectFit: 'contain', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
           )}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {epg?.epg_now && (
+            {selectedItem.epg_now && (
               <div>
                 <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>NOW</span>
-                <div style={{ fontSize: '11px', color: '#fff', marginTop: '2px' }}>{epg.epg_now}</div>
-                {epg.progress > 0 && (
+                <div style={{ fontSize: '11px', color: '#fff', marginTop: '2px' }}>{selectedItem.epg_now}</div>
+                {selectedItem.epg_progress > 0 && (
                   <div style={{ height: '2px', borderRadius: '1px', background: 'rgba(255,255,255,0.1)', marginTop: '4px', width: '100%' }}>
-                    <div style={{ height: '100%', borderRadius: '1px', background: '#6225ff', width: `${Math.min(100, epg.progress)}%` }} />
+                    <div style={{ height: '100%', borderRadius: '1px', background: '#6225ff', width: `${Math.min(100, selectedItem.epg_progress)}%` }} />
                   </div>
                 )}
               </div>
