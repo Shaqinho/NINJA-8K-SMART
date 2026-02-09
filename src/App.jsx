@@ -147,7 +147,7 @@ const AppContent = () => {
   }, []);
 
   // ============================================================================
-  // SQL ENGINE INIT
+  // SQL ENGINE INIT + PREMIUM LOGOS SYNC
   // ============================================================================
   useEffect(() => {
     const initSql = async () => {
@@ -155,6 +155,23 @@ const AppContent = () => {
         const db = await openDatabase();
         window.db = db;
         console.log('✅ SQLite ready for search');
+        
+        // Sync premium channel logos from Google Apps Script
+        const LOGOS_JSON_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
+        
+        try {
+          const { syncChannelLogosOverride } = await import('./database/ProgramQueries');
+          const result = await syncChannelLogosOverride(LOGOS_JSON_URL);
+          
+          if (result.success) {
+            console.log(`✅ Synced ${result.inserted} premium channel logos`);
+          } else {
+            console.warn('⚠️ Premium logos sync failed:', result.error);
+          }
+        } catch (logoErr) {
+          console.warn('⚠️ Premium logos sync skipped:', logoErr.message);
+        }
+        
       } catch (err) {
         console.warn('⚠️ SQLite not available:', err.message);
       }

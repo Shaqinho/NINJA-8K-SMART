@@ -590,3 +590,193 @@ export const syncEmptyChannels = async (xtreamService, allFolders) => {
   }
 };
 
+// ============================================================================
+// CHANNEL LOGOS OVERRIDE SYSTEM
+// ============================================================================
+
+/**
+ * Sync channel logos override from Google Apps Script JSON endpoint
+ * @param {string} jsonUrl - URL to fetch JSON from (e.g., Google Apps Script deployment URL)
+ * @returns {Promise<{success: boolean, inserted: number, cleared: number}>}
+ */
+export const syncChannelLogosOverride = async (jsonUrl) => {
+  try {
+    console.log('🔄 Syncing channel logos override from:', jsonUrl);
+    
+    // Fetch JSON from URL
+    const response = await fetch(jsonUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.channels || !Array.isArray(data.channels)) {
+      throw new Error('Invalid JSON format: missing channels array');
+    }
+    
+    const db = getDatabase();
+    
+    // Clear old overrides
+    await db.execute('DELETE FROM channel_logos_override');
+    console.log('🗑️ Cleared old logo overrides');
+    
+    // Insert new overrides
+    const statements = data.channels.map(ch => ({
+      statement: `INSERT INTO channel_logos_override (channel_name, logo_url, match_patterns, channel_type, updated_at) VALUES (?, ?, ?, ?, strftime('%s', 'now'))`,
+      values: [
+        ch.name,
+        ch.logo_url,
+        JSON.stringify(ch.match_patterns || []),
+        ch.type || null
+      ],
+    }));
+    
+    await db.executeSet(statements);
+    
+    console.log(`✅ Synced ${data.channels.length} premium channel logos`);
+    
+    return {
+      success: true,
+      inserted: data.channels.length,
+      cleared: data.channels.length,
+      version: data.version,
+      last_updated: data.last_updated
+    };
+    
+  } catch (err) {
+    console.error('❌ syncChannelLogosOverride failed:', err);
+    return { success: false, inserted: 0, cleared: 0, error: err.message };
+  }
+};
+
+/**
+ * Get premium logo override for a channel
+ * @param {string} channelName - Name of the channel
+ * @param {string} epgChannelId - EPG channel ID (optional)
+ * @returns {Promise<string|null>} Premium logo URL or null
+ */
+export const getLogoOverride = async (channelName, epgChannelId = null) => {
+  try {
+    if (!channelName) return null;
+    
+    const rows = await querySql('SELECT logo_url, match_patterns FROM channel_logos_override');
+    
+    if (!rows || rows.length === 0) return null;
+    
+    const channelNameLower = channelName.toLowerCase().trim();
+    const epgIdLower = epgChannelId ? epgChannelId.toLowerCase().trim() : null;
+    
+    for (const row of rows) {
+      const patterns = JSON.parse(row.match_patterns || '[]');
+      
+      for (const pattern of patterns) {
+        const patternLower = pattern.toLowerCase().trim();
+        
+        // Exact match
+        if (channelNameLower === patternLower) {
+          return row.logo_url;
+        }
+        
+        // EPG ID match
+        if (epgIdLower && epgIdLower === patternLower) {
+          return row.logo_url;
+        }
+        
+        // Contains match (for "VIP: TF1 RAW" matching "TF1")
+        if (channelNameLower.includes(patternLower)) {
+          return row.logo_url;
+        }
+      }
+    }
+    
+    return null;
+    
+  } catch (err) {
+    console.error('❌ getLogoOverride failed:', err);
+    return null;
+  }
+};
+
+/**
+ * Get premium logo overrides for multiple channels (batch)
+ * @param {Array} channels - Array of channel objects with name and epg_channel_id
+ * @returns {Promise<Map>} Map of stream_id -> premium logo URL
+ */
+export const getLogoOverrideBatch = async (channels) => {
+  try {
+    if (!channels || channels.length === 0) return new Map();
+    
+    const rows = await querySql('SELECT logo_url, match_patterns FROM channel_logos_override');
+    
+    if (!rows || rows.length === 0) return new Map();
+    
+    const logoMap = new Map();
+    
+    for (const channel of channels) {
+      const channelNameLower = (channel.name || '').toLowerCase().trim();
+      const epgIdLower = channel.epg_channel_id ? channel.epg_channel_id.toLowerCase().trim() : null;
+      
+      for (const row of rows) {
+        const patterns = JSON.parse(row.match_patterns || '[]');
+        
+        let matched = false;
+        for (const pattern of patterns) {
+          const patternLower = pattern.toLowerCase().trim();
+          
+          if (channelNameLower === patternLower || 
+              (epgIdLower && epgIdLower === patternLower) ||
+              channelNameLower.includes(patternLower)) {
+            logoMap.set(channel.stream_id, row.logo_url);
+            matched = true;
+            break;
+          }
+        }
+        
+        if (matched) break;
+      }
+    }
+    
+    console.log(`✅ Matched ${logoMap.size}/${channels.length} channels with premium logos`);
+    return logoMap;
+    
+  } catch (err) {
+    console.error('❌ getLogoOverrideBatch failed:', err);
+    return new Map();
+  }
+};
+
+/**
+ * Clear all logo overrides
+ * @returns {Promise<{success: boolean, cleared: number}>}
+ */
+export const clearLogoOverrides = async () => {
+  try {
+    await executeSql('DELETE FROM channel_logos_override');
+    console.log('🗑️ Cleared all logo overrides');
+    return { success: true, cleared: 0 };
+  } catch (err) {
+    console.error('❌ clearLogoOverrides failed:', err);
+    return { success: false, cleared: 0, error: err.message };
+  }
+};
+
+/**
+ * Get logo override statistics
+ * @returns {Promise<{count: number, types: Array}>}
+ */
+export const getLogoOverrideStats = async () => {
+  try {
+    const countResult = await querySql('SELECT COUNT(*) as count FROM channel_logos_override');
+    const typesResult = await querySql('SELECT channel_type, COUNT(*) as count FROM channel_logos_override GROUP BY channel_type');
+    
+    return {
+      count: countResult[0]?.count || 0,
+      types: typesResult || []
+    };
+  } catch (err) {
+    console.error('❌ getLogoOverrideStats failed:', err);
+    return { count: 0, types: [] };
+  }
+};
+

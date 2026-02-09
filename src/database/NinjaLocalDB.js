@@ -174,6 +174,20 @@ const initSchema = async () => {
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `);
+  
+  // ========== CHANNEL LOGOS OVERRIDE ==========
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS channel_logos_override (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel_name TEXT NOT NULL,
+      logo_url TEXT NOT NULL,
+      match_patterns TEXT NOT NULL,
+      channel_type TEXT,
+      priority INTEGER DEFAULT 1,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_lang ON channels(lang_prefix)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_cat ON channels(category_id)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_channels_epg ON channels(epg_channel_id)`);
@@ -189,6 +203,8 @@ const initSchema = async () => {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_vod_items_name ON vod_items(name)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_items_cat ON series_items(category_id)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_series_items_name ON series_items(name)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_logos_name ON channel_logos_override(channel_name)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_logos_type ON channel_logos_override(channel_type)`);
   
   // WAL mode pour perf lectures pendant écritures massives
   await db.execute(`PRAGMA journal_mode=WAL`);
