@@ -210,6 +210,22 @@ const AppContent = () => {
             setIsPlaying(true);
             console.log('[AutoPlay] From NinjaCentral:', live[0].name);
           }
+          
+          // UPGRADE TO PREMIUM LOGOS (background, non-blocking)
+          if (live.length > 0) {
+            setTimeout(async () => {
+              try {
+                const { upgradeToPremiumLogos } = await import('./database/ProgramQueries');
+                const result = await upgradeToPremiumLogos(live);
+                if (result.upgraded > 0) {
+                  console.log(`🎨 Upgraded ${result.upgraded} channels with premium logos`);
+                  setLiveData([...live]); // Force re-render
+                }
+              } catch (err) {
+                console.warn('⚠️ Premium logo upgrade skipped:', err.message);
+              }
+            }, 1000); // Delay 1s to not block initial render
+          }
         }
         setNinjaReady(true);
       } catch (err) {
@@ -259,6 +275,22 @@ const AppContent = () => {
           setSelectedItem(live[0]);
           setIsPlaying(true);
           console.log('[AutoPlay] Playing:', live[0].name);
+        }
+        
+        // UPGRADE TO PREMIUM LOGOS (background, non-blocking)
+        if (live?.length > 0) {
+          setTimeout(async () => {
+            try {
+              const { upgradeToPremiumLogos } = await import('./database/ProgramQueries');
+              const result = await upgradeToPremiumLogos(live);
+              if (result.upgraded > 0) {
+                console.log(`🎨 Upgraded ${result.upgraded} channels with premium logos`);
+                setLiveData([...live]); // Force re-render
+              }
+            } catch (err) {
+              console.warn('⚠️ Premium logo upgrade skipped:', err.message);
+            }
+          }, 1000); // Delay 1s to not block initial render
         }
       } catch (err) {
         console.error('[NinjaCentral] Save error:', err);

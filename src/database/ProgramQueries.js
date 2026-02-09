@@ -780,3 +780,87 @@ export const getLogoOverrideStats = async () => {
   }
 };
 
+/**
+ * Upgrade channels array with premium logos (mutates channel.logo in place)
+ * Call this AFTER loading channels to progressively replace logos with premium versions
+ * @param {Array} channels - Array of channel objects (will be mutated)
+ * @returns {Promise<{upgraded: number, total: number}>}
+ */
+export const upgradeToPremiumLogos = async (channels) => {
+  try {
+    if (!channels || channels.length === 0) {
+      return { upgraded: 0, total: 0 };
+    }
+    
+    console.log(`🔄 Upgrading ${channels.length} channels with premium logos...`);
+    
+    // Get all logo overrides from DB
+    const rows = await querySql('SELECT logo_url, match_patterns FROM channel_logos_override');
+    
+    if (!rows || rows.length === 0) {
+      console.log('⚠️ No premium logos available in database');
+      return { upgraded: 0, total: channels.length };
+    }
+    
+    let upgraded = 0;
+    
+    // For each channel, check if we have a premium logo
+    for (const channel of channels) {
+      const channelName = channel.name || '';
+      const epgChannelId = channel.epg_channel_id || channel.epgChannelId || null;
+      
+      if (!channelName) continue;
+      
+      const channelNameLower = channelName.toLowerCase().trim();
+      const epgIdLower = epgChannelId ? epgChannelId.toLowerCase().trim() : null;
+      
+      // Try to find a match
+      let matched = false;
+      for (const row of rows) {
+        const patterns = JSON.parse(row.match_patterns || '[]');
+        
+        for (const pattern of patterns) {
+          const patternLower = pattern.toLowerCase().trim();
+          
+          // Exact match
+          if (channelNameLower === patternLower) {
+            channel.logo = row.logo_url;  // ← ÉCRASE le logo
+            channel.stream_icon = row.logo_url;  // ← Pour compatibilité
+            upgraded++;
+            matched = true;
+            break;
+          }
+          
+          // EPG ID match
+          if (epgIdLower && epgIdLower === patternLower) {
+            channel.logo = row.logo_url;
+            channel.stream_icon = row.logo_url;
+            upgraded++;
+            matched = true;
+            break;
+          }
+          
+          // Contains match (for "VIP: TF1 RAW" matching "TF1")
+          if (channelNameLower.includes(patternLower)) {
+            channel.logo = row.logo_url;
+            channel.stream_icon = row.logo_url;
+            upgraded++;
+            matched = true;
+            break;
+          }
+        }
+        
+        if (matched) break;
+      }
+    }
+    
+    console.log(`✅ Upgraded ${upgraded}/${channels.length} channels with premium logos`);
+    
+    return { upgraded, total: channels.length };
+    
+  } catch (err) {
+    console.error('❌ upgradeToPremiumLogos failed:', err);
+    return { upgraded: 0, total: channels.length };
+  }
+};
+
