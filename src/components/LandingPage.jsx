@@ -7,6 +7,7 @@ import { Icons } from './Icons';
 import { LoadingScreen } from './LoadingScreen';
 import { PlaylistForm } from './PlaylistForm';
 import ParticleThemes from './ParticleThemes';
+import { THEME } from '../constants/theme';
 import { openDatabase } from '../database/NinjaLocalDB';
 import { 
   insertChannels, 
