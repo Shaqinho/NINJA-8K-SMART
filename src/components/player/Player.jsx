@@ -393,11 +393,12 @@ const Player = memo(({
           pointerEvents: ottSidebarOpen ? 'auto' : 'none',
         }}>
           <OTTRight
+            items={sidebarRef.current?.getFilteredItems() || []}
+            sidebarTab={sidebarTab}
             xtreamService={xtreamService}
-            currentChannel={channel}
-            currentFolder={sidebarRef.current?.getCurrentFolder?.()}
+            videoRef={videoRef}
+            onItemSelect={onChannelChange}
             visible={ottSidebarOpen}
-            onClose={() => onOttSidebarChange?.(false)}
           />
         </div>
       )}
