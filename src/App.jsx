@@ -159,13 +159,19 @@ const AppContent = () => {
         // FETCH PREMIUM LOGOS (une seule fois, stocké en localStorage)
         const LOGOS_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
         
+        console.log('🔄 [PREMIUM LOGOS] Starting fetch from Google Sheet...');
+        
         try {
           const response = await fetch(LOGOS_URL);
+          console.log('📡 [PREMIUM LOGOS] Fetch response received:', response.status);
+          
           const data = await response.json();
+          console.log('📦 [PREMIUM LOGOS] JSON parsed, channels count:', data.channels?.length);
+          
           localStorage.setItem('premiumLogos', JSON.stringify(data.channels));
-          console.log(`✅ Loaded ${data.channels.length} premium logos in RAM`);
+          console.log(`✅ [PREMIUM LOGOS] Loaded ${data.channels.length} premium logos in RAM`);
         } catch (logoErr) {
-          console.warn('⚠️ Premium logos fetch failed:', logoErr.message);
+          console.error('❌ [PREMIUM LOGOS] Fetch failed:', logoErr.message);
         }
         
       } catch (err) {
@@ -209,8 +215,15 @@ const AppContent = () => {
           
           // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
           if (live.length > 0) {
+            console.log('🎨 [LOGO UPGRADE] Starting upgrade for', live.length, 'channels...');
+            
             try {
-              const premiumLogos = JSON.parse(localStorage.getItem('premiumLogos') || '[]');
+              const premiumLogosRaw = localStorage.getItem('premiumLogos');
+              console.log('📦 [LOGO UPGRADE] localStorage data exists:', !!premiumLogosRaw);
+              
+              const premiumLogos = JSON.parse(premiumLogosRaw || '[]');
+              console.log('🔍 [LOGO UPGRADE] Parsed', premiumLogos.length, 'premium logos');
+              
               let upgraded = 0;
               
               live.forEach(ch => {
@@ -228,12 +241,13 @@ const AppContent = () => {
                 }
               });
               
+              console.log(`✅ [LOGO UPGRADE] Upgraded ${upgraded}/${live.length} channels with premium logos`);
+              
               if (upgraded > 0) {
-                console.log(`🎨 Upgraded ${upgraded}/${live.length} channels with premium logos`);
                 setLiveData([...live]); // Force re-render
               }
             } catch (err) {
-              console.warn('⚠️ Premium logo upgrade failed:', err.message);
+              console.error('❌ [LOGO UPGRADE] Failed:', err.message);
             }
           }
         }
@@ -289,8 +303,15 @@ const AppContent = () => {
         
         // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
         if (live?.length > 0) {
+          console.log('🎨 [LOGO UPGRADE] Starting upgrade for', live.length, 'channels (playlist.data)...');
+          
           try {
-            const premiumLogos = JSON.parse(localStorage.getItem('premiumLogos') || '[]');
+            const premiumLogosRaw = localStorage.getItem('premiumLogos');
+            console.log('📦 [LOGO UPGRADE] localStorage data exists:', !!premiumLogosRaw);
+            
+            const premiumLogos = JSON.parse(premiumLogosRaw || '[]');
+            console.log('🔍 [LOGO UPGRADE] Parsed', premiumLogos.length, 'premium logos');
+            
             let upgraded = 0;
             
             live.forEach(ch => {
@@ -308,12 +329,13 @@ const AppContent = () => {
               }
             });
             
+            console.log(`✅ [LOGO UPGRADE] Upgraded ${upgraded}/${live.length} channels with premium logos`);
+            
             if (upgraded > 0) {
-              console.log(`🎨 Upgraded ${upgraded}/${live.length} channels with premium logos`);
               setLiveData([...live]); // Force re-render
             }
           } catch (err) {
-            console.warn('⚠️ Premium logo upgrade failed:', err.message);
+            console.error('❌ [LOGO UPGRADE] Failed:', err.message);
           }
         }
       } catch (err) {
