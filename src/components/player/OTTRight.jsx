@@ -76,7 +76,7 @@ const OTTRight = ({
   videoRef, 
   onItemSelect,
   visible = false,
-}) => {
+}, ref) => {
   const type = sidebarTab; // 'movies' or 'series'
   
   const [selectedItem, setSelectedItem] = useState(null);
@@ -86,18 +86,20 @@ const OTTRight = ({
   const [loading, setLoading] = useState(false);
   const [posterOverlay, setPosterOverlay] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
+  const [columnCount, setColumnCount] = useState(4); // Dynamic grid zoom
   const gridRef = useRef(null);
 
-  // Grid layout — responsive columns
-  const COLUMN_COUNT = useMemo(() => {
-    const w = window.innerWidth - 280;
-    if (w < 500) return 3;
-    if (w < 800) return 4;
-    return 6;
-  }, []);
+  // Grid layout — dynamic columns
+  const COLUMN_COUNT = columnCount;
   const ITEM_WIDTH = Math.floor((window.innerWidth - 280) / COLUMN_COUNT);
   const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.5);
   const ROW_COUNT = Math.ceil(items.length / COLUMN_COUNT);
+
+  // Expose zoom methods to parent
+  React.useImperativeHandle(ref, () => ({
+    zoomIn: () => setColumnCount(prev => Math.max(3, prev - 1)),   // Spread → bigger
+    zoomOut: () => setColumnCount(prev => Math.min(6, prev + 1)),  // Pinch → smaller
+  }));
 
   // Reset on items change
   useEffect(() => {
@@ -537,4 +539,4 @@ const OTTRight = ({
   );
 };
 
-export default OTTRight;
+export default React.forwardRef(OTTRight);
