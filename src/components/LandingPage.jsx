@@ -99,8 +99,6 @@ const LandingPage = ({ onNavigateToPlayer }) => {
     return localStorage.getItem('ninja_particle_theme') || 'ultimate';
   });
 
-  const [deviceId, setDeviceId] = useState('loading...');
-
   // Lock landscape + log Device ID + Calculate PIN
   useEffect(() => {
     const lockLandscape = async () => {
@@ -450,7 +448,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
     <div 
       ref={containerRef}
       className="fixed inset-0 flex overflow-hidden relative" 
-      style={{ background: 'transparent' }}
+      style={{ background: THEME.colors.bg }}
     >
       {/* Particles */}
       {particleTheme !== 'off' && (
