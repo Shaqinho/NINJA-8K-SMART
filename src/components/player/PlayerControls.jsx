@@ -340,38 +340,8 @@ export const PlayerControls = ({
   if (sidebarOpen) return null;
 
   // ===========================================
-  // MINIMAL MODE (Small player - not fullscreen)
   // ===========================================
-  if (!fullscreen) {
-    return (
-      <div
-        className={`absolute top-0 left-0 right-0 p-3 flex justify-between z-50 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-      >
-        {/* Left: Play/Pause */}
-        <button
-          onClick={onPlayPause}
-          style={{ ...styles.btnPlay, filter: 'drop-shadow(0 0 4px rgba(0,0,0,1))' }}
-        >
-          <div className="w-5 h-5 text-white">
-            {playing ? <Icons.Pause /> : <Icons.Play />}
-          </div>
-        </button>
-
-        {/* Right: Fullscreen */}
-        <button
-          onClick={onFullscreenToggle}
-          style={{ ...styles.btnPlay, filter: 'drop-shadow(0 0 4px rgba(0,0,0,1))' }}
-        >
-          <div className="w-5 h-5 text-white">
-            <Icons.Fullscreen />
-          </div>
-        </button>
-      </div>
-    );
-  }
-
-  // ===========================================
-  // FULLSCREEN MODE - OTT Design
+  // FULLSCREEN MODE - OTT Design (ALWAYS)
   // ===========================================
   return (
     <div
@@ -576,17 +546,6 @@ export const PlayerControls = ({
             >
               ›
             </button>
-
-            {/* Minimize */}
-            {onFullscreenToggle && (
-              <button
-                onClick={onFullscreenToggle}
-                style={{ ...styles.cornerBtn, marginLeft: '4px', flexShrink: 0 }}
-                title="Exit Fullscreen"
-              >
-                <div className="w-5 h-5"><Icons.Minimize /></div>
-              </button>
-            )}
           </div>
         )}
 

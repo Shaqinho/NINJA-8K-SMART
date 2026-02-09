@@ -125,6 +125,22 @@ const Player = memo(({
     videoRef.current.setVolume(shouldMute ? 0 : volume);
   }, [ottSidebarOpen, sidebarTab, volume]);
 
+  const handlePlayPause = useCallback(() => {
+    if (isPlaying) {
+      // Pause the video
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+    } else {
+      // Play the video
+      if (videoRef.current && src) {
+        videoRef.current.play(src);
+      }
+    }
+    // Toggle state
+    onTogglePlay?.();
+  }, [isPlaying, onTogglePlay, src]);
+
   const handleStateChange = useCallback((state) => {
     setIsLoading(state === 'buffering');
   }, []);
@@ -316,7 +332,7 @@ const Player = memo(({
           volume={volume}
           currentTime={currentTime}
           duration={duration}
-          onPlayPause={onTogglePlay}
+          onPlayPause={handlePlayPause}
           onSeek={handleSeek}
           onSeekRelative={handleSeekRelative}
           onVolumeChange={handleVolumeChange}
