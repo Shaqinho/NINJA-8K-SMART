@@ -2,14 +2,23 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchAndStoreEPG, getProgramsForChannel } from '../../database/ProgramQueries';
 
 // ============================================================================
-// EPG GRID FULLSCREEN - Timeline view with favorites filter
+// EPG GRID FULLSCREEN - Planby Style with Temporal Proportions
+// 
+// FEATURES:
+// - Temporal proportions (width = duration, like Music Festival)
+// - Position absolue calculée (left = start - baseTime)
+// - 1 box per program (no split across cells)
+// - Favorites filter
+// - Fetch missing EPG
+// - NOW line vertical
+// - DPAD + 2-finger gestures
 // 
 // DPAD Controls:
 // - F1 (Blue): Toggle EPGGrid open/close
 // - F2 (Yellow): Toggle favorites filter
 // - ArrowUp/Down: Navigate channels
 // - ArrowLeft/Right: Timeline -2h/+2h
-// - Enter/OK short: Select channel & close
+// - Enter short: Select channel & close
 // - OK Long Press (2s): Toggle favorite on selected channel
 // - Escape: Close
 //
@@ -47,6 +56,10 @@ const EPGGrid = ({
   const [touchStartX, setTouchStartX] = useState(null);
   const [touchStartY, setTouchStartY] = useState(null);
   const gestureActiveRef = useRef(false);
+  
+  // PLANBY CONFIG
+  const HOUR_WIDTH = 200; // 1 hour = 200px
+  const CHANNEL_HEIGHT = 80;
   
   // ========== LOAD FOLDER CHANNELS ==========
   useEffect(() => {
@@ -102,10 +115,10 @@ const EPGGrid = ({
         try {
           const streamId = channel.stream_id || channel.id;
           
-          // Try to get from DB first
+          // Try to get from ninjalocaldb first
           let programs = await getProgramsForChannel(streamId, true);
           
-          // If empty, fetch
+          // If empty, fetch from XMLTV
           if (programs.length === 0) {
             await fetchAndStoreEPG(xtreamService, streamId, 4);
             programs = await getProgramsForChannel(streamId, true);
@@ -194,6 +207,16 @@ const EPGGrid = ({
   
   const timeSlots = generateTimeSlots();
   
+  // ========== CALCULATE BASE TIMESTAMP ==========
+  const getBaseTimestamp = useCallback(() => {
+    const baseTime = new Date(currentTime);
+    baseTime.setHours(baseTime.getHours() + timeOffset);
+    baseTime.setMinutes(0);
+    baseTime.setSeconds(0);
+    baseTime.setMilliseconds(0);
+    return Math.floor(baseTime.getTime() / 1000);
+  }, [currentTime, timeOffset]);
+  
   // ========== NAVIGATION ==========
   const handleNavigate = (hours) => {
     setTimeOffset(prev => prev + hours);
@@ -208,13 +231,33 @@ const EPGGrid = ({
     setSelectedChannelIndex(0); // Reset selection
   };
   
-  // ========== GET PROGRAM FOR TIME SLOT ==========
-  const getProgramAtTime = (streamId, slotTimestamp) => {
+  // ========== GET PROGRAMS FOR CHANNEL IN TIME RANGE ==========
+  const getProgramsInRange = (streamId) => {
     const programs = epgData[streamId] || [];
+    const baseTimestamp = getBaseTimestamp();
+    const endTimestamp = baseTimestamp + (12 * 3600); // 12 hours
     
-    return programs.find(prog => 
-      prog.start_time <= slotTimestamp && prog.end_time > slotTimestamp
+    // Filter programs that overlap with visible time range
+    return programs.filter(prog => 
+      prog.start_time < endTimestamp && prog.end_time > baseTimestamp
     );
+  };
+  
+  // ========== CALCULATE PROGRAM POSITION & WIDTH (PLANBY STYLE) ==========
+  const calculateProgramStyle = (program) => {
+    const baseTimestamp = getBaseTimestamp();
+    
+    // Start position (seconds from base time)
+    const startOffset = Math.max(0, program.start_time - baseTimestamp);
+    const left = (startOffset / 3600) * HOUR_WIDTH;
+    
+    // Duration calculation
+    const visibleStart = Math.max(program.start_time, baseTimestamp);
+    const visibleEnd = Math.min(program.end_time, baseTimestamp + (12 * 3600));
+    const visibleDuration = visibleEnd - visibleStart;
+    const width = (visibleDuration / 3600) * HOUR_WIDTH;
+    
+    return { left, width };
   };
   
   // ========== 2-FINGER TOUCH GESTURES ==========
@@ -388,23 +431,19 @@ const EPGGrid = ({
   // ========== GET NOW LINE POSITION ==========
   const getNowLinePosition = useCallback(() => {
     const now = Math.floor(Date.now() / 1000);
-    const baseTime = new Date(currentTime);
-    baseTime.setHours(baseTime.getHours() + timeOffset);
-    baseTime.setMinutes(0);
-    baseTime.setSeconds(0);
-    const baseTimestamp = Math.floor(baseTime.getTime() / 1000);
+    const baseTimestamp = getBaseTimestamp();
     
-    // Position relative to first time slot
+    // Position relative to base time
     const offset = (now - baseTimestamp) / 3600; // Hours from base
     
-    // Each slot is 200px
-    const position = 200 + (offset * 200); // 200px for channel column + offset
+    // Calculate position (200px channel column + offset)
+    const position = 200 + (offset * HOUR_WIDTH);
     
     return position;
-  }, [currentTime, timeOffset]);
+  }, [currentTime, timeOffset, getBaseTimestamp]);
   
   const nowLinePosition = getNowLinePosition();
-  const showNowLine = timeOffset === 0; // Only show on NOW view
+  const showNowLine = timeOffset === 0 && nowLinePosition > 200; // Only show on NOW view
   
   // ========== RENDER ==========
   return (
@@ -468,7 +507,7 @@ const EPGGrid = ({
           ) : (
             <>
               {/* NOW Line (vertical) */}
-              {showNowLine && nowLinePosition > 200 && (
+              {showNowLine && (
                 <div style={{
                   ...styles.nowLine,
                   left: `${nowLinePosition}px`,
@@ -497,6 +536,7 @@ const EPGGrid = ({
                   const streamId = channel.stream_id || channel.id;
                   const isSelected = channelIdx === selectedChannelIndex;
                   const isFavorite = favorites.includes(streamId);
+                  const programs = getProgramsInRange(streamId);
                   
                   return (
                     <div 
@@ -518,37 +558,35 @@ const EPGGrid = ({
                         </div>
                       </div>
                       
-                      {/* Programs */}
-                      {timeSlots.map((slot, idx) => {
-                        const program = getProgramAtTime(streamId, slot.timestamp);
-                        const now = Math.floor(Date.now() / 1000);
-                        const isLive = program && program.start_time <= now && program.end_time > now;
-                        
-                        return (
-                          <div 
-                            key={idx}
-                            style={{
-                              ...styles.gridCellProgram,
-                              ...(isLive ? styles.gridCellProgramLive : {}),
-                              ...(isSelected ? styles.gridCellProgramSelected : {})
-                            }}
-                          >
-                            {program ? (
-                              <>
-                                <div style={styles.gridProgramTitle}>
-                                  {isLive && 'LIVE '}
-                                  {program.title || 'Untitled'}
-                                </div>
-                                <div style={styles.gridProgramTime}>
-                                  {formatTimeShort(program.start_time)} - {formatTimeShort(program.end_time)}
-                                </div>
-                              </>
-                            ) : (
-                              <div style={styles.gridProgramEmpty}>-</div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {/* Programs Container - PLANBY STYLE */}
+                      <div style={styles.programsContainer}>
+                        {programs.map((program) => {
+                          const style = calculateProgramStyle(program);
+                          const now = Math.floor(Date.now() / 1000);
+                          const isLive = program.start_time <= now && program.end_time > now;
+                          
+                          return (
+                            <div 
+                              key={program.id}
+                              style={{
+                                ...styles.programBox,
+                                left: `${style.left}px`,
+                                width: `${style.width}px`,
+                                ...(isLive ? styles.programBoxLive : {}),
+                                ...(isSelected ? styles.programBoxSelected : {})
+                              }}
+                            >
+                              <div style={styles.programTitle}>
+                                {isLive && 'LIVE '}
+                                {program.title || 'Untitled'}
+                              </div>
+                              <div style={styles.programTime}>
+                                {formatTimeShort(program.start_time)} - {formatTimeShort(program.end_time)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -729,6 +767,8 @@ const styles = {
     borderBottom: '1px solid rgba(255,255,255,0.05)',
     cursor: 'pointer',
     transition: 'background 0.2s',
+    height: '80px',
+    position: 'relative',
   },
   gridRowSelected: {
     background: 'rgba(98, 37, 255, 0.15)',
@@ -745,6 +785,8 @@ const styles = {
     position: 'sticky',
     left: 0,
     zIndex: 5,
+    display: 'flex',
+    alignItems: 'center',
   },
   gridChannelName: {
     fontSize: '12px',
@@ -757,21 +799,37 @@ const styles = {
   favoriteStar: {
     color: '#ffd700',
   },
-  gridCellProgram: {
-    minWidth: '200px',
-    padding: '12px',
-    borderRight: '1px solid rgba(255,255,255,0.05)',
-    background: 'transparent',
-    transition: 'background 0.2s',
+  
+  // PLANBY STYLE - Programs Container
+  programsContainer: {
+    position: 'relative',
+    flex: 1,
+    height: '100%',
   },
-  gridCellProgramLive: {
-    background: 'rgba(34, 197, 94, 0.05)',
-    border: '1px solid rgba(34, 197, 94, 0.2)',
+  
+  // PLANBY STYLE - Program Box (temporal proportions)
+  programBox: {
+    position: 'absolute',
+    top: '8px',
+    bottom: '8px',
+    borderRadius: '4px',
+    background: 'linear-gradient(135deg, #002eb3, #002360)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    padding: '8px',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
   },
-  gridCellProgramSelected: {
-    background: 'rgba(98, 37, 255, 0.05)',
+  programBoxLive: {
+    background: 'linear-gradient(135deg, #2C7A7B, #234E52)',
+    border: '1px solid rgba(34, 197, 94, 0.3)',
+    boxShadow: '0 0 8px rgba(34, 197, 94, 0.2)',
   },
-  gridProgramTitle: {
+  programBoxSelected: {
+    background: 'linear-gradient(135deg, #6225ff, #8b5cf6)',
+    border: '1px solid rgba(98, 37, 255, 0.6)',
+  },
+  programTitle: {
     fontSize: '12px',
     fontWeight: 600,
     color: '#fff',
@@ -780,14 +838,9 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  gridProgramTime: {
+  programTime: {
     fontSize: '10px',
-    color: '#666',
-  },
-  gridProgramEmpty: {
-    fontSize: '12px',
-    color: '#444',
-    textAlign: 'center',
+    color: 'rgba(255,255,255,0.6)',
   },
   
   // Loading

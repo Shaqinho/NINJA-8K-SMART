@@ -93,6 +93,7 @@ const LandingPage = ({ onNavigateToPlayer }) => {
   // const [token, setToken] = useState('');
   // const [tokenLoading, setTokenLoading] = useState(false);
   const [ninjaPin, setNinjaPin] = useState('----');
+  const [deviceId, setDeviceId] = useState('loading...');
   
   const containerRef = useRef(null);
   
