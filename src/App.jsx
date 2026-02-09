@@ -147,7 +147,7 @@ const AppContent = () => {
   }, []);
 
   // ============================================================================
-  // SQL ENGINE INIT + PREMIUM LOGOS SYNC
+  // SQL ENGINE INIT + PREMIUM LOGOS FETCH (localStorage, pas SQLite)
   // ============================================================================
   useEffect(() => {
     const initSql = async () => {
@@ -156,20 +156,16 @@ const AppContent = () => {
         window.db = db;
         console.log('✅ SQLite ready for search');
         
-        // Sync premium channel logos from Google Apps Script
-        const LOGOS_JSON_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
+        // FETCH PREMIUM LOGOS (une seule fois, stocké en localStorage)
+        const LOGOS_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
         
         try {
-          const { syncChannelLogosOverride } = await import('./database/ProgramQueries');
-          const result = await syncChannelLogosOverride(LOGOS_JSON_URL);
-          
-          if (result.success) {
-            console.log(`✅ Synced ${result.inserted} premium channel logos`);
-          } else {
-            console.warn('⚠️ Premium logos sync failed:', result.error);
-          }
+          const response = await fetch(LOGOS_URL);
+          const data = await response.json();
+          localStorage.setItem('premiumLogos', JSON.stringify(data.channels));
+          console.log(`✅ Loaded ${data.channels.length} premium logos in RAM`);
         } catch (logoErr) {
-          console.warn('⚠️ Premium logos sync skipped:', logoErr.message);
+          console.warn('⚠️ Premium logos fetch failed:', logoErr.message);
         }
         
       } catch (err) {
@@ -211,20 +207,34 @@ const AppContent = () => {
             console.log('[AutoPlay] From NinjaCentral:', live[0].name);
           }
           
-          // UPGRADE TO PREMIUM LOGOS (background, non-blocking)
+          // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
           if (live.length > 0) {
-            setTimeout(async () => {
-              try {
-                const { upgradeToPremiumLogos } = await import('./database/ProgramQueries');
-                const result = await upgradeToPremiumLogos(live);
-                if (result.upgraded > 0) {
-                  console.log(`🎨 Upgraded ${result.upgraded} channels with premium logos`);
-                  setLiveData([...live]); // Force re-render
+            try {
+              const premiumLogos = JSON.parse(localStorage.getItem('premiumLogos') || '[]');
+              let upgraded = 0;
+              
+              live.forEach(ch => {
+                const match = premiumLogos.find(logo => 
+                  logo.match_patterns.some(pattern => {
+                    const p = pattern.toLowerCase();
+                    const n = (ch.name || '').toLowerCase();
+                    return n === p || n.includes(p);
+                  })
+                );
+                if (match) {
+                  ch.logo = match.logo_url;
+                  ch.stream_icon = match.logo_url;
+                  upgraded++;
                 }
-              } catch (err) {
-                console.warn('⚠️ Premium logo upgrade skipped:', err.message);
+              });
+              
+              if (upgraded > 0) {
+                console.log(`🎨 Upgraded ${upgraded}/${live.length} channels with premium logos`);
+                setLiveData([...live]); // Force re-render
               }
-            }, 1000); // Delay 1s to not block initial render
+            } catch (err) {
+              console.warn('⚠️ Premium logo upgrade failed:', err.message);
+            }
           }
         }
         setNinjaReady(true);
@@ -277,20 +287,34 @@ const AppContent = () => {
           console.log('[AutoPlay] Playing:', live[0].name);
         }
         
-        // UPGRADE TO PREMIUM LOGOS (background, non-blocking)
+        // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
         if (live?.length > 0) {
-          setTimeout(async () => {
-            try {
-              const { upgradeToPremiumLogos } = await import('./database/ProgramQueries');
-              const result = await upgradeToPremiumLogos(live);
-              if (result.upgraded > 0) {
-                console.log(`🎨 Upgraded ${result.upgraded} channels with premium logos`);
-                setLiveData([...live]); // Force re-render
+          try {
+            const premiumLogos = JSON.parse(localStorage.getItem('premiumLogos') || '[]');
+            let upgraded = 0;
+            
+            live.forEach(ch => {
+              const match = premiumLogos.find(logo => 
+                logo.match_patterns.some(pattern => {
+                  const p = pattern.toLowerCase();
+                  const n = (ch.name || '').toLowerCase();
+                  return n === p || n.includes(p);
+                })
+              );
+              if (match) {
+                ch.logo = match.logo_url;
+                ch.stream_icon = match.logo_url;
+                upgraded++;
               }
-            } catch (err) {
-              console.warn('⚠️ Premium logo upgrade skipped:', err.message);
+            });
+            
+            if (upgraded > 0) {
+              console.log(`🎨 Upgraded ${upgraded}/${live.length} channels with premium logos`);
+              setLiveData([...live]); // Force re-render
             }
-          }, 1000); // Delay 1s to not block initial render
+          } catch (err) {
+            console.warn('⚠️ Premium logo upgrade failed:', err.message);
+          }
         }
       } catch (err) {
         console.error('[NinjaCentral] Save error:', err);
