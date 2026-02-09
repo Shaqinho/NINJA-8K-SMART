@@ -8,7 +8,15 @@ import { LoadingScreen } from './LoadingScreen';
 import { PlaylistForm } from './PlaylistForm';
 import ParticleThemes from './ParticleThemes';
 import { openDatabase } from '../database/NinjaLocalDB';
-import { insertChannels, loadXMLTV } from '../database/ProgramQueries';
+import { 
+  insertChannels, 
+  insertLiveCategories,
+  insertVODCategories,
+  insertSeriesCategories,
+  insertVODItems,
+  insertSeriesItems,
+  loadXMLTV 
+} from '../database/ProgramQueries';
 import { getDeviceId } from '../services/NinjaAPI';
 
 // ============================================================================
@@ -278,13 +286,43 @@ const LandingPage = ({ onNavigateToPlayer }) => {
       setProgress({ step: 'Indexing for search...', percent: 85 });
       await openDatabase();
       
+      // ========== SAVE LIVE CHANNELS & CATEGORIES ==========
       if (mappedLive.length > 0) {
         await insertChannels(mappedLive);
         console.log(`✅ Indexed ${mappedLive.length} live channels for search`);
-        
-        // ============================================================
-        // XMLTV EPG LOADING - Fast bulk load (34s for 70-80% channels)
-        // ============================================================
+      }
+      
+      if (liveCategories.length > 0) {
+        await insertLiveCategories(liveCategories);
+        console.log(`✅ Saved ${liveCategories.length} live categories`);
+      }
+      
+      // ========== SAVE VOD ITEMS & CATEGORIES ==========
+      if (mappedVod.length > 0) {
+        await insertVODItems(mappedVod);
+        console.log(`✅ Saved ${mappedVod.length} VOD items`);
+      }
+      
+      if (vodCategories.length > 0) {
+        await insertVODCategories(vodCategories);
+        console.log(`✅ Saved ${vodCategories.length} VOD categories`);
+      }
+      
+      // ========== SAVE SERIES ITEMS & CATEGORIES ==========
+      if (mappedSeries.length > 0) {
+        await insertSeriesItems(mappedSeries);
+        console.log(`✅ Saved ${mappedSeries.length} series items`);
+      }
+      
+      if (seriesCategories.length > 0) {
+        await insertSeriesCategories(seriesCategories);
+        console.log(`✅ Saved ${seriesCategories.length} series categories`);
+      }
+      
+      // ============================================================
+      // XMLTV EPG LOADING - Fast bulk load (34s for 70-80% channels)
+      // ============================================================
+      if (mappedLive.length > 0) {
         setProgress({ step: 'Loading XMLTV EPG...', percent: 90 });
         
         const xmltvResult = await loadXMLTV(service);

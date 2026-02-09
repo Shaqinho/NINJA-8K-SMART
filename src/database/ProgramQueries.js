@@ -16,6 +16,105 @@ export const insertChannels = async (channels) => {
   return channels.length;
 };
 
+// ============================================================================
+// INSERT CATEGORIES & ITEMS
+// ============================================================================
+
+// Insert Live Categories (bulk)
+export const insertLiveCategories = async (categories) => {
+  if (!categories?.length) return 0;
+  const db = getDatabase();
+  const statements = categories.map(cat => ({
+    statement: `INSERT OR REPLACE INTO live_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+    values: [
+      cat.category_id || cat.id,
+      cat.category_name || cat.name || '',
+      cat.parent_id || 0
+    ],
+  }));
+  await db.executeSet(statements);
+  console.log(`✅ ${categories.length} live categories inserted`);
+  return categories.length;
+};
+
+// Insert VOD Categories (bulk)
+export const insertVODCategories = async (categories) => {
+  if (!categories?.length) return 0;
+  const db = getDatabase();
+  const statements = categories.map(cat => ({
+    statement: `INSERT OR REPLACE INTO vod_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+    values: [
+      cat.category_id || cat.id,
+      cat.category_name || cat.name || '',
+      cat.parent_id || 0
+    ],
+  }));
+  await db.executeSet(statements);
+  console.log(`✅ ${categories.length} VOD categories inserted`);
+  return categories.length;
+};
+
+// Insert Series Categories (bulk)
+export const insertSeriesCategories = async (categories) => {
+  if (!categories?.length) return 0;
+  const db = getDatabase();
+  const statements = categories.map(cat => ({
+    statement: `INSERT OR REPLACE INTO series_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+    values: [
+      cat.category_id || cat.id,
+      cat.category_name || cat.name || '',
+      cat.parent_id || 0
+    ],
+  }));
+  await db.executeSet(statements);
+  console.log(`✅ ${categories.length} series categories inserted`);
+  return categories.length;
+};
+
+// Insert VOD Items (bulk)
+export const insertVODItems = async (items) => {
+  if (!items?.length) return 0;
+  const db = getDatabase();
+  const statements = items.map(item => ({
+    statement: `INSERT OR REPLACE INTO vod_items (stream_id, name, category_id, category_name, logo, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    values: [
+      item.stream_id || item.id,
+      item.name || '',
+      item.categoryId || item.category_id || null,
+      item.category || item.category_name || null,
+      item.logo || item.stream_icon || null,
+      item.rating || null,
+      item.year || null,
+      item.genre || null
+    ],
+  }));
+  await db.executeSet(statements);
+  console.log(`✅ ${items.length} VOD items inserted`);
+  return items.length;
+};
+
+// Insert Series Items (bulk)
+export const insertSeriesItems = async (items) => {
+  if (!items?.length) return 0;
+  const db = getDatabase();
+  const statements = items.map(item => ({
+    statement: `INSERT OR REPLACE INTO series_items (series_id, name, category_id, category_name, cover, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    values: [
+      item.series_id || item.id,
+      item.name || '',
+      item.categoryId || item.category_id || null,
+      item.category || item.category_name || null,
+      item.cover || item.cover_big || null,
+      item.rating || null,
+      item.year || null,
+      item.genre || null
+    ],
+  }));
+  await db.executeSet(statements);
+  console.log(`✅ ${items.length} series items inserted`);
+  return items.length;
+};
+
 // Clean expired programs (end_time < now)
 export const cleanExpiredPrograms = async () => {
   const now = Math.floor(Date.now() / 1000);
