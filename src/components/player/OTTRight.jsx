@@ -75,6 +75,7 @@ const OTTRight = ({
   xtreamService, 
   videoRef, 
   onItemSelect,
+  onClose,
   visible = false,
 }, ref) => {
   const type = sidebarTab; // 'movies' or 'series'
@@ -154,8 +155,11 @@ const OTTRight = ({
   }, []);
 
   const handlePlay = useCallback(() => {
-    if (selectedItem) onItemSelect?.(selectedItem);
-  }, [selectedItem, onItemSelect]);
+    if (selectedItem) {
+      onClose?.(); // Fermer OTT
+      onItemSelect?.({ ...selectedItem, seekTime: 0 }); // Lancer à 0
+    }
+  }, [selectedItem, onItemSelect, onClose]);
 
   // Play a specific episode
   const handlePlayEpisode = useCallback((episode) => {
@@ -204,7 +208,7 @@ const OTTRight = ({
     const channelId = selectedItem.stream_id || selectedItem.id;
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'rgba(0,0,0,0.75)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'transparent' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff' }}>{selectedItem.name}</div>
@@ -275,7 +279,7 @@ const OTTRight = ({
     const seasonCover = currentSeasonInfo?.cover || currentSeasonInfo?.cover_big || poster;
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'rgba(0,0,0,0.75)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'transparent' }}>
 
         {/* Title row */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
@@ -284,26 +288,23 @@ const OTTRight = ({
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
               {year && <span style={{ fontSize: '10px', color: '#888' }}>{String(year).substring(0, 4)}</span>}
               {genre && <span style={{ fontSize: '9px', color: '#6225ff', fontWeight: 700 }}>{genre}</span>}
-              {rating && <span style={{ fontSize: '9px', color: '#ffd700' }}>⭐ {rating}</span>}
+              {video && video.width && video.height && <span style={{ fontSize: '9px', color: '#4ade80', fontWeight: 600 }}>{video.width}×{video.height}</span>}
+              {rating && <span style={{ fontSize: '9px', color: '#ffd700' }}>★ {rating}</span>}
               {duration && <span style={{ fontSize: '9px', color: '#666' }}>{duration}</span>}
-              {country && <span style={{ fontSize: '9px', color: '#555' }}>🌍 {country}</span>}
-              {video && <span style={{ fontSize: '9px', color: '#555' }}>{video.width}×{video.height}</span>}
               {type === 'series' && episodeRunTime && <span style={{ fontSize: '9px', color: '#555' }}>~{episodeRunTime} min/ep</span>}
-              {type === 'series' && lastModified && <span style={{ fontSize: '9px', color: '#444' }}>{formatTimeAgo(lastModified)}</span>}
             </div>
           </div>
           <button onClick={handlePlay} style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ color: '#fff', fontSize: '14px', marginLeft: '2px' }}>▶</span>
           </button>
           {trailer && (
-            <button onClick={() => window.open(trailer, '_blank')} style={{ background: 'rgba(255,0,0,0.2)', border: '1px solid rgba(255,0,0,0.4)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <button onClick={() => window.open(`https://www.youtube.com/watch?v=${trailer}`, '_blank')} style={{ background: 'rgba(255,0,0,0.2)', border: '1px solid rgba(255,0,0,0.4)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
               <span style={{ color: '#ff4444', fontSize: '10px', fontWeight: 800 }}>YT</span>
             </button>
           )}
           <button onClick={() => {/* TODO: toggle favorite */}} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ fontSize: '16px' }}>☆</span>
           </button>
-          <button onClick={handleBack} style={{ background: 'none', border: 'none', color: '#6225ff', fontSize: '18px', fontWeight: 700, cursor: 'pointer', padding: '0 0 0 8px', flexShrink: 0 }}>✕</button>
         </div>
 
         {/* Poster + Description */}
@@ -317,13 +318,13 @@ const OTTRight = ({
             />
           )}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {director && <div style={{ fontSize: '10px', color: '#888' }}>🎬 {director}</div>}
             {plot && (
               <div style={{ fontSize: '11px', color: '#aaa', lineHeight: '1.5' }}>
                 {plot.substring(0, 300)}{plot.length > 300 ? '...' : ''}
               </div>
             )}
-            {cast && <div style={{ fontSize: '10px', color: '#666' }}>🎭 {cast.substring(0, 150)}</div>}
+            {director && <div style={{ fontSize: '10px', color: '#888' }}><span style={{ fontWeight: 700 }}>Director:</span> {director}</div>}
+            {cast && <div style={{ fontSize: '10px', color: '#666' }}><span style={{ fontWeight: 700 }}>Cast:</span> {cast.substring(0, 150)}</div>}
 
             {/* Audio */}
             <div>
