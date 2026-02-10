@@ -8,7 +8,7 @@ import { LoadingScreen } from './LoadingScreen';
 import { PlaylistForm } from './PlaylistForm';
 import ParticleThemes from './ParticleThemes';
 import { THEME } from '../constants/theme';
-import { openDatabase } from '../database/NinjaLocalDB';
+// import { openDatabase } from '../database/NinjaLocalDB'; // ← Plus nécessaire (utilise window.db)
 import { 
   insertChannels, 
   insertLiveCategories,
