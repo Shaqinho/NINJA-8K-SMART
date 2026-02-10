@@ -15,7 +15,7 @@ import XMLTVRefreshService from './services/XMLTVRefreshService';
 
 // ============================================================================
 // NINJA 8K — App Root
-// Flow: Tutorial → Landing → Player (fullscreen OTT)
+// Flow: Tutorial → ServerForm → Player (fullscreen OTT)
 // No more Smart.jsx — Player handles everything with OTTLeft + OTTRight
 //
 // EPG Background Sync runs here (access to xtreamService + categories)
