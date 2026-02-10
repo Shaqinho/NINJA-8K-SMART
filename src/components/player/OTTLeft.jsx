@@ -433,11 +433,7 @@ const OTTLeft = forwardRef(({
     const folders = [
       { category_id: '__all__', category_name: 'ALL', count: totalCount, isSystem: true },
     ];
-    // NEW folder only for movies and series tabs
-    if (activeTab === 'movies' || activeTab === 'series') {
-      const newCount = activeItems.filter(item => item.added).length;
-      folders.push({ category_id: '__new__', category_name: 'NEW', count: newCount, isSystem: true });
-    }
+    // NEW folder supprimé - ALL affiche les derniers ajouts par défaut
     folders.push(
       { category_id: '__favorites__', category_name: 'FAVORITES', count: favCount, isSystem: true },
       { category_id: '__recent__', category_name: 'RECENT', count: recentCount, isSystem: true },
@@ -945,7 +941,12 @@ const OTTLeft = forwardRef(({
     
     let items;
     if (currentCategory.category_id === '__all__') {
-      items = [...activeItems];
+      // Trier par date d'ajout (les plus récents en premier)
+      items = [...activeItems].sort((a, b) => {
+        const aAdded = Number(a.added) || 0;
+        const bAdded = Number(b.added) || 0;
+        return bAdded - aAdded; // Décroissant (les plus récents d'abord)
+      });
     } else if (currentCategory.category_id === '__new__') {
       items = [...activeItems].filter(item => item.added).sort((a, b) => Number(b.added) - Number(a.added));
     } else if (currentCategory.category_id === '__favorites__') {
@@ -1080,9 +1081,9 @@ const OTTLeft = forwardRef(({
     setProgramResults([]);
     setShowKeyboard(false);
     onTabChange?.(tabId);
-    // Movies & Series: open NEW folder by default
+    // Movies & Series: open ALL folder by default (triés par derniers ajouts)
     if (tabId === 'movies' || tabId === 'series') {
-      setCurrentCategory({ category_id: '__new__', category_name: 'NEW', isSystem: true });
+      setCurrentCategory({ category_id: '__all__', category_name: 'ALL', isSystem: true });
       setShowItems(true);
     } else {
       setShowItems(false);
