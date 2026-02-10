@@ -690,6 +690,9 @@ const AppContent = () => {
         epgSyncProgress={epgSyncProgress}
         epgSyncingFolders={epgSyncingFolders}
         userLangs={userLangs}
+        liveChannels={playlist?.data?.live || []}
+        vodItems={playlist?.data?.vod || []}
+        seriesItems={playlist?.data?.series || []}
       />
     </div>
   );
