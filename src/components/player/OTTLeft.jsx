@@ -439,7 +439,7 @@ const OTTLeft = forwardRef(({
       { category_id: '__recent__', category_name: 'RECENT', count: recentCount, isSystem: true },
     );
     return folders;
-  }, [activeItems, favorites, recentIds, activeTab]);
+  }, [activeItems, favorites, recentIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ========== EPG BATCH LOAD (same method as Smart) ==========
   const epgLoadedCategoriesRef = useRef(new Set());
