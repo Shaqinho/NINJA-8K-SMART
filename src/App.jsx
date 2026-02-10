@@ -7,7 +7,7 @@ import { Player } from './components/player';
 import GestureTutorial, { isTutorialDone } from './components/GestureTutorial';
 import ParticleThemes from './components/ParticleThemes';
 import { XtreamService } from './services/XtreamService';
-// import { ninjaCentral, STORES } from './services/NinjaCentral'; // ← DÉCONNECTÉ POUR TEST
+import { ninjaCentral, STORES } from './services/NinjaCentral';
 import { useGestures } from './hooks/useGestures';
 import { openDatabase, extractLangPrefix } from './database/NinjaLocalDB';
 import { insertProgramsBatch, cleanExpiredPrograms } from './database/ProgramQueries';
@@ -147,7 +147,7 @@ const AppContent = () => {
   }, []);
 
   // ============================================================================
-  // SQL ENGINE INIT + PREMIUM LOGOS SYNC
+  // SQL ENGINE INIT + PREMIUM LOGOS FETCH (localStorage, pas SQLite)
   // ============================================================================
   useEffect(() => {
     const initSql = async () => {
@@ -156,20 +156,22 @@ const AppContent = () => {
         window.db = db;
         console.log('✅ SQLite ready for search');
         
-        // Sync premium channel logos from Google Apps Script
-        const LOGOS_JSON_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
+        // FETCH PREMIUM LOGOS (une seule fois, stocké en localStorage)
+        const LOGOS_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
+        
+        console.log('🔄 [PREMIUM LOGOS] Starting fetch from Google Sheet...');
         
         try {
-          const { syncChannelLogosOverride } = await import('./database/ProgramQueries');
-          const result = await syncChannelLogosOverride(LOGOS_JSON_URL);
+          const response = await fetch(LOGOS_URL);
+          console.log('📡 [PREMIUM LOGOS] Fetch response received:', response.status);
           
-          if (result.success) {
-            console.log(`✅ Synced ${result.inserted} premium channel logos`);
-          } else {
-            console.warn('⚠️ Premium logos sync failed:', result.error);
-          }
+          const data = await response.json();
+          console.log('📦 [PREMIUM LOGOS] JSON parsed, channels count:', data.channels?.length);
+          
+          localStorage.setItem('premiumLogos', JSON.stringify(data.channels));
+          console.log(`✅ [PREMIUM LOGOS] Loaded ${data.channels.length} premium logos in RAM`);
         } catch (logoErr) {
-          console.warn('⚠️ Premium logos sync skipped:', logoErr.message);
+          console.error('❌ [PREMIUM LOGOS] Fetch failed:', logoErr.message);
         }
         
       } catch (err) {
@@ -180,70 +182,109 @@ const AppContent = () => {
   }, []);
 
   // ============================================================================
-  // NINJA CENTRAL — DÉCONNECTÉ POUR TEST
+  // NINJA CENTRAL — Load persisted data on mount
   // ============================================================================
   useEffect(() => {
-    // const loadFromNinja = async () => {
-    //   try {
-    //     await ninjaCentral.init();
-    //     const [live, vod, series, liveCats] = await Promise.all([
-    //       ninjaCentral.getAll(STORES.LIVE),
-    //       ninjaCentral.getAll(STORES.VOD),
-    //       ninjaCentral.getAll(STORES.SERIES),
-    //       ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
-    //     ]);
-    //     if (live.length > 0 || vod.length > 0 || series.length > 0) {
-    //       setLiveData(live);
-    //       console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
-    //       // Detect user languages from persisted categories
-    //       if (liveCats.length > 0) {
-    //         const langs = detectUserLangs(liveCats);
-    //         setUserLangs(langs);
-    //         console.log('[NinjaCentral] User langs detected:', langs);
-    //       }
-    //       // Auto-play first live channel from NinjaCentral (returning user)
-    //       if (live.length > 0 && !autoPlayedRef.current) {
-    //         autoPlayedRef.current = true;
-    //         setSelectedItem(live[0]);
-    //         setIsPlaying(true);
-    //         console.log('[AutoPlay] From NinjaCentral:', live[0].name);
-    //       }
-    //     }
-    //     setNinjaReady(true);
-    //   } catch (err) {
-    //     console.error('[NinjaCentral] Load error:', err);
-    //     setNinjaReady(true);
-    //   }
-    // };
-    // loadFromNinja();
-    setNinjaReady(true); // ← Immediate ready
+    const loadFromNinja = async () => {
+      try {
+        await ninjaCentral.init();
+        const [live, vod, series, liveCats] = await Promise.all([
+          ninjaCentral.getAll(STORES.LIVE),
+          ninjaCentral.getAll(STORES.VOD),
+          ninjaCentral.getAll(STORES.SERIES),
+          ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
+        ]);
+        if (live.length > 0 || vod.length > 0 || series.length > 0) {
+          setLiveData(live);
+          console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+
+          // Detect user languages from persisted categories
+          if (liveCats.length > 0) {
+            const langs = detectUserLangs(liveCats);
+            setUserLangs(langs);
+            console.log('[NinjaCentral] User langs detected:', langs);
+          }
+
+          // Auto-play first live channel from NinjaCentral (returning user)
+          if (live.length > 0 && !autoPlayedRef.current) {
+            autoPlayedRef.current = true;
+            setSelectedItem(live[0]);
+            setIsPlaying(true);
+            console.log('[AutoPlay] From NinjaCentral:', live[0].name);
+          }
+          
+          // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
+          if (live.length > 0) {
+            console.log('🎨 [LOGO UPGRADE] Starting upgrade for', live.length, 'channels...');
+            
+            try {
+              const premiumLogosRaw = localStorage.getItem('premiumLogos');
+              console.log('📦 [LOGO UPGRADE] localStorage data exists:', !!premiumLogosRaw);
+              
+              const premiumLogos = JSON.parse(premiumLogosRaw || '[]');
+              console.log('🔍 [LOGO UPGRADE] Parsed', premiumLogos.length, 'premium logos');
+              
+              let upgraded = 0;
+              
+              live.forEach(ch => {
+                const match = premiumLogos.find(logo => 
+                  logo.match_patterns.some(pattern => {
+                    const p = pattern.toLowerCase();
+                    const n = (ch.name || '').toLowerCase();
+                    return n === p || n.includes(p);
+                  })
+                );
+                if (match) {
+                  ch.logo = match.logo_url;
+                  ch.stream_icon = match.logo_url;
+                  upgraded++;
+                }
+              });
+              
+              console.log(`✅ [LOGO UPGRADE] Upgraded ${upgraded}/${live.length} channels with premium logos`);
+              
+              if (upgraded > 0) {
+                setLiveData([...live]); // Force re-render
+              }
+            } catch (err) {
+              console.error('❌ [LOGO UPGRADE] Failed:', err.message);
+            }
+          }
+        }
+        setNinjaReady(true);
+      } catch (err) {
+        console.error('[NinjaCentral] Load error:', err);
+        setNinjaReady(true);
+      }
+    };
+    loadFromNinja();
   }, []);
 
   // ============================================================================
-  // SAVE TO NINJA CENTRAL — DÉCONNECTÉ POUR TEST
+  // SAVE TO NINJA CENTRAL when playlist.data arrives
   // ============================================================================
   useEffect(() => {
     if (!playlist?.data || !ninjaReady) return;
     
     const saveToNinja = async () => {
       try {
-        // await ninjaCentral.init(); // ← DÉCONNECTÉ
+        await ninjaCentral.init();
         const { live, vod, series, liveCategories, vodCategories, seriesCategories } = playlist.data;
         
         if (live?.length > 0) {
-          // await ninjaCentral.saveItems(STORES.LIVE, live); // ← DÉCONNECTÉ
-          // await ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, liveCategories || []); // ← DÉCONNECTÉ
+          await ninjaCentral.saveItems(STORES.LIVE, live);
+          await ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, liveCategories || []);
           setLiveData(live);
         }
-        // if (vod?.length > 0) {
-        //   await ninjaCentral.saveItems(STORES.VOD, vod);
-        //   await ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, vodCategories || []);
-        // }
-        // if (series?.length > 0) {
-        //   await ninjaCentral.saveItems(STORES.SERIES, series);
-        //   await ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, seriesCategories || []);
-        // }
-        console.log('[TEST] NinjaCentral disabled, using NinjaLocalDB only');
+        if (vod?.length > 0) {
+          await ninjaCentral.saveItems(STORES.VOD, vod);
+          await ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, vodCategories || []);
+        }
+        if (series?.length > 0) {
+          await ninjaCentral.saveItems(STORES.SERIES, series);
+          await ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, seriesCategories || []);
+        }
+        console.log('[NinjaCentral] Saved playlist.data');
 
         // Detect user languages from fresh categories
         if (liveCategories?.length > 0) {
@@ -259,8 +300,46 @@ const AppContent = () => {
           setIsPlaying(true);
           console.log('[AutoPlay] Playing:', live[0].name);
         }
+        
+        // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
+        if (live?.length > 0) {
+          console.log('🎨 [LOGO UPGRADE] Starting upgrade for', live.length, 'channels (playlist.data)...');
+          
+          try {
+            const premiumLogosRaw = localStorage.getItem('premiumLogos');
+            console.log('📦 [LOGO UPGRADE] localStorage data exists:', !!premiumLogosRaw);
+            
+            const premiumLogos = JSON.parse(premiumLogosRaw || '[]');
+            console.log('🔍 [LOGO UPGRADE] Parsed', premiumLogos.length, 'premium logos');
+            
+            let upgraded = 0;
+            
+            live.forEach(ch => {
+              const match = premiumLogos.find(logo => 
+                logo.match_patterns.some(pattern => {
+                  const p = pattern.toLowerCase();
+                  const n = (ch.name || '').toLowerCase();
+                  return n === p || n.includes(p);
+                })
+              );
+              if (match) {
+                ch.logo = match.logo_url;
+                ch.stream_icon = match.logo_url;
+                upgraded++;
+              }
+            });
+            
+            console.log(`✅ [LOGO UPGRADE] Upgraded ${upgraded}/${live.length} channels with premium logos`);
+            
+            if (upgraded > 0) {
+              setLiveData([...live]); // Force re-render
+            }
+          } catch (err) {
+            console.error('❌ [LOGO UPGRADE] Failed:', err.message);
+          }
+        }
       } catch (err) {
-        console.error('[App] Save error:', err);
+        console.error('[NinjaCentral] Save error:', err);
       }
     };
     saveToNinja();
@@ -313,21 +392,17 @@ const AppContent = () => {
     const signal = abortController.signal;
 
     try {
-      // Read channels + categories from NinjaLocalDB (NinjaCentral disabled)
-      // await ninjaCentral.init(); // ← DÉCONNECTÉ
-      // const [allChannels, liveCats] = await Promise.all([
-      //   ninjaCentral.getAll(STORES.LIVE),
-      //   ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
-      // ]);
+      // Read channels + categories from NinjaCentral
+      await ninjaCentral.init();
+      const [allChannels, liveCats] = await Promise.all([
+        ninjaCentral.getAll(STORES.LIVE),
+        ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
+      ]);
 
-      // ⚠️ TODO: Load from NinjaLocalDB instead
-      console.log('[EPG Cleanup] NinjaCentral disabled - skipping for now');
-      return;
-
-      // if (allChannels.length === 0) {
-      //   console.log('[EPG Sync] No channels in NinjaCentral, skipping');
-      //   return;
-      // }
+      if (allChannels.length === 0) {
+        console.log('[EPG Sync] No channels in NinjaCentral, skipping');
+        return;
+      }
 
       // Filter by user languages
       const channels = langs.length > 0
