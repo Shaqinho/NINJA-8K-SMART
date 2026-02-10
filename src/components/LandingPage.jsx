@@ -293,63 +293,26 @@ const LandingPage = ({ onNavigateToPlayer }) => {
 
     setProgress({ step: 'Done!', percent: 100 });
 
-    // ========== STORE IN SQLITE FOR SEARCH (NON-BLOQUANT) ==========
+    // ========== STORE IN SQLITE FOR SEARCH (CORRIGÉ - Instance partagée) ==========
     try {
       setProgress({ step: 'Indexing for search...', percent: 85 });
-      await openDatabase();
       
-      // ========== SAFETY TIMEOUT : 10 secondes max ==========
-      const indexingTimeout = new Promise((resolve) => 
-        setTimeout(() => {
-          console.warn('⏱️ Indexing timeout - continuing to Player');
-          resolve('timeout');
-        }, 10000)
-      );
-      
-      const indexingWork = (async () => {
-        // ========== SAVE LIVE CHANNELS & CATEGORIES ==========
-        if (mappedLive.length > 0) {
-          await insertChannels(mappedLive);
-          console.log(`✅ Indexed ${mappedLive.length} live channels for search`);
-        }
-        
-        if (liveCategories.length > 0) {
-          await insertLiveCategories(liveCategories);
-          console.log(`✅ Saved ${liveCategories.length} live categories`);
-        }
-        
-        // ========== SAVE VOD ITEMS & CATEGORIES ==========
-        if (mappedVod.length > 0) {
-          await insertVODItems(mappedVod);
-          console.log(`✅ Saved ${mappedVod.length} VOD items`);
-        }
-        
-        if (vodCategories.length > 0) {
-          await insertVODCategories(vodCategories);
-          console.log(`✅ Saved ${vodCategories.length} VOD categories`);
-        }
-        
-        // ========== SAVE SERIES ITEMS & CATEGORIES ==========
-        if (mappedSeries.length > 0) {
-          await insertSeriesItems(mappedSeries);
-        console.log(`✅ Saved ${mappedSeries.length} series items`);
-      }
-      
-      if (seriesCategories.length > 0) {
-        await insertSeriesCategories(seriesCategories);
-        console.log(`✅ Saved ${seriesCategories.length} series categories`);
-      }
-        
-        return 'completed';
-      })();
-      
-      // ========== RACE : Timeout vs Indexation ==========
-      const result = await Promise.race([indexingWork, indexingTimeout]);
-      
-      if (result === 'timeout') {
-        console.log('⏱️ Indexing will continue in background');
-        // Laisser indexingWork continuer sans bloquer
-        indexingWork.catch(err => console.error('Background indexing error:', err));
+      // On utilise l'instance globale déjà ouverte par App.jsx
+      if (window.db) {
+        await Promise.race([
+          Promise.all([
+            mappedLive.length > 0 && insertChannels(mappedLive),
+            liveCategories.length > 0 && insertLiveCategories(liveCategories),
+            mappedVod.length > 0 && insertVODItems(mappedVod),
+            mappedSeries.length > 0 && insertSeriesItems(mappedSeries),
+            vodCategories.length > 0 && insertVODCategories(vodCategories),
+            seriesCategories.length > 0 && insertSeriesCategories(seriesCategories)
+          ].filter(Boolean)),
+          new Promise(resolve => setTimeout(resolve, 8000)) // Sécurité : 8s max
+        ]);
+        console.log("✅ Indexation terminée via instance partagée");
+      } else {
+        console.warn('⚠️ window.db not available, skipping indexation');
       }
       
       // ============================================================
