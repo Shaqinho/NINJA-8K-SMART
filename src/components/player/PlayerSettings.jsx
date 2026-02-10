@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { glassCard } from '../../constants/theme';
+import SettingsOverlay from './SettingsOverlay';
 
 // ============================================================================
-// PLAYER SETTINGS - Quality, Speed, Subtitles, Audio, Aspect
+// PLAYER SETTINGS - Quality, Speed, Subtitles, Audio, Aspect + Global Settings
 // ============================================================================
 
 const SettingItem = ({ label, active, onClick }) => (
@@ -22,6 +23,7 @@ const TabIcons = {
   subtitles: () => <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h4M14 12h4M6 16h8"/></svg>,
   audio: () => <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>,
   aspect: () => <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>,
+  more: () => <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>,
 };
 
 export const PlayerSettings = ({
@@ -43,8 +45,13 @@ export const PlayerSettings = ({
   aspectRatios = ['Auto', '16:9', '4:3', 'Fill', 'Cover'],
   currentAspectRatio = 'Auto',
   onAspectRatioChange,
+  // SettingsOverlay props
+  xtreamService,
+  onEPGGrid,
+  onServers,
 }) => {
   const [tab, setTab] = useState(activeTab);
+  const [showMore, setShowMore] = useState(false);
   
   const tabs = [
     { id: 'quality', label: 'Quality', Icon: TabIcons.quality },
@@ -52,6 +59,7 @@ export const PlayerSettings = ({
     { id: 'subtitles', label: 'Subtitles', Icon: TabIcons.subtitles },
     { id: 'audio', label: 'Audio', Icon: TabIcons.audio },
     { id: 'aspect', label: 'Aspect', Icon: TabIcons.aspect },
+    { id: 'more', label: 'More', Icon: TabIcons.more },
   ];
 
   if (!visible) return null;
@@ -76,7 +84,13 @@ export const PlayerSettings = ({
           {tabs.map((t) => (
             <button 
               key={t.id} 
-              onClick={() => setTab(t.id)} 
+              onClick={() => {
+                if (t.id === 'more') {
+                  setShowMore(true);
+                } else {
+                  setTab(t.id);
+                }
+              }} 
               className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${tab === t.id ? 'bg-purple-500 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             >
               <t.Icon />{t.label}
@@ -112,6 +126,24 @@ export const PlayerSettings = ({
           )}
         </div>
       </div>
+
+      {/* SettingsOverlay (More) */}
+      <SettingsOverlay
+        visible={showMore}
+        onClose={() => setShowMore(false)}
+        xtreamService={xtreamService}
+        onEPGGrid={() => {
+          setShowMore(false);
+          onClose();
+          onEPGGrid?.();
+        }}
+        onServers={() => {
+          setShowMore(false);
+          onClose();
+          onServers?.();
+        }}
+        sidebarOpen={false}
+      />
     </div>
   );
 };

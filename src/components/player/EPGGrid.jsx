@@ -59,6 +59,7 @@ const EPGGrid = ({
   
   // PLANBY CONFIG
   const HOUR_WIDTH = 200; // 1 hour = 200px
+  const CHANNEL_HEIGHT = 80;
   
   // ========== LOAD FOLDER CHANNELS ==========
   useEffect(() => {
@@ -439,7 +440,7 @@ const EPGGrid = ({
     const position = 200 + (offset * HOUR_WIDTH);
     
     return position;
-  }, [getBaseTimestamp]);
+  }, [currentTime, timeOffset, getBaseTimestamp]);
   
   const nowLinePosition = getNowLinePosition();
   const showNowLine = timeOffset === 0 && nowLinePosition > 200; // Only show on NOW view

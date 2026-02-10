@@ -74,6 +74,7 @@ const OTTRight = ({
   const [posterOverlay, setPosterOverlay] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [columnCount, setColumnCount] = useState(4); // Dynamic grid zoom
+  const [epgPrograms, setEpgPrograms] = useState([]); // 4 prochains programmes
   const gridRef = useRef(null);
 
   // Grid layout — dynamic columns
@@ -132,6 +133,32 @@ const OTTRight = ({
       }
     }
   }, [type, xtreamService, videoRef]);
+
+  // Charger EPG (4 prochains programmes) quand on sélectionne une chaîne LIVE
+  useEffect(() => {
+    if (!selectedItem || type !== 'live' || !xtreamService) {
+      setEpgPrograms([]);
+      return;
+    }
+    
+    const channelId = selectedItem.stream_id || selectedItem.id;
+    if (!channelId) return;
+    
+    xtreamService.getShortEPG(channelId, 4).then(data => {
+      const programs = [];
+      if (data.epg_now) programs.push({ title: data.epg_now, start: data.epg_start, end: data.epg_end });
+      if (data.epg_next) programs.push({ title: data.epg_next, start: data.epg_next_start, end: data.epg_next_end });
+      if (data.epg_listings) {
+        data.epg_listings.forEach(p => {
+          if (programs.length < 4) programs.push({ title: p.title, start: p.start, end: p.stop });
+        });
+      }
+      setEpgPrograms(programs.slice(0, 4));
+    }).catch(err => {
+      console.warn('EPG fetch failed:', err);
+      setEpgPrograms([]);
+    });
+  }, [selectedItem, type, xtreamService]);
 
   const handleBack = useCallback(() => {
     setSelectedItem(null);
@@ -215,21 +242,25 @@ const OTTRight = ({
             <img src={selectedItem.logo} alt="" style={{ width: '120px', height: '60px', objectFit: 'contain', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
           )}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {selectedItem.epg_now && (
-              <div>
-                <span style={{ fontSize: '9px', fontWeight: 800, color: '#6225ff' }}>NOW</span>
-                <div style={{ fontSize: '11px', color: '#fff', marginTop: '2px' }}>{selectedItem.epg_now}</div>
-                {selectedItem.epg_progress > 0 && (
-                  <div style={{ height: '2px', borderRadius: '1px', background: 'rgba(255,255,255,0.1)', marginTop: '4px', width: '100%' }}>
-                    <div style={{ height: '100%', borderRadius: '1px', background: '#6225ff', width: `${Math.min(100, selectedItem.epg_progress)}%` }} />
-                  </div>
-                )}
-              </div>
-            )}
             {selectedItem.category && <div style={{ fontSize: '9px', color: '#666' }}>📁 {selectedItem.category}</div>}
             {selectedItem.tvArchive && <div style={{ fontSize: '9px', color: '#888' }}>📼 Catch-up: {selectedItem.tvArchiveDuration || '?'} days</div>}
           </div>
         </div>
+
+        {/* 4 PROCHAINS PROGRAMMES EPG */}
+        {epgPrograms.length > 0 && (
+          <div style={{ padding: '0 20px 15px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#888', marginBottom: '8px' }}>PROGRAMMES</div>
+            {epgPrograms.map((prog, i) => (
+              <div key={i} style={{ padding: '8px 0', borderBottom: i < epgPrograms.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                <div style={{ fontSize: '11px', color: '#fff', marginBottom: '2px' }}>{prog.title}</div>
+                <div style={{ fontSize: '9px', color: '#888' }}>
+                  {prog.start} - {prog.end}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
