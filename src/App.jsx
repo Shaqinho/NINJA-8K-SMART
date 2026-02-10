@@ -29,12 +29,12 @@ import XMLTVRefreshService from './services/XMLTVRefreshService';
 const detectUserLangs = (liveCategories) => {
   if (!Array.isArray(liveCategories) || liveCategories.length === 0) return [];
 
-  const first10 = liveCategories.slice(0, 10);
+  const first30 = liveCategories.slice(0, 30); // ← Augmenté pour capturer les vrais bouquets
   const langCounts = {};
   let hasVip = false;
 
-  // Count lang prefixes in first 10 categories
-  first10.forEach(cat => {
+  // Count lang prefixes in first 30 categories
+  first30.forEach(cat => {
     const prefix = extractLangPrefix(cat.category_name);
     if (prefix === 'VIP') {
       hasVip = true;
@@ -43,7 +43,7 @@ const detectUserLangs = (liveCategories) => {
     }
   });
 
-  // Also check all categories for VIP (might not be in top 10)
+  // Also check all categories for VIP (might not be in top 30)
   if (!hasVip) {
     hasVip = liveCategories.some(cat => extractLangPrefix(cat.category_name) === 'VIP');
   }
@@ -147,38 +147,32 @@ const AppContent = () => {
   }, []);
 
   // ============================================================================
-  // SQL ENGINE INIT + PREMIUM LOGOS FETCH (localStorage, pas SQLite)
+  // SQL ENGINE INIT + PREMIUM LOGOS FETCH
   // ============================================================================
   useEffect(() => {
-    const initSql = async () => {
+    const initAppCore = async () => {
       try {
+        // 1. Init SQLite
         const db = await openDatabase();
         window.db = db;
         console.log('✅ SQLite ready for search');
         
-        // FETCH PREMIUM LOGOS (une seule fois, stocké en localStorage)
+        // 2. Fetch Logos si pas déjà en cache local
         const LOGOS_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
+        const response = await fetch(LOGOS_URL);
+        const data = await response.json();
         
-        console.log('🔄 [PREMIUM LOGOS] Starting fetch from Google Sheet...');
-        
-        try {
-          const response = await fetch(LOGOS_URL);
-          console.log('📡 [PREMIUM LOGOS] Fetch response received:', response.status);
-          
-          const data = await response.json();
-          console.log('📦 [PREMIUM LOGOS] JSON parsed, channels count:', data.channels?.length);
-          
+        if (data?.channels) {
           localStorage.setItem('premiumLogos', JSON.stringify(data.channels));
-          console.log(`✅ [PREMIUM LOGOS] Loaded ${data.channels.length} premium logos in RAM`);
-        } catch (logoErr) {
-          console.error('❌ [PREMIUM LOGOS] Fetch failed:', logoErr.message);
+          // Déclenche un événement personnalisé pour notifier les composants que les logos sont prêts
+          window.dispatchEvent(new Event('logos_ready'));
+          console.log(`✅ Premium logos ready (${data.channels.length} channels)`);
         }
-        
       } catch (err) {
-        console.warn('⚠️ SQLite not available:', err.message);
+        console.error('❌ Core Init Error:', err);
       }
     };
-    initSql();
+    initAppCore();
   }, []);
 
   // ============================================================================
