@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { PlaylistProvider, usePlaylistContext } from './context/PlaylistContext';
-import LandingPage from './components/LandingPage';
+import { ServerForm } from './components/ServerForm';
 import { Player } from './components/player';
 import GestureTutorial, { isTutorialDone } from './components/GestureTutorial';
 import ParticleThemes from './components/ParticleThemes';
@@ -622,7 +622,7 @@ const AppContent = () => {
   }
 
   if (currentPage === 'landing') {
-    return <LandingPage onNavigateToPlayer={handleNavigateToPlayer} />;
+    return <ServerForm onNavigateToPlayer={handleNavigateToPlayer} />;
   }
 
   // ============================================================================

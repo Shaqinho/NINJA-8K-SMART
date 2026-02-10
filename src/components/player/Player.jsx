@@ -8,6 +8,7 @@ import VideoPlayer from './VideoPlayer';
 import OTTLeft from './OTTLeft';             // OTTLeft
 import OTTRight from './OTTRight';           // OTTRight (live: EPG search, movies/series: poster grid)
 import EPGGrid from './EPGGrid';             // EPGGrid fullscreen (Planby temporal proportions)
+import NinjaKeyboard from '../../utils/NinjaKeyboard'; // Smart keyboard wrapper (chooses keyboard based on settings)
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
@@ -56,6 +57,12 @@ const Player = memo(({
   // EPGGrid state
   const [showEPGGrid, setShowEPGGrid] = useState(false);
   const [favorites, setFavorites] = useState([]);
+
+  // ============================================================================
+  // SHARED KEYBOARD STATE
+  // ============================================================================
+  const [keyboardActive, setKeyboardActive] = useState(null); // null | 'left' | 'right'
+  const [keyboardSearchQuery, setKeyboardSearchQuery] = useState('');
 
   const src = channel?.streamUrl || channel?.url || null;
 
@@ -397,6 +404,11 @@ const Player = memo(({
           xtreamService={xtreamService}
           epgSyncProgress={epgSyncProgress}
           epgSyncingFolders={epgSyncingFolders}
+          onRequestKeyboard={(query) => {
+            setKeyboardActive('left');
+            setKeyboardSearchQuery(query || '');
+          }}
+          onKeyboardSearchUpdate={keyboardActive === 'left' ? keyboardSearchQuery : null}
         />
       )}
 
@@ -420,6 +432,11 @@ const Player = memo(({
             videoRef={videoRef}
             onItemSelect={onChannelChange}
             visible={ottSidebarOpen}
+            onRequestKeyboard={(query) => {
+              setKeyboardActive('right');
+              setKeyboardSearchQuery(query || '');
+            }}
+            onKeyboardSearchUpdate={keyboardActive === 'right' ? keyboardSearchQuery : null}
           />
         </div>
       )}
@@ -451,6 +468,21 @@ const Player = memo(({
             console.log('Prev folder');
           }}
           onClose={() => setShowEPGGrid(false)}
+        />
+      )}
+
+      {/* ========== SHARED KEYBOARD ========== */}
+      {keyboardActive && (
+        <KeyboardWrapper
+          onSearch={(query, mode) => {
+            // Update search query for active component
+            setKeyboardSearchQuery(query);
+            console.log(`[Keyboard] ${keyboardActive} search:`, query, `mode: ${mode}`);
+          }}
+          onClose={() => {
+            setKeyboardActive(null);
+            setKeyboardSearchQuery('');
+          }}
         />
       )}
     </div>
