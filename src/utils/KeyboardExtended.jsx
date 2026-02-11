@@ -10,6 +10,13 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
   const [statusMessage, setStatusMessage] = useState('');
   const [statusVisible, setStatusVisible] = useState(false);
   const statusTimer = useRef(null);
+  
+  // Drag & Zoom states
+  const [position, setPosition] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const [scale, setScale] = useState(1.3); // 130% par défaut
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+  const lastPinchDistance = useRef(null);
 
   const AZERTY = ['a','z','e','r','t','y','u','i','o','p','q','s','d','f','g','h','j','k','l','m','w','x','c','v','b','n'];
   const QWERTY = ['q','w','e','r','t','y','u','i','o','p','a','s','d','f','g','h','j','k','l',';','z','x','c','v','b','n','m'];
@@ -65,73 +72,180 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
     showStatus(activeZone === 'accents' ? 'ACCENTS OFF' : 'ACCENTS ON');
   };
 
-  const Key = ({ char, onPress, onHover, style = {}, special, toggle, active, wide, glyph }) => (
-    <button
-      style={{
-        backgroundColor: special ? 'rgba(0, 212, 255, 0.25)' : (toggle && active ? 'rgba(46, 204, 113, 0.25)' : 'rgba(255, 255, 255, 0.08)'),
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        border: '1px solid',
-        borderColor: special ? 'rgba(0, 212, 255, 0.4)' : (toggle && active ? 'rgba(46, 204, 113, 0.4)' : 'rgba(255, 255, 255, 0.1)'),
-        borderRadius: '6px',
-        minWidth: wide ? `${wide}px` : '50px',
-        height: '50px',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '0 8px',
-        cursor: 'pointer',
-        boxShadow: special || (toggle && active) ? '0 4px 12px rgba(0, 212, 255, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.1)',
-        color: '#fff',
-        fontSize: glyph ? '16px' : '13px',
-        fontWeight: special || (toggle && active) ? '700' : '600',
-        textShadow: special || (toggle && active) ? '0 1px 2px rgba(0, 0, 0, 0.2)' : 'none',
-        ...style,
-      }}
-      onClick={onPress}
-      onMouseEnter={() => onHover && showStatus(onHover)}
-    >
-      {char}
-    </button>
-  );
+  // ========== DRAG HANDLERS ==========
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    const touch = e.touches?.[0] || e;
+    dragStart.current = { x: touch.clientX, y: touch.clientY, posX: position.x, posY: position.y };
+    setIsDragging(true);
+  };
+
+  const handleDragMove = (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const touch = e.touches?.[0] || e;
+    const dx = touch.clientX - dragStart.current.x;
+    const dy = touch.clientY - dragStart.current.y;
+    setPosition({
+      x: dragStart.current.posX + dx,
+      y: dragStart.current.posY + dy,
+    });
+  };
+
+  const handleDragEnd = () => setIsDragging(false);
+
+  // ========== PINCH ZOOM HANDLERS ==========
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      lastPinchDistance.current = dist;
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2 && lastPinchDistance.current) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = dist - lastPinchDistance.current;
+      const newScale = Math.max(1.0, Math.min(1.3, scale + delta * 0.001));
+      setScale(newScale);
+      lastPinchDistance.current = dist;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    lastPinchDistance.current = null;
+  };
+
+  // UseEffect pour drag
+  React.useEffect(() => {
+    if (!isDragging) return;
+    const moveHandler = (e) => handleDragMove(e);
+    const upHandler = () => handleDragEnd();
+    window.addEventListener('mousemove', moveHandler);
+    window.addEventListener('mouseup', upHandler);
+    return () => {
+      window.removeEventListener('mousemove', moveHandler);
+      window.removeEventListener('mouseup', upHandler);
+    };
+  }, [isDragging]);
+
+  const Key = ({ char, onPress, onHover, style = {}, special, toggle, active, wide, glyph }) => {
+    const [isPressed, setIsPressed] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
+
+    const handleClick = (e) => {
+      setIsPressed(true);
+      setTimeout(() => setIsPressed(false), 150);
+      onPress(e);
+    };
+
+    return (
+      <button
+        style={{
+          backgroundColor: isPressed 
+            ? 'rgba(255, 255, 255, 0.25)' 
+            : (isHovered ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)'),
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid',
+          borderColor: isPressed 
+            ? 'rgba(255, 255, 255, 0.4)' 
+            : (isHovered ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)'),
+          borderRadius: '6px',
+          minWidth: wide ? `${wide}px` : '50px',
+          height: '50px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '0 8px',
+          cursor: 'pointer',
+          boxShadow: isPressed 
+            ? '0 0 16px rgba(255, 255, 255, 0.3), inset 0 2px 8px rgba(0, 0, 0, 0.3)' 
+            : (isHovered ? '0 0 10px rgba(255, 255, 255, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.1)'),
+          color: '#fff',
+          fontSize: glyph ? '16px' : '13px',
+          fontWeight: '600',
+          textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+          fontFamily: 'Arial, sans-serif',
+          transform: isPressed ? 'scale(0.95)' : 'scale(1)',
+          transition: 'all 0.15s ease',
+          ...style,
+        }}
+        onClick={handleClick}
+        onMouseEnter={() => { setIsHovered(true); onHover && showStatus(onHover); }}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {char}
+      </button>
+    );
+  };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%) scale(0.5)',
-      transformOrigin: 'center',
-      zIndex: 100000,
-      backgroundColor: 'rgba(10, 10, 20, 0.75)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      padding: '20px',
-      boxShadow: '0 4px 24px rgba(0, 0, 0, 0.15)',
-      display: 'flex',
-      flexDirection: 'column',
-      borderRadius: '12px',
-    }}>
-      <input
-        type="text"
-        value={searchValue}
-        onChange={(e) => setSearchValue(e.target.value)}
-        placeholder="Search channel or program"
+    <>
+      {/* Overlay invisible pour tap en dehors */}
+      <div 
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 99999,
+        }}
+        onClick={onClose}
+        onTouchEnd={onClose}
+      />
+      
+      <div 
+        style={{
+          position: 'fixed',
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          transform: `translate(-50%, -50%) scale(${scale * 0.5})`,
+          transformOrigin: 'center',
+          zIndex: 100000,
+          backgroundColor: 'rgba(10, 10, 20, 0.5)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          padding: '20px',
+          boxShadow: '0 4px 24px rgba(0, 0, 0, 0.15)',
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: '12px',
+          cursor: isDragging ? 'grabbing' : 'default',
+          userSelect: 'none',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={(e) => e.stopPropagation()}
+      >
+      {/* DRAG HANDLE */}
+      <div 
+        onMouseDown={handleDragStart}
+        onTouchStart={handleDragStart}
+        onMouseMove={handleDragMove}
+        onMouseUp={handleDragEnd}
+        onMouseLeave={handleDragEnd}
         style={{
           width: '100%',
-          padding: '15px',
-          marginBottom: '15px',
-          backgroundColor: 'rgba(255, 255, 255, 0.05)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-          border: '1px solid rgba(0, 212, 255, 0.2)',
-          borderRadius: '12px',
-          color: '#fff',
-          fontSize: '18px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-          outline: 'none',
+          height: '20px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          cursor: 'grab',
+          marginBottom: '10px',
         }}
-      />
+      >
+        <div style={{ width: '40px', height: '4px', borderRadius: '2px', backgroundColor: 'rgba(255, 255, 255, 0.3)' }} />
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'row', gap: '10px', position: 'relative' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -144,14 +258,14 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
                 top: 0,
                 right: '-180px',
                 padding: '15px',
-                backgroundColor: 'rgba(0, 212, 255, 0.35)',
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
                 borderRadius: '12px',
-                border: '1px solid rgba(0, 212, 255, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
                 minWidth: '200px',
                 zIndex: 1000,
-                boxShadow: '0 4px 16px rgba(0, 212, 255, 0.25)',
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
                 color: '#fff',
                 fontSize: '13px',
                 fontWeight: '700',
@@ -162,7 +276,17 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
               </div>
             )}
             
-            <Key char="HIDE" onPress={onClose} onHover="Hide keyboard" wide={80} />
+            <Key 
+              char={
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              }
+              onPress={onClose} 
+              onHover="Hide keyboard" 
+              wide={80} 
+            />
             <div style={{ width: '20px' }} />
             <Key char="EPG GRID" onPress={() => showStatus('EPG Grid')} onHover="Navigate to EPG Grid" wide={100} special />
             <Key 
@@ -277,6 +401,7 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
         )}
       </div>
     </div>
+    </>
   );
 };
 
