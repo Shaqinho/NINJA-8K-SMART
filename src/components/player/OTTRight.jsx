@@ -120,8 +120,6 @@ const OTTRight = ({
       if (type === 'movies' && xtreamService) {
         // 2. On appelle la nouvelle méthode qui prépare tout
         const { info, probeUrl } = await xtreamService.getVodDetailsWithProbeUrl(streamId);
-        console.log('🎬 VOD Info reçu:', info);
-        console.log('🎬 movie_data:', info?.movie_data);
         setDetailData(info); // Affiche le synopsis, titre, etc.
 
         // 3. LANCEMENT DU SCAN AUTOMATIQUE (Le Probe)
@@ -279,25 +277,29 @@ const OTTRight = ({
 
   // ========== MOVIES / SERIES DETAIL VIEW ==========
   if (selectedItem && (type === 'movies' || type === 'series')) {
-    // Pour MOVIES: detailData est l'objet retourné par getVodInfo
-    // Pour SERIES: detailData est l'objet retourné par getSeriesInfo qui contient { info, seasons, episodes }
-    const info = detailData?.movie_data || detailData?.info || detailData || {};
-    const poster = info.cover || info.movie_image || selectedItem.logo || selectedItem.cover || selectedItem.stream_icon;
-    const posterBig = info.cover_big || poster;
-    const title = info.name || selectedItem.name || 'Untitled';
-    const plot = info.plot || info.description || selectedItem.plot || '';
-    const cast = info.cast || selectedItem.cast || '';
-    const director = info.director || selectedItem.director || '';
-    const genre = info.genre || selectedItem.genre || '';
-    const rating = info.rating || selectedItem.rating || '';
-    const year = info.releasedate || info.release_date || selectedItem.releaseDate || selectedItem.year || '';
-    const duration = info.duration || selectedItem.duration || '';
-    const trailer = info.youtube_trailer || '';
-    const video = info.video || selectedItem.video || null;
-    const episodeRunTime = info.episode_run_time || selectedItem.episodeRunTime || null;
+    // GEMINI FIX: Double mapping pour couvrir .info ET .movie_data
+    const apiInfo = detailData?.info || {};
+    const apiMovie = detailData?.movie_data || {};
+    
+    // Poster (généralement dans .info)
+    const poster = apiInfo.cover || apiInfo.movie_image || selectedItem.logo || selectedItem.cover || selectedItem.stream_icon;
+    const posterBig = apiInfo.cover_big || poster;
+    
+    // Métadonnées (cherche dans les DEUX sources)
+    const title = apiMovie.name || apiInfo.name || selectedItem.name || 'Untitled';
+    const plot = apiInfo.plot || apiInfo.description || apiMovie.plot || selectedItem.plot || '';
+    const cast = apiInfo.cast || apiMovie.cast || selectedItem.cast || '';
+    const director = apiInfo.director || apiMovie.director || selectedItem.director || '';
+    const genre = apiInfo.genre || apiMovie.genre || selectedItem.category_name || '';
+    const rating = apiInfo.rating || apiMovie.rating || selectedItem.rating || '';
+    const year = apiInfo.releasedate || apiInfo.release_date || apiMovie.year || selectedItem.year || '';
+    const duration = apiInfo.duration || apiMovie.duration || selectedItem.duration || '';
+    const trailer = apiInfo.youtube_trailer || '';
+    const video = apiInfo.video || apiMovie.video || selectedItem.video || null;
+    const episodeRunTime = apiInfo.episode_run_time || selectedItem.episodeRunTime || null;
 
-    const audioTracks = getAudioTracks(info);
-    const subtitleTracks = getSubtitleTracks(info);
+    const audioTracks = getAudioTracks(apiInfo);
+    const subtitleTracks = getSubtitleTracks(apiInfo);
 
     // Series-specific
     const seasons = detailData?.seasons || [];

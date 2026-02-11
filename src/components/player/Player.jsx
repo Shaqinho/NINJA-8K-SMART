@@ -264,6 +264,15 @@ const Player = memo(({
     if (nextChannel && onChannelChange) onChannelChange(nextChannel);
   }, [nextChannel, onChannelChange]);
 
+  // Zoom controls for OTTRight thumbnails
+  const handleZoomIn = useCallback(() => {
+    ottRightRef.current?.zoomIn();
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    ottRightRef.current?.zoomOut();
+  }, []);
+
   const handleSpeedChange = useCallback((speed) => {
     setPlaybackSpeed(speed);
     if (videoRef.current?.getVideoElement) {
@@ -379,6 +388,7 @@ const Player = memo(({
           xtreamService={xtreamService}
           onServers={onServers}
           onTapDismiss={() => setShowControls(false)}
+          onEPGGrid={() => setShowEPGGrid(true)}
         />
       </div>
 
@@ -410,6 +420,8 @@ const Player = memo(({
             setKeyboardSearchQuery(query || '');
           }}
           onKeyboardSearchUpdate={keyboardActive === 'left' ? keyboardSearchQuery : null}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
         />
       )}
 

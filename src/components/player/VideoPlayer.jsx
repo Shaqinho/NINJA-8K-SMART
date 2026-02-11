@@ -186,8 +186,8 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
             position: 'relative',
             zIndex: 1,
           }}
-          playsInline 
-          autoPlay 
+          playsInline
+          controls={false}
         />
       )}
     </div>
