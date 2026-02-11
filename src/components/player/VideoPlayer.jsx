@@ -47,7 +47,7 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
 
     /**
      * Probe stream: play 3s silently, extract audio/subtitle tracks, then pause
-     * Returns { audioTracks: [{ id, name }], subtitleTracks: [{ id, name }] }
+     * Returns { audioTracks: [{ id, language, channels, name }], subtitleTracks: [{ id, language, name }] }
      */
     probeStream: async (url) => {
       try {
@@ -59,10 +59,22 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
           const subs = await libVLC.getSubtitleTracks();
           await libVLC.pause();
           await libVLC.setVolume(0.5);
-          return {
-            audioTracks: audio?.tracks || [],
-            subtitleTracks: subs?.tracks || [],
-          };
+          
+          // Mapper les tracks pour OTTRight (language + channels requis)
+          const audioTracks = (audio?.tracks || []).map(t => ({
+            id: t.id,
+            language: t.language || t.name || 'und', // Force language pour getLangName
+            channels: t.channels || 2,               // Assure channels
+            name: t.name
+          }));
+          
+          const subtitleTracks = (subs?.tracks || []).map(t => ({
+            id: t.id,
+            language: t.language || t.name || 'und', // Force language pour getLangName
+            name: t.name
+          }));
+          
+          return { audioTracks, subtitleTracks };
         }
         return { audioTracks: [], subtitleTracks: [] };
       } catch (e) {
