@@ -4,6 +4,7 @@ import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { PlaylistProvider, usePlaylistContext } from './context/PlaylistContext';
 import { ServerForm } from './components/ServerForm';
 import { Player } from './components/player';
+import { NinjaSplash } from './components/NinjaSplash';
 import GestureTutorial, { isTutorialDone } from './components/GestureTutorial';
 import ParticleThemes from './components/ParticleThemes';
 import { ninjaCentral, STORES } from './services/NinjaCentral';
@@ -81,7 +82,7 @@ const filterChannelsByLangs = (channels, categories, langs) => {
 
 const AppContent = () => {
   const { playlist, setPlaylist, clearPlaylist, isRestored } = usePlaylistContext();
-  const [currentPage, setCurrentPage] = useState(null);
+  const [currentPage, setCurrentPage] = useState('splash');
   const [showTutorial, setShowTutorial] = useState(false);
   const [xtreamService, setXtreamService] = useState(null);
 
@@ -152,42 +153,18 @@ const AppContent = () => {
   useEffect(() => {
     const initAppCore = async () => {
       try {
-        // 1. Init SQLite
-        const db = await openDatabase();
-        window.db = db;
-        console.log('✅ SQLite ready for search');
-        
-        // 2. Auto-login: Check if last active server exists
-        const { getLastActiveServer } = await import('./database/NinjaLocalDB');
-        const lastServer = await getLastActiveServer();
-        
-        if (lastServer) {
-          console.log('🔐 Auto-login with last server:', lastServer.name || lastServer.url);
-          // Créer instance XtreamService avec les credentials sauvegardés
-          const { XtreamService } = await import('./services/XtreamService');
-          const xtream = new XtreamService(lastServer.url, lastServer.username, lastServer.password);
-          setXtreamService(xtream);
-          // Passer directement au player (data déjà en DB locale)
-          setCurrentPage('player');
-        } else {
-          // Aucun serveur sauvegardé → afficher ServerForm
-          setCurrentPage('serverform');
-        }
-        
-        // 3. Fetch Logos si pas déjà en cache local
+        // 1. Fetch Logos en background
         const LOGOS_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
         const response = await fetch(LOGOS_URL);
         const data = await response.json();
         
         if (data?.channels) {
           localStorage.setItem('premiumLogos', JSON.stringify(data.channels));
-          // Déclenche un événement personnalisé pour notifier les composants que les logos sont prêts
           window.dispatchEvent(new Event('logos_ready'));
           console.log(`✅ Premium logos ready (${data.channels.length} channels)`);
         }
       } catch (err) {
-        console.error('❌ Core Init Error:', err);
-        setCurrentPage('serverform'); // Fallback sur erreur
+        console.error('❌ Logo fetch error:', err);
       }
     };
     initAppCore();
@@ -585,6 +562,11 @@ const AppContent = () => {
     setCurrentPage(playlist ? 'player' : 'landing');
   };
 
+  const handleSplashComplete = useCallback((nextPage, service = null) => {
+    if (service) setXtreamService(service);
+    setCurrentPage(nextPage);
+  }, []);
+
   const handleNavigateToPlayer = useCallback((data) => {
     setPlaylist(data);
     setCurrentPage('player');
@@ -627,8 +609,16 @@ const AppContent = () => {
     );
   }
 
+  if (currentPage === 'splash') {
+    return <NinjaSplash onComplete={handleSplashComplete} />;
+  }
+
   if (showTutorial || currentPage === 'tutorial') {
     return <GestureTutorial onComplete={handleTutorialComplete} />;
+  }
+
+  if (currentPage === 'serverform') {
+    return <ServerForm onNavigateToPlayer={handleNavigateToPlayer} />;
   }
 
   if (currentPage === 'landing') {
