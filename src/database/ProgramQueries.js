@@ -1031,56 +1031,144 @@ export const getSeriesItemsPaginated = async (categoryId, limit = 100, offset = 
 
 // ========== PROGRESSIVE INDEXING (50 items par batch, pause 50ms) ==========
 /**
- * Insertion ultra-fluide : 50 items par lot avec pause pour ne pas freeze l'UI
- * @param {Array} items - Items à insérer (vod ou series)
- * @param {String} type - 'vod' ou 'series'
+ * Smart Indexing : Priorité aux LIVE pour débloquer UI, puis progressive pour VOD/Series
+ * @param {Object} data - { live: [], vod: [], series: [] }
  * @param {Function} onProgress - Callback pour progression (percent)
  */
-export const insertItemsProgressive = async (items, type = 'vod', onProgress) => {
-  if (!items?.length) return;
-  
+export const smartIndexing = async (data, onProgress) => {
   const { getDatabase } = await import('./NinjaLocalDB');
   const db = getDatabase();
-  const CHUNK_SIZE = 50;
   
-  for (let i = 0; i < items.length; i += CHUNK_SIZE) {
-    const chunk = items.slice(i, i + CHUNK_SIZE);
-    const statements = chunk.map(item => ({
-      statement: type === 'vod' 
-        ? `INSERT OR REPLACE INTO vod_items (stream_id, name, category_id, category_name, logo, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        : `INSERT OR REPLACE INTO series_items (series_id, name, category_id, category_name, cover, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      values: type === 'vod' ? [
+  let totalItems = 0;
+  let processedItems = 0;
+  
+  // Calculer total
+  if (data.live) totalItems += data.live.length;
+  if (data.vod) totalItems += data.vod.length;
+  if (data.series) totalItems += data.series.length;
+  
+  // ========== PRIORITÉ 1 : LIVE 50 premiers (débloquer UI) ==========
+  if (data.live?.length > 0) {
+    const first50 = data.live.slice(0, 50);
+    const statements = first50.map(item => ({
+      statement: `INSERT OR REPLACE INTO channels (stream_id, name, category_id, category_name, logo, lang_prefix) VALUES (?, ?, ?, ?, ?, ?)`,
+      values: [
         item.stream_id || item.id,
         item.name || '',
         item.category_id || item.categoryId,
         item.category_name || item.category || '',
         item.logo || item.stream_icon || '',
-        item.rating || '',
-        item.year || '',
-        item.genre || ''
-      ] : [
-        item.series_id || item.id,
-        item.name || '',
-        item.category_id || item.categoryId,
-        item.category_name || item.category || '',
-        item.cover || '',
-        item.rating || '',
-        item.year || '',
-        item.genre || ''
+        item.lang_prefix || 'OTHER'
       ]
     }));
-
-    await db.executeSet(statements);
     
-    // Notification de progression
+    await db.executeSet(statements);
+    processedItems += first50.length;
+    
     if (onProgress) {
-      const percent = Math.round(((i + chunk.length) / items.length) * 100);
-      onProgress(percent);
+      onProgress(Math.round((processedItems / totalItems) * 100));
     }
-
-    // Pause 50ms pour laisser l'UI respirer
-    await new Promise(r => setTimeout(r, 50));
+    
+    console.log(`✅ LIVE 50 premiers chargés (UI débloquée)`);
   }
   
-  console.log(`✅ Progressive indexing complete: ${items.length} ${type} items`);
+  // ========== PRIORITÉ 2 : LIVE reste (par batch de 100) ==========
+  if (data.live?.length > 50) {
+    const remaining = data.live.slice(50);
+    const CHUNK_SIZE = 100;
+    
+    for (let i = 0; i < remaining.length; i += CHUNK_SIZE) {
+      const chunk = remaining.slice(i, i + CHUNK_SIZE);
+      const statements = chunk.map(item => ({
+        statement: `INSERT OR REPLACE INTO channels (stream_id, name, category_id, category_name, logo, lang_prefix) VALUES (?, ?, ?, ?, ?, ?)`,
+        values: [
+          item.stream_id || item.id,
+          item.name || '',
+          item.category_id || item.categoryId,
+          item.category_name || item.category || '',
+          item.logo || item.stream_icon || '',
+          item.lang_prefix || 'OTHER'
+        ]
+      }));
+      
+      await db.executeSet(statements);
+      processedItems += chunk.length;
+      
+      if (onProgress) {
+        onProgress(Math.round((processedItems / totalItems) * 100));
+      }
+      
+      await new Promise(r => setTimeout(r, 50));
+    }
+    
+    console.log(`✅ LIVE complet: ${data.live.length} chaînes`);
+  }
+  
+  // ========== PRIORITÉ 3 : VOD (par batch de 1000) ==========
+  if (data.vod?.length > 0) {
+    const CHUNK_SIZE = 1000;
+    
+    for (let i = 0; i < data.vod.length; i += CHUNK_SIZE) {
+      const chunk = data.vod.slice(i, i + CHUNK_SIZE);
+      const statements = chunk.map(item => ({
+        statement: `INSERT OR REPLACE INTO vod_items (stream_id, name, category_id, category_name, logo, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        values: [
+          item.stream_id || item.id,
+          item.name || '',
+          item.category_id || item.categoryId,
+          item.category_name || item.category || '',
+          item.logo || item.stream_icon || '',
+          item.rating || '',
+          item.year || '',
+          item.genre || ''
+        ]
+      }));
+      
+      await db.executeSet(statements);
+      processedItems += chunk.length;
+      
+      if (onProgress) {
+        onProgress(Math.round((processedItems / totalItems) * 100));
+      }
+      
+      await new Promise(r => setTimeout(r, 100));
+    }
+    
+    console.log(`✅ VOD complet: ${data.vod.length} films`);
+  }
+  
+  // ========== PRIORITÉ 4 : SERIES (par batch de 1000) ==========
+  if (data.series?.length > 0) {
+    const CHUNK_SIZE = 1000;
+    
+    for (let i = 0; i < data.series.length; i += CHUNK_SIZE) {
+      const chunk = data.series.slice(i, i + CHUNK_SIZE);
+      const statements = chunk.map(item => ({
+        statement: `INSERT OR REPLACE INTO series_items (series_id, name, category_id, category_name, cover, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        values: [
+          item.series_id || item.id,
+          item.name || '',
+          item.category_id || item.categoryId,
+          item.category_name || item.category || '',
+          item.cover || '',
+          item.rating || '',
+          item.year || '',
+          item.genre || ''
+        ]
+      }));
+      
+      await db.executeSet(statements);
+      processedItems += chunk.length;
+      
+      if (onProgress) {
+        onProgress(Math.round((processedItems / totalItems) * 100));
+      }
+      
+      await new Promise(r => setTimeout(r, 100));
+    }
+    
+    console.log(`✅ SERIES complet: ${data.series.length} séries`);
+  }
+  
+  console.log(`🚀 Smart indexing terminé: ${totalItems} items`);
 };
