@@ -359,14 +359,6 @@ const AppContent = () => {
   }, [playlist?.data, ninjaReady]);
 
   // ============================================================================
-  // XTREAM SERVICE
-  // ============================================================================
-  const xtreamService = useMemo(() => {
-    if (!playlist?.server || !playlist?.username || !playlist?.password) return null;
-    return new XtreamService(playlist.server, playlist.username, playlist.password);
-  }, [playlist]);
-
-  // ============================================================================
   // XMLTV BACKGROUND REFRESH - Every 5 minutes
   // ============================================================================
   useEffect(() => {
