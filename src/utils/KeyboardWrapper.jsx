@@ -1,6 +1,6 @@
 import React from 'react';
 import Keyboard_Extended from './Keyboard_Extended';
-import NinjaKeyboard_Compact from './NinjaKeyboard_Compact';
+import NinjaKeyboard_Compact from './NinjaKeyboard';
 
 const KeyboardWrapper = (props) => {
   const selectedKeyboard = localStorage.getItem('ninja_keyboard_type') || 'extended';
