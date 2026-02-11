@@ -12,7 +12,10 @@ const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
   const statusTimer = useRef(null);
   
   // Drag & Zoom states
-  const [position, setPosition] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const [position, setPosition] = useState({ 
+    x: window.innerWidth - 400,  // 400px du bord droit
+    y: window.innerHeight - 250  // 250px du bas
+  });
   const [scale, setScale] = useState(1.3); // 130% par défaut
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });

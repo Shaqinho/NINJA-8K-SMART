@@ -91,6 +91,7 @@ const OTTLeft = forwardRef(({
   const [programResults, setProgramResults] = useState([]);
   const [, setProgramSearching] = useState(false);
   const [lastCharZoom, setLastCharZoom] = useState(false);
+  const previousSearchLength = useRef(0);
   
   // Tab-specific data (all fetched from Xtream directly)
   const [liveChannels, setLiveChannels] = useState([]);
@@ -845,10 +846,15 @@ const OTTLeft = forwardRef(({
   // Update parent's search query when keyboard updates come back
   useEffect(() => {
     if (onKeyboardSearchUpdate !== null) {
-      setSearchQuery(onKeyboardSearchUpdate);
-      // Trigger zoom animation
-      setLastCharZoom(true);
-      setTimeout(() => setLastCharZoom(false), 200);
+      const newQuery = onKeyboardSearchUpdate;
+      setSearchQuery(newQuery);
+      
+      // Trigger zoom animation only if length changed (new char added or deleted)
+      if (newQuery.length !== previousSearchLength.current) {
+        setLastCharZoom(true);
+        setTimeout(() => setLastCharZoom(false), 250);
+        previousSearchLength.current = newQuery.length;
+      }
     }
   }, [onKeyboardSearchUpdate]);
 
