@@ -140,6 +140,25 @@ const styles = {
 
 // Skip amounts: 1x=5s, 2x=15s, 3x=30s
 
+// Format time helper
+const formatTime = (seconds) => {
+  if (!seconds || isNaN(seconds)) return '0:00';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
+
+// Resolution label helper
+const getResolutionLabel = (width) => {
+  if (!width) return null;
+  if (width >= 7680) return '8K UHD';
+  if (width >= 3840) return '4K UHD';
+  if (width >= 1920) return '1080p FHD';
+  if (width >= 1280) return '720p HD';
+  return 'SD';
+};
 
 export const PlayerControls = ({
   playing,
@@ -175,10 +194,18 @@ export const PlayerControls = ({
   onTapDismiss,
   // Sidebar state
   sidebarOpen = false,
+  // Probe data (VOD only)
+  probeData = null,
+  onAudioTrackChange,
+  onSubtitleChange,
+  currentAudioTrack = null,
+  currentSubtitle = null,
 }) => {
   const [isHoveringTimeshift, setIsHoveringTimeshift] = useState(false);
   const [showSettingsOverlay, setShowSettingsOverlay] = useState(false);
   const [isDraggingTimeline, setIsDraggingTimeline] = useState(false);
+  const [showAudioTracks, setShowAudioTracks] = useState(false);
+  const [showSubtitles, setShowSubtitles] = useState(false);
   const timelineRef = useRef(null);
   const vodTimelineRef = useRef(null);
   const autoHideTimerRef = useRef(null);
@@ -385,6 +412,81 @@ export const PlayerControls = ({
           8K
         </span>
       </button>
+
+      {/* Resolution Badge (top-left, VOD only) */}
+      {!isLive && probeData?.video?.width && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '15px',
+            left: '15px',
+            background: 'rgba(0,0,0,0.7)',
+            border: '1px solid rgba(76,222,128,0.4)',
+            borderRadius: '6px',
+            padding: '6px 12px',
+            backdropFilter: 'blur(10px)',
+            zIndex: 10001,
+          }}
+        >
+          <span style={{ 
+            fontSize: '11px', 
+            fontWeight: '700', 
+            color: '#4ade80',
+          }}>
+            {getResolutionLabel(probeData.video.width)}
+          </span>
+        </div>
+      )}
+
+      {/* AUDIO + SUBTITLES buttons (top-right, VOD only) */}
+      {!isLive && probeData && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '15px',
+            right: '15px',
+            display: 'flex',
+            gap: '8px',
+            zIndex: 10001,
+          }}
+        >
+          {/* AUDIO */}
+          <button
+            onClick={() => setShowAudioTracks(!showAudioTracks)}
+            style={{
+              background: 'rgba(0,0,0,0.7)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: '600',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            AUDIO
+          </button>
+
+          {/* SUBTITLES */}
+          <button
+            onClick={() => setShowSubtitles(!showSubtitles)}
+            style={{
+              background: 'rgba(0,0,0,0.7)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: '600',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            SUBTITLES
+          </button>
+        </div>
+      )}
 
       {/* Top Right: Play/Pause */}
       <button
@@ -644,6 +746,167 @@ export const PlayerControls = ({
         onServers={onServers}
         sidebarOpen={sidebarOpen}
       />
+
+      {/* Audio Tracks Overlay */}
+      {showAudioTracks && probeData?.audioTracks && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '80px',
+            right: '20px',
+            background: 'rgba(0,0,0,0.95)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px',
+            padding: '12px',
+            minWidth: '220px',
+            maxHeight: '400px',
+            overflowY: 'auto',
+            zIndex: 10002,
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ 
+            fontSize: '12px', 
+            fontWeight: '700', 
+            color: '#6225ff', 
+            marginBottom: '8px',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            paddingBottom: '8px',
+          }}>
+            AUDIO ({probeData.audioTracks.length})
+          </div>
+          {probeData.audioTracks.map((track, index) => {
+            const isActive = currentAudioTrack === index || (currentAudioTrack === null && index === 0);
+            const lang = track.language || track.name || `Track ${index + 1}`;
+            const channels = track.channels ? (track.channels === 6 ? '5.1' : track.channels === 2 ? 'Stereo' : `${track.channels}ch`) : '';
+            
+            return (
+              <button
+                key={index}
+                onClick={() => {
+                  onAudioTrackChange?.(index);
+                  setShowAudioTracks(false);
+                }}
+                style={{
+                  width: '100%',
+                  background: isActive ? 'rgba(98,37,255,0.3)' : 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '4px',
+                }}
+                onMouseEnter={(e) => !isActive && (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                onMouseLeave={(e) => !isActive && (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ fontSize: '14px', opacity: isActive ? 1 : 0 }}>✓</span>
+                <span style={{ flex: 1 }}>{lang.toUpperCase()}</span>
+                {channels && <span style={{ fontSize: '9px', opacity: 0.7 }}>{channels}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Subtitles Overlay */}
+      {showSubtitles && probeData?.subtitleTracks && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '80px',
+            right: '20px',
+            background: 'rgba(0,0,0,0.95)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px',
+            padding: '12px',
+            minWidth: '220px',
+            maxHeight: '400px',
+            overflowY: 'auto',
+            zIndex: 10002,
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ 
+            fontSize: '12px', 
+            fontWeight: '700', 
+            color: '#6225ff', 
+            marginBottom: '8px',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            paddingBottom: '8px',
+          }}>
+            SUBTITLES ({probeData.subtitleTracks.length})
+          </div>
+          
+          {/* None option */}
+          <button
+            onClick={() => {
+              onSubtitleChange?.(null);
+              setShowSubtitles(false);
+            }}
+            style={{
+              width: '100%',
+              background: currentSubtitle === null ? 'rgba(98,37,255,0.3)' : 'transparent',
+              border: 'none',
+              color: 'white',
+              padding: '8px',
+              cursor: 'pointer',
+              fontSize: '11px',
+              textAlign: 'left',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '4px',
+            }}
+            onMouseEnter={(e) => currentSubtitle !== null && (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+            onMouseLeave={(e) => currentSubtitle !== null && (e.currentTarget.style.background = 'transparent')}
+          >
+            <span style={{ fontSize: '14px', opacity: currentSubtitle === null ? 1 : 0 }}>✓</span>
+            <span>NONE</span>
+          </button>
+
+          {probeData.subtitleTracks.map((track, index) => {
+            const isActive = currentSubtitle === index;
+            const lang = track.language || track.name || `Track ${index + 1}`;
+            
+            return (
+              <button
+                key={index}
+                onClick={() => {
+                  onSubtitleChange?.(index);
+                  setShowSubtitles(false);
+                }}
+                style={{
+                  width: '100%',
+                  background: isActive ? 'rgba(98,37,255,0.3)' : 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '4px',
+                }}
+                onMouseEnter={(e) => !isActive && (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                onMouseLeave={(e) => !isActive && (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ fontSize: '14px', opacity: isActive ? 1 : 0 }}>✓</span>
+                <span>{lang.toUpperCase()}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Keyframes */}
       <style>{`
