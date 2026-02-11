@@ -1,12 +1,15 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
+import InfiniteLoader from 'react-window-infinite-loader';
+import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount } from '../database/ProgramQueries';
 
 // ============================================================================
-// OTT RIGHT - Movies & Series Gallery
+// OTT RIGHT - Movies & Series Gallery (WINDOWING for 185K items)
 // 
-// - Windowed grid (react-window FixedSizeGrid)
+// - Windowed grid (react-window FixedSizeGrid + InfiniteLoader)
 // - Movies: poster grid → detail with TMDB info, trailer, audio/subtitles
 // - Series: poster grid → detail with seasons tabs, episodes list
+// - Pagination: Load 100 items at a time (no more 10s lag!)
 // ============================================================================
 
 // Language code mapping (ISO 639-2/3 → display name) - 30 languages
@@ -96,8 +99,9 @@ const TagPill = ({ children, color = 'purple' }) => {
 };
 
 const OTTRight = ({ 
-  items = [], 
+  items: propsItems = [], // DEPRECATED - now using windowing
   sidebarTab = 'movies', 
+  selectedFolder = '__all__', // Category ID for filtering
   xtreamService, 
   videoRef, 
   onItemSelect,
@@ -106,6 +110,11 @@ const OTTRight = ({
   visible = false,
 }, ref) => {
   const type = sidebarTab; // 'movies' or 'series'
+  
+  // ========== WINDOWING STATES (Infinite Loader) ==========
+  const [items, setItems] = useState([]);           // Paginated items
+  const [totalCount, setTotalCount] = useState(0);  // Total count from DB
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   const [selectedItem, setSelectedItem] = useState(null);
   const [detailData, setDetailData] = useState(null);
@@ -184,6 +193,61 @@ const OTTRight = ({
       setLoading(false);
     }
   }, [type, xtreamService, videoRef]);
+
+  // ========== WINDOWING: Load More Items (Infinite Loader) ==========
+  const loadMoreItems = useCallback(async (startIndex, stopIndex) => {
+    if (isLoadingMore) return;
+    
+    setIsLoadingMore(true);
+    
+    try {
+      const limit = stopIndex - startIndex + 1;
+      const offset = startIndex;
+      
+      const newItems = type === 'movies' 
+        ? await getVODItemsPaginated(selectedFolder, limit, offset)
+        : await getSeriesItemsPaginated(selectedFolder, limit, offset);
+      
+      setItems(prev => {
+        const updated = [...prev];
+        newItems.forEach((item, i) => {
+          updated[startIndex + i] = item;
+        });
+        return updated;
+      });
+    } catch (err) {
+      console.error('❌ loadMoreItems failed:', err);
+    }
+    
+    setIsLoadingMore(false);
+  }, [type, selectedFolder, isLoadingMore]);
+
+  // ========== WINDOWING: Initial Load on Folder/Tab Change ==========
+  useEffect(() => {
+    const loadInitial = async () => {
+      try {
+        const count = type === 'movies' 
+          ? await getVODItemsCount(selectedFolder)
+          : await getSeriesItemsCount(selectedFolder);
+        
+        setTotalCount(count);
+        setItems(new Array(count).fill(null)); // Placeholder array
+        
+        // Load first 100 items
+        if (count > 0) {
+          await loadMoreItems(0, Math.min(99, count - 1));
+        }
+      } catch (err) {
+        console.error('❌ Initial load failed:', err);
+        setTotalCount(0);
+        setItems([]);
+      }
+    };
+    
+    if (visible) {
+      loadInitial();
+    }
+  }, [selectedFolder, type, visible, loadMoreItems]);
 
   // Charger EPG (4 prochains programmes) quand on sélectionne une chaîne LIVE
   useEffect(() => {
@@ -575,24 +639,52 @@ const OTTRight = ({
     );
   };
 
+  // ========== INFINITE LOADER HELPERS ==========
+  const isItemLoaded = useCallback((index) => !!items[index], [items]);
+  
+  const handleItemsRendered = useCallback(({ visibleRowStartIndex, visibleRowStopIndex, visibleColumnStartIndex, visibleColumnStopIndex }) => {
+    const startIndex = visibleRowStartIndex * COLUMN_COUNT + visibleColumnStartIndex;
+    const stopIndex = visibleRowStopIndex * COLUMN_COUNT + visibleColumnStopIndex;
+    
+    return {
+      visibleStartIndex: startIndex,
+      visibleStopIndex: stopIndex,
+    };
+  }, [COLUMN_COUNT]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, minHeight: 0 }}>
-        {items.length > 0 ? (
-          <Grid
-            ref={gridRef}
-            columnCount={COLUMN_COUNT}
-            columnWidth={ITEM_WIDTH}
-            height={window.innerHeight}
-            rowCount={ROW_COUNT}
-            rowHeight={ITEM_HEIGHT}
-            width={window.innerWidth - 280}
+        {totalCount > 0 ? (
+          <InfiniteLoader
+            isItemLoaded={isItemLoaded}
+            itemCount={totalCount}
+            loadMoreItems={loadMoreItems}
           >
-            {Cell}
-          </Grid>
+            {({ onItemsRendered, ref: loaderRef }) => (
+              <Grid
+                ref={(grid) => {
+                  gridRef.current = grid;
+                  loaderRef(grid);
+                }}
+                columnCount={COLUMN_COUNT}
+                columnWidth={ITEM_WIDTH}
+                height={window.innerHeight}
+                rowCount={ROW_COUNT}
+                rowHeight={ITEM_HEIGHT}
+                width={window.innerWidth - 280}
+                onItemsRendered={(gridProps) => {
+                  const indices = handleItemsRendered(gridProps);
+                  onItemsRendered(indices);
+                }}
+              >
+                {Cell}
+              </Grid>
+            )}
+          </InfiniteLoader>
         ) : (
           <div style={{ padding: '40px', textAlign: 'center', color: '#444', fontSize: '11px' }}>
-            Select a category
+            {isLoadingMore ? 'Loading...' : 'Select a category'}
           </div>
         )}
       </div>
