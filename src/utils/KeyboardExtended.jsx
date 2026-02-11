@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 
 const Keyboard_Extended = ({ onSearch, onClose }) => {
   const [searchValue, setSearchValue] = useState('');
@@ -80,7 +80,7 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
     setIsDragging(true);
   };
 
-  const handleDragMove = (e) => {
+  const handleDragMove = useCallback((e) => {
     if (!isDragging) return;
     e.preventDefault();
     const touch = e.touches?.[0] || e;
@@ -90,9 +90,11 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
       x: dragStart.current.posX + dx,
       y: dragStart.current.posY + dy,
     });
-  };
+  }, [isDragging]);
 
-  const handleDragEnd = () => setIsDragging(false);
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   // ========== PINCH ZOOM HANDLERS ==========
   const handleTouchStart = (e) => {
