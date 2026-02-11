@@ -1543,7 +1543,11 @@ const OTTLeft = forwardRef(({
             {(activeTab === 'movies' || activeTab === 'series') && (
               <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
                 <button
-                  onClick={onZoomOut}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onZoomOut?.();
+                  }}
                   style={{
                     background: 'rgba(255,255,255,0.08)',
                     border: '1px solid rgba(255,255,255,0.12)',
@@ -1566,7 +1570,11 @@ const OTTLeft = forwardRef(({
                   −
                 </button>
                 <button
-                  onClick={onZoomIn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onZoomIn?.();
+                  }}
                   style={{
                     background: 'rgba(255,255,255,0.08)',
                     border: '1px solid rgba(255,255,255,0.12)',
