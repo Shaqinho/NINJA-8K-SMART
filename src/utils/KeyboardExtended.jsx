@@ -18,8 +18,8 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
   const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
   const lastPinchDistance = useRef(null);
 
-  const AZERTY = ['a','z','e','r','t','y','u','i','o','p','q','s','d','f','g','h','j','k','l','m','w','x','c','v','b','n'];
-  const QWERTY = ['q','w','e','r','t','y','u','i','o','p','a','s','d','f','g','h','j','k','l',';','z','x','c','v','b','n','m'];
+  const AZERTY = ['a','z','e','r','t','y','u','i','o','p','q','s','d','f','g','h','j','k','l','m','w','x','c','v','b','n','@','+','|'];
+  const QWERTY = ['q','w','e','r','t','y','u','i','o','p','a','s','d','f','g','h','j','k','l',';','z','x','c','v','b','n','m','@','+','|'];
   const letters = layout === 'AZERTY' ? AZERTY : QWERTY;
 
   const showStatus = (msg) => {
@@ -227,54 +227,63 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
         onTouchEnd={handleTouchEnd}
         onClick={(e) => e.stopPropagation()}
       >
-      {/* DRAG HANDLE */}
+      {/* DRAG HANDLE + STATUS LOG */}
       <div 
-        onMouseDown={handleDragStart}
-        onTouchStart={handleDragStart}
-        onMouseMove={handleDragMove}
-        onMouseUp={handleDragEnd}
-        onMouseLeave={handleDragEnd}
         style={{
           width: '100%',
           height: '20px',
           display: 'flex',
-          justifyContent: 'center',
           alignItems: 'center',
-          cursor: 'grab',
+          justifyContent: 'space-between',
           marginBottom: '10px',
+          position: 'relative',
         }}
       >
-        <div style={{ width: '40px', height: '4px', borderRadius: '2px', backgroundColor: 'rgba(255, 255, 255, 0.3)' }} />
+        {/* Drag handle - gauche */}
+        <div 
+          onMouseDown={handleDragStart}
+          onTouchStart={handleDragStart}
+          onMouseMove={handleDragMove}
+          onMouseUp={handleDragEnd}
+          onMouseLeave={handleDragEnd}
+          style={{
+            width: '40px',
+            height: '4px',
+            borderRadius: '2px',
+            backgroundColor: 'rgba(255, 255, 255, 0.3)',
+            cursor: 'grab',
+          }}
+        />
+
+        {/* Status log - centre */}
+        {statusVisible && (
+          <div style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%) scale(0.7)',
+            padding: '8px 12px',
+            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            borderRadius: '8px',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
+            color: '#fff',
+            fontSize: '11px',
+            fontWeight: '700',
+            textAlign: 'center',
+            textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+            whiteSpace: 'nowrap',
+          }}>
+            {statusMessage}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'row', gap: '10px', position: 'relative' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {/* ROW 1 */}
           <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', minHeight: '50px', position: 'relative' }}>
-            {/* Status Toast */}
-            {statusVisible && (
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                right: '-180px',
-                padding: '15px',
-                backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                borderRadius: '12px',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                minWidth: '200px',
-                zIndex: 1000,
-                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
-                color: '#fff',
-                fontSize: '13px',
-                fontWeight: '700',
-                textAlign: 'center',
-                textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
-              }}>
-                {statusMessage}
-              </div>
-            )}
             
             <Key 
               char={
@@ -331,7 +340,7 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
               {/* ROW 5 */}
               <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', minHeight: '50px' }}>
                 <Key char="CAPS" onPress={toggleShift} onHover="Toggle CAPS" wide={70} toggle active={shiftActive} />
-                {letters.slice(20, 27).map((l, i) => (
+                {letters.slice(20, 30).map((l, i) => (
                   <Key key={i} char={shiftActive ? l.toUpperCase() : l} onPress={() => typeLetter(i + 20)} onHover={l.toUpperCase()} />
                 ))}
               </div>
