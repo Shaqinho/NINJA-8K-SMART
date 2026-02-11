@@ -941,7 +941,7 @@ export const upgradeToPremiumLogos = async (channels) => {
  * Returns: { total: 185420 }
  */
 export const getVODItemsCount = async (categoryId) => {
-  const { querySql } = await import('./database/NinjaLocalDB');
+  const { querySql } = await import('./NinjaLocalDB');
   
   if (categoryId === '__all__') {
     const result = await querySql(`SELECT COUNT(*) as total FROM vod_items`);
@@ -960,7 +960,7 @@ export const getVODItemsCount = async (categoryId) => {
  * Returns: { total: 45230 }
  */
 export const getSeriesItemsCount = async (categoryId) => {
-  const { querySql } = await import('./database/NinjaLocalDB');
+  const { querySql } = await import('./NinjaLocalDB');
   
   if (categoryId === '__all__') {
     const result = await querySql(`SELECT COUNT(*) as total FROM series_items`);
@@ -980,7 +980,7 @@ export const getSeriesItemsCount = async (categoryId) => {
  * NOTE: NO plot/cast here → too heavy for scroll
  */
 export const getVODItemsPaginated = async (categoryId, limit = 100, offset = 0) => {
-  const { querySql } = await import('./database/NinjaLocalDB');
+  const { querySql } = await import('./NinjaLocalDB');
   
   if (categoryId === '__all__') {
     return await querySql(
@@ -1007,7 +1007,7 @@ export const getVODItemsPaginated = async (categoryId, limit = 100, offset = 0) 
  * Returns: [{ series_id, name, cover, rating, year }]
  */
 export const getSeriesItemsPaginated = async (categoryId, limit = 100, offset = 0) => {
-  const { querySql } = await import('./database/NinjaLocalDB');
+  const { querySql } = await import('./NinjaLocalDB');
   
   if (categoryId === '__all__') {
     return await querySql(
