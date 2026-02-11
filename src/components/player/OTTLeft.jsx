@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, u
 import { FixedSizeList as List } from 'react-window';
 import { ninjaCentral, STORES } from '../../services/NinjaCentral';
 import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch, syncEmptyChannels } from '../../database/ProgramQueries';
-import Keyboard_Extended from '../../utils/Keyboard_Extended';
 
 // ============================================================================
 // OTT SIDEBAR - Composant autonome pour mode paysage/fullscreen
