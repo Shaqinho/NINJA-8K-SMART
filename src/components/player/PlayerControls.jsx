@@ -56,12 +56,19 @@ export const PlayerControls = ({
   sidebarOpen = false,
   onTapDismiss,
   probeData = null, // Probe video info from VOD
-}) => {
-  sidebarOpen = false,
-  onTapDismiss,
+  aspectRatio = 'fit', // Current aspect ratio
+  onAspectRatioChange, // Callback to change aspect ratio
+  onShowMediaInfo, // Callback to show media info overlay
+  onAudioTrackChange, // Callback to change audio track
+  onSubtitleChange, // Callback to change subtitle track
+  currentAudioTrack = null, // Currently selected audio track
+  currentSubtitle = null, // Currently selected subtitle track
 }) => {
   const [showSettingsOverlay, setShowSettingsOverlay] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showAudioTracks, setShowAudioTracks] = useState(false);
+  const [showSubtitles, setShowSubtitles] = useState(false);
+  const [showRatioMenu, setShowRatioMenu] = useState(false);
   const timelineRef = useRef(null);
   const autoHideTimer = useRef(null);
 
@@ -145,6 +152,167 @@ export const PlayerControls = ({
         onEPGGrid={() => {/* EPG Grid déjà géré dans Player */}}
       />
 
+      {/* Audio Tracks Overlay */}
+      {showAudioTracks && probeData?.audioTracks && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '80px',
+            right: '20px',
+            background: 'rgba(0,0,0,0.95)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px',
+            padding: '12px',
+            minWidth: '220px',
+            maxHeight: '400px',
+            overflowY: 'auto',
+            zIndex: 10002,
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ 
+            fontSize: '12px', 
+            fontWeight: '700', 
+            color: '#6225ff', 
+            marginBottom: '8px',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            paddingBottom: '8px',
+          }}>
+            AUDIO ({probeData.audioTracks.length} tracks)
+          </div>
+          {probeData.audioTracks.map((track, index) => {
+            const isActive = currentAudioTrack === index || (currentAudioTrack === null && index === 0);
+            const lang = track.language || track.name || `Track ${index + 1}`;
+            const channels = track.channels ? (track.channels === 6 ? '5.1' : track.channels === 2 ? 'Stereo' : `${track.channels}ch`) : '';
+            
+            return (
+              <button
+                key={index}
+                onClick={() => {
+                  onAudioTrackChange?.(index);
+                  setShowAudioTracks(false);
+                }}
+                style={{
+                  width: '100%',
+                  background: isActive ? 'rgba(98,37,255,0.3)' : 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '4px',
+                }}
+                onMouseEnter={(e) => !isActive && (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                onMouseLeave={(e) => !isActive && (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ fontSize: '14px', opacity: isActive ? 1 : 0 }}>✓</span>
+                <span style={{ flex: 1 }}>{lang.toUpperCase()}</span>
+                {channels && <span style={{ fontSize: '9px', opacity: 0.7 }}>{channels}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Subtitles Overlay */}
+      {showSubtitles && probeData?.subtitleTracks && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '80px',
+            right: '20px',
+            background: 'rgba(0,0,0,0.95)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px',
+            padding: '12px',
+            minWidth: '220px',
+            maxHeight: '400px',
+            overflowY: 'auto',
+            zIndex: 10002,
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ 
+            fontSize: '12px', 
+            fontWeight: '700', 
+            color: '#6225ff', 
+            marginBottom: '8px',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            paddingBottom: '8px',
+          }}>
+            SUBTITLES ({probeData.subtitleTracks.length} tracks)
+          </div>
+          
+          {/* None option */}
+          <button
+            onClick={() => {
+              onSubtitleChange?.(null);
+              setShowSubtitles(false);
+            }}
+            style={{
+              width: '100%',
+              background: currentSubtitle === null ? 'rgba(98,37,255,0.3)' : 'transparent',
+              border: 'none',
+              color: 'white',
+              padding: '8px',
+              cursor: 'pointer',
+              fontSize: '11px',
+              textAlign: 'left',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '4px',
+            }}
+            onMouseEnter={(e) => currentSubtitle !== null && (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+            onMouseLeave={(e) => currentSubtitle !== null && (e.currentTarget.style.background = 'transparent')}
+          >
+            <span style={{ fontSize: '14px', opacity: currentSubtitle === null ? 1 : 0 }}>✓</span>
+            <span>NONE</span>
+          </button>
+
+          {probeData.subtitleTracks.map((track, index) => {
+            const isActive = currentSubtitle === index;
+            const lang = track.language || track.name || `Track ${index + 1}`;
+            
+            return (
+              <button
+                key={index}
+                onClick={() => {
+                  onSubtitleChange?.(index);
+                  setShowSubtitles(false);
+                }}
+                style={{
+                  width: '100%',
+                  background: isActive ? 'rgba(98,37,255,0.3)' : 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  textAlign: 'left',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '4px',
+                }}
+                onMouseEnter={(e) => !isActive && (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                onMouseLeave={(e) => !isActive && (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ fontSize: '14px', opacity: isActive ? 1 : 0 }}>✓</span>
+                <span>{lang.toUpperCase()}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Controls Container */}
       <div
         style={{
@@ -189,6 +357,28 @@ export const PlayerControls = ({
           </span>
         </button>
 
+        {/* Title + Description (top-left, VOD only) */}
+        {!isLive && currentChannel?.name && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '20px',
+              left: '150px',
+              color: 'white',
+              maxWidth: '400px',
+            }}
+          >
+            <div style={{ fontSize: '16px', fontWeight: '700', marginBottom: '2px' }}>
+              {currentChannel.name}
+            </div>
+            {currentChannel.description && (
+              <div style={{ fontSize: '11px', opacity: 0.7 }}>
+                {currentChannel.description}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Resolution Badge (top-right, VOD only) */}
         {!isLive && probeData?.video?.width && (
           <div
@@ -210,6 +400,99 @@ export const PlayerControls = ({
             }}>
               {getResolutionLabel(probeData.video.width)}
             </span>
+          </div>
+        )}
+
+        {/* Top-Right Controls (VOD only): AD | CC | ⓘ | ⋮ */}
+        {!isLive && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: probeData?.video?.width ? '120px' : '20px',
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'center',
+            }}
+          >
+            {/* AD - Audio Tracks */}
+            <button
+              onClick={() => setShowAudioTracks(!showAudioTracks)}
+              style={{
+                background: 'rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: '600',
+              }}
+              title="Audio Tracks"
+            >
+              AD
+            </button>
+
+            {/* CC - Subtitles */}
+            <button
+              onClick={() => setShowSubtitles(!showSubtitles)}
+              style={{
+                background: 'rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: '600',
+              }}
+              title="Subtitles"
+            >
+              CC
+            </button>
+
+            {/* ⓘ - Media Info */}
+            <button
+              onClick={() => onShowMediaInfo?.()}
+              style={{
+                background: 'rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '16px',
+              }}
+              title="Media Info"
+            >
+              ⓘ
+            </button>
+
+            {/* ⋮ - Settings */}
+            <button
+              onClick={() => setShowSettingsOverlay(true)}
+              style={{
+                background: 'rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '18px',
+                lineHeight: '1',
+              }}
+              title="Settings"
+            >
+              ⋮
+            </button>
           </div>
         )}
 
@@ -312,16 +595,11 @@ export const PlayerControls = ({
           </div>
         )}
 
-        {/* Bottom Controls */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-        }}>
-          {/* Left: Play/Pause + Skip */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {!isLive && (
+        {/* Bottom Controls - VOD Layout */}
+        {!isLive && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+            {/* Row 1: Skip + Play/Pause */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
               <button
                 onClick={onChannelPrev}
                 style={{
@@ -329,8 +607,8 @@ export const PlayerControls = ({
                   border: 'none',
                   color: 'white',
                   cursor: 'pointer',
-                  width: '32px',
-                  height: '32px',
+                  width: '40px',
+                  height: '40px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -338,8 +616,209 @@ export const PlayerControls = ({
               >
                 <Icons.SkipPrev />
               </button>
-            )}
 
+              <button
+                onClick={onPlayPause}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '56px',
+                  height: '56px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: 'white',
+                }}
+              >
+                {playing ? <Icons.Pause /> : <Icons.Play />}
+              </button>
+
+              <button
+                onClick={onChannelNext}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'white',
+                  cursor: 'pointer',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icons.SkipNext />
+              </button>
+            </div>
+
+            {/* Row 2: Skip ±15s | Volume | Settings | Ratio */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {/* Skip -15s */}
+              <button
+                onClick={() => onSeek?.(Math.max(0, currentTime - 15))}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  fontSize: '20px',
+                }}
+                title="Rewind 15s"
+              >
+                <span>↺</span>
+                <span style={{ fontSize: '9px' }}>15</span>
+              </button>
+
+              {/* Skip +15s */}
+              <button
+                onClick={() => onSeek?.(Math.min(duration, currentTime + 15))}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  fontSize: '20px',
+                }}
+                title="Forward 15s"
+              >
+                <span>↻</span>
+                <span style={{ fontSize: '9px' }}>15</span>
+              </button>
+
+              {/* Volume */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={onMuteToggle}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'white',
+                    cursor: 'pointer',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {muted || volume === 0 ? <Icons.VolumeMute /> : <Icons.Volume />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={muted ? 0 : volume}
+                  onChange={(e) => onVolumeChange?.(parseFloat(e.target.value))}
+                  style={{
+                    width: '80px',
+                    accentColor: '#6225ff',
+                  }}
+                />
+              </div>
+
+              {/* Settings */}
+              <button
+                onClick={() => setShowSettingsOverlay(true)}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                }}
+                title="Settings"
+              >
+                ⚙️
+              </button>
+
+              {/* Aspect Ratio */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowRatioMenu(!showRatioMenu)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '4px',
+                    padding: '6px 10px',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                  }}
+                  title="Aspect Ratio"
+                >
+                  {aspectRatio.toUpperCase()}
+                </button>
+
+                {/* Ratio Menu */}
+                {showRatioMenu && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '40px',
+                      right: 0,
+                      background: 'rgba(0,0,0,0.9)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '6px',
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px',
+                      minWidth: '80px',
+                    }}
+                  >
+                    {['fit', '16:9', '21:9', '16:10', '1:1'].map((ratio) => (
+                      <button
+                        key={ratio}
+                        onClick={() => {
+                          onAspectRatioChange?.(ratio);
+                          setShowRatioMenu(false);
+                        }}
+                        style={{
+                          background: aspectRatio === ratio ? 'rgba(98,37,255,0.3)' : 'none',
+                          border: 'none',
+                          color: 'white',
+                          padding: '6px',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          textAlign: 'left',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        {ratio.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bottom Controls - LIVE Layout */}
+        {isLive && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+          }}>
+            {/* Left: Play/Pause */}
             <button
               onClick={onPlayPause}
               style={{
@@ -358,32 +837,43 @@ export const PlayerControls = ({
               {playing ? <Icons.Pause /> : <Icons.Play />}
             </button>
 
-            {!isLive && (
-              <button
-                onClick={onChannelNext}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'white',
-                  cursor: 'pointer',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icons.SkipNext />
-              </button>
-            )}
-          </div>
+            {/* Right: Volume + Fullscreen */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {/* Volume */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={onMuteToggle}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'white',
+                    cursor: 'pointer',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {muted || volume === 0 ? <Icons.VolumeMute /> : <Icons.Volume />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={muted ? 0 : volume}
+                  onChange={(e) => onVolumeChange?.(parseFloat(e.target.value))}
+                  style={{
+                    width: '80px',
+                    accentColor: '#6225ff',
+                  }}
+                />
+              </div>
 
-          {/* Right: Volume + Fullscreen */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Volume */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Fullscreen */}
               <button
-                onClick={onMuteToggle}
+                onClick={onFullscreenToggle}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -396,41 +886,11 @@ export const PlayerControls = ({
                   justifyContent: 'center',
                 }}
               >
-                {muted || volume === 0 ? <Icons.VolumeMute /> : <Icons.Volume />}
+                {fullscreen ? <Icons.Minimize /> : <Icons.Fullscreen />}
               </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={muted ? 0 : volume}
-                onChange={(e) => onVolumeChange?.(parseFloat(e.target.value))}
-                style={{
-                  width: '80px',
-                  accentColor: '#6225ff',
-                }}
-              />
             </div>
-
-            {/* Fullscreen */}
-            <button
-              onClick={onFullscreenToggle}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'white',
-                cursor: 'pointer',
-                width: '24px',
-                height: '24px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {fullscreen ? <Icons.Minimize /> : <Icons.Fullscreen />}
-            </button>
           </div>
-        </div>
+        )}
       </div>
     </>
   );
