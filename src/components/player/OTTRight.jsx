@@ -366,14 +366,6 @@ const OTTRight = ({
             />
           )}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {/* ANNÉE + GENRE */}
-            {(year || genre) && (
-              <div style={{ fontSize: '10px', color: '#888', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {year && <span>{year.substring(0, 4)}</span>}
-                {genre && <span>{genre}</span>}
-              </div>
-            )}
-            
             {plot && (
               <div style={{ fontSize: '11px', color: '#aaa', lineHeight: '1.5' }}>
                 {plot.substring(0, 300)}{plot.length > 300 ? '...' : ''}

@@ -157,7 +157,24 @@ const AppContent = () => {
         window.db = db;
         console.log('✅ SQLite ready for search');
         
-        // 2. Fetch Logos si pas déjà en cache local
+        // 2. Auto-login: Check if last active server exists
+        const { getLastActiveServer } = await import('./utils/NinjaLocalDB');
+        const lastServer = await getLastActiveServer();
+        
+        if (lastServer) {
+          console.log('🔐 Auto-login with last server:', lastServer.name || lastServer.url);
+          // Créer instance XtreamService avec les credentials sauvegardés
+          const XtreamService = (await import('./utils/XtreamService')).default;
+          const xtream = new XtreamService(lastServer.url, lastServer.username, lastServer.password);
+          setXtreamService(xtream);
+          // Passer directement au player (data déjà en DB locale)
+          setCurrentPage('player');
+        } else {
+          // Aucun serveur sauvegardé → afficher ServerForm
+          setCurrentPage('serverform');
+        }
+        
+        // 3. Fetch Logos si pas déjà en cache local
         const LOGOS_URL = 'https://script.google.com/macros/s/AKfycbzVRZLKDPgqtFtDp54eZ9ArmdkvfR6-6Wo8eaga1BId8jtEU5PetqQ4DfW6Jsl3vUg57g/exec';
         const response = await fetch(LOGOS_URL);
         const data = await response.json();
@@ -170,6 +187,7 @@ const AppContent = () => {
         }
       } catch (err) {
         console.error('❌ Core Init Error:', err);
+        setCurrentPage('serverform'); // Fallback sur erreur
       }
     };
     initAppCore();

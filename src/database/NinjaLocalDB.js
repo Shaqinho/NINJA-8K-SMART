@@ -107,6 +107,20 @@ const initSchema = async () => {
       programs_count INTEGER DEFAULT 0
     )
   `);
+  
+  // ========== SERVERS (Auto-login persistence) ==========
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS servers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      url TEXT NOT NULL,
+      username TEXT NOT NULL,
+      password TEXT NOT NULL,
+      is_last_active INTEGER DEFAULT 0,
+      added_at INTEGER DEFAULT (strftime('%s', 'now'))
+    )
+  `);
+  
   await db.execute(`
     CREATE TABLE IF NOT EXISTS hidden_folders (
       category_id INTEGER PRIMARY KEY,
@@ -230,6 +244,32 @@ export const clearPrograms = async () => {
   await db.execute('DELETE FROM programs');
 };
 
+// ========== SERVERS MANAGEMENT ==========
+export const saveServer = async (server) => {
+  // Désactiver tous les autres serveurs
+  await db.execute('UPDATE servers SET is_last_active = 0');
+  
+  // Insérer le nouveau serveur comme actif
+  await db.run(
+    'INSERT INTO servers (name, url, username, password, is_last_active) VALUES (?, ?, ?, ?, 1)',
+    [server.name || 'My Server', server.url, server.username, server.password]
+  );
+};
+
+export const getLastActiveServer = async () => {
+  const result = await db.query('SELECT * FROM servers WHERE is_last_active = 1 LIMIT 1');
+  return result.values?.[0] || null;
+};
+
+export const getAllServers = async () => {
+  const result = await db.query('SELECT * FROM servers ORDER BY added_at DESC');
+  return result.values || [];
+};
+
+export const deleteServer = async (id) => {
+  await db.run('DELETE FROM servers WHERE id = ?', [id]);
+};
+
 export const getDatabaseStats = async () => {
   const channels = await db.query('SELECT COUNT(*) as count FROM channels');
   const programs = await db.query('SELECT COUNT(*) as count FROM programs');
@@ -254,5 +294,5 @@ export const normalizeText = (text) => {
   return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
-const NinjaLocalDBExports = { openDatabase, getDatabase, closeDatabase, clearAllData, clearPrograms, getDatabaseStats, extractLangPrefix, normalizeText, executeSql, querySql };
+const NinjaLocalDBExports = { openDatabase, getDatabase, closeDatabase, clearAllData, clearPrograms, getDatabaseStats, extractLangPrefix, normalizeText, executeSql, querySql, saveServer, getLastActiveServer, getAllServers, deleteServer };
 export default NinjaLocalDBExports;
