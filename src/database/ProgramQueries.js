@@ -932,3 +932,100 @@ export const upgradeToPremiumLogos = async (channels) => {
   }
 };
 
+// ============================================================================
+// WINDOWING: VOD/SERIES Pagination (185K items → 100 per load)
+// ============================================================================
+
+/**
+ * Get VOD items count (for InfiniteLoader itemCount)
+ * Returns: { total: 185420 }
+ */
+export const getVODItemsCount = async (categoryId) => {
+  const { querySql } = await import('./database/NinjaLocalDB');
+  
+  if (categoryId === '__all__') {
+    const result = await querySql(`SELECT COUNT(*) as total FROM vod_items`);
+    return result[0]?.total || 0;
+  }
+  
+  const result = await querySql(
+    `SELECT COUNT(*) as total FROM vod_items WHERE category_id = ?`,
+    [categoryId]
+  );
+  return result[0]?.total || 0;
+};
+
+/**
+ * Get Series items count (for InfiniteLoader itemCount)
+ * Returns: { total: 45230 }
+ */
+export const getSeriesItemsCount = async (categoryId) => {
+  const { querySql } = await import('./database/NinjaLocalDB');
+  
+  if (categoryId === '__all__') {
+    const result = await querySql(`SELECT COUNT(*) as total FROM series_items`);
+    return result[0]?.total || 0;
+  }
+  
+  const result = await querySql(
+    `SELECT COUNT(*) as total FROM series_items WHERE category_id = ?`,
+    [categoryId]
+  );
+  return result[0]?.total || 0;
+};
+
+/**
+ * Get VOD items paginated (LIMIT + OFFSET)
+ * Returns: [{ stream_id, name, logo, rating, year, container_extension }]
+ * NOTE: NO plot/cast here → too heavy for scroll
+ */
+export const getVODItemsPaginated = async (categoryId, limit = 100, offset = 0) => {
+  const { querySql } = await import('./database/NinjaLocalDB');
+  
+  if (categoryId === '__all__') {
+    return await querySql(
+      `SELECT stream_id, name, logo, rating, year, category_id, category_name 
+       FROM vod_items 
+       ORDER BY created_at DESC 
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+  }
+  
+  return await querySql(
+    `SELECT stream_id, name, logo, rating, year, category_id, category_name 
+     FROM vod_items 
+     WHERE category_id = ? 
+     ORDER BY created_at DESC 
+     LIMIT ? OFFSET ?`,
+    [categoryId, limit, offset]
+  );
+};
+
+/**
+ * Get Series items paginated (LIMIT + OFFSET)
+ * Returns: [{ series_id, name, cover, rating, year }]
+ */
+export const getSeriesItemsPaginated = async (categoryId, limit = 100, offset = 0) => {
+  const { querySql } = await import('./database/NinjaLocalDB');
+  
+  if (categoryId === '__all__') {
+    return await querySql(
+      `SELECT series_id, name, cover, rating, year, category_id, category_name 
+       FROM series_items 
+       ORDER BY created_at DESC 
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+  }
+  
+  return await querySql(
+    `SELECT series_id, name, cover, rating, year, category_id, category_name 
+     FROM series_items 
+     WHERE category_id = ? 
+     ORDER BY created_at DESC 
+     LIMIT ? OFFSET ?`,
+    [categoryId, limit, offset]
+  );
+};
+
