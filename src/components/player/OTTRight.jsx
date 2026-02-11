@@ -9,27 +9,67 @@ import { FixedSizeGrid as Grid } from 'react-window';
 // - Series: poster grid → detail with seasons tabs, episodes list
 // ============================================================================
 
-// Language code mapping (ISO 639-2/3 → display name)
+// Language code mapping (ISO 639-2/3 → display name) - 30 languages
 const LANG_MAP = {
-  fre: 'FRENCH', fra: 'FRENCH', fr: 'FRENCH',
+  // French
+  fra: 'FRENCH', fre: 'FRENCH', fr: 'FRENCH',
+  // English
   eng: 'ENGLISH', en: 'ENGLISH',
-  ara: 'ARABIC', ar: 'ARABIC',
-  spa: 'SPANISH', es: 'SPANISH',
-  ger: 'GERMAN', deu: 'GERMAN', de: 'GERMAN',
-  ita: 'ITALIAN', it: 'ITALIAN',
-  por: 'PORTUGUESE', pt: 'PORTUGUESE',
-  rus: 'RUSSIAN', ru: 'RUSSIAN',
+  // Turkish
   tur: 'TURKISH', tr: 'TURKISH',
-  pol: 'POLISH', pl: 'POLISH',
+  // Arabic
+  ara: 'ARABIC', ar: 'ARABIC',
+  // Spanish
+  spa: 'SPANISH', esp: 'SPANISH', es: 'SPANISH',
+  // German
+  ger: 'GERMAN', deu: 'GERMAN', de: 'GERMAN',
+  // Italian
+  ita: 'ITALIAN', it: 'ITALIAN',
+  // Portuguese
+  por: 'PORTUGUESE', pt: 'PORTUGUESE',
+  // Russian
+  rus: 'RUSSIAN', ru: 'RUSSIAN',
+  // Dutch
   dut: 'DUTCH', nld: 'DUTCH', nl: 'DUTCH',
+  // Polish
+  pol: 'POLISH', pl: 'POLISH',
+  // Japanese
   jpn: 'JAPANESE', ja: 'JAPANESE',
-  kor: 'KOREAN', ko: 'KOREAN',
+  // Chinese
   chi: 'CHINESE', zho: 'CHINESE', zh: 'CHINESE',
+  // Korean
+  kor: 'KOREAN', ko: 'KOREAN',
+  // Hindi
   hin: 'HINDI', hi: 'HINDI',
-  und: 'UNDEFINED',
+  // Greek
+  gre: 'GREEK', ell: 'GREEK', el: 'GREEK',
+  // Swedish
+  swe: 'SWEDISH', sv: 'SWEDISH',
+  // Norwegian
+  nor: 'NORWEGIAN', no: 'NORWEGIAN',
+  // Danish
+  dan: 'DANISH', da: 'DANISH',
+  // Finnish
+  fin: 'FINNISH', fi: 'FINNISH',
+  // Hebrew
+  heb: 'HEBREW', he: 'HEBREW',
+  // Romanian
+  rum: 'ROMANIAN', ron: 'ROMANIAN', ro: 'ROMANIAN',
+  // Hungarian
+  hun: 'HUNGARIAN', hu: 'HUNGARIAN',
+  // Czech
+  cze: 'CZECH', ces: 'CZECH', cs: 'CZECH',
+  // Vietnamese
+  vie: 'VIETNAMESE', vi: 'VIETNAMESE',
+  // Thai
+  tha: 'THAI', th: 'THAI'
 };
 
-const getLangName = (code) => LANG_MAP[(code || '').toLowerCase()] || (code || 'UNKNOWN').toUpperCase();
+const getLangName = (code) => {
+  if (!code) return 'UNKNOWN';
+  const cleanCode = code.toLowerCase().trim();
+  return LANG_MAP[cleanCode] || cleanCode.toUpperCase();
+};
 
 // Format duration seconds → "1h35"
 const formatDuration = (secs) => {
@@ -352,7 +392,7 @@ const OTTRight = ({
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
                   {audioTracks.map((track, i) => (
                     <TagPill key={i} color="purple">
-                      {track.language || 'Unknown'} {track.channels ? `(${track.channels}ch)` : ''}
+                      {getLangName(track.language)} {track.channels ? `(${track.channels}ch)` : ''}
                     </TagPill>
                   ))}
                 </div>
@@ -370,7 +410,7 @@ const OTTRight = ({
               {subtitleTracks.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
                   {subtitleTracks.map((track, i) => (
-                    <TagPill key={i} color="gray">{track.language || 'Unknown'}</TagPill>
+                    <TagPill key={i} color="gray">{getLangName(track.language)}</TagPill>
                   ))}
                 </div>
               )}
