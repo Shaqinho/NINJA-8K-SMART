@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useRef, useImperativeHandle, useState, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { libVLC } from './libVLC';
+import ParticleThemes from '../ParticleThemes';
 
 export const getPlayerMode = () => localStorage.getItem('ninja_player_mode') || 'both';
 export const setPlayerMode = (mode) => localStorage.setItem('ninja_player_mode', mode);
@@ -168,13 +169,22 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
       onClick={onTap}
       style={getContainerStyle()}
     >
+      {/* Particles quand pas de vidéo */}
+      {!src && (
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+          <ParticleThemes containerRef={containerRef} theme="soft" />
+        </div>
+      )}
+      
       {!useNative && (
         <video 
           ref={videoRef} 
           src={src} 
           className="w-full h-full"
           style={{
-            objectFit: aspectRatio === 'fill' ? 'cover' : 'contain'
+            objectFit: aspectRatio === 'fill' ? 'cover' : 'contain',
+            position: 'relative',
+            zIndex: 1,
           }}
           playsInline 
           autoPlay 

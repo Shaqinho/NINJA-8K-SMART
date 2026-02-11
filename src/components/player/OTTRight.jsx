@@ -73,20 +73,27 @@ const OTTRight = ({
   const [loading, setLoading] = useState(false);
   const [posterOverlay, setPosterOverlay] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
-  const [columnCount, setColumnCount] = useState(4); // Dynamic grid zoom
+  const [zoomLevel, setZoomLevel] = useState(0); // 0=Petit(4rows défaut), 1=Moyen, 2=Grand
   const [epgPrograms, setEpgPrograms] = useState([]); // 4 prochains programmes
   const gridRef = useRef(null);
 
-  // Grid layout — dynamic columns
-  const COLUMN_COUNT = columnCount;
+  // Grid layout — 3 crans de zoom
+  const ZOOM_CONFIGS = [
+    { rows: 4, cols: 6 },  // Petit (défaut) - 24 posters
+    { rows: 3, cols: 6 },  // Moyen - 18 posters
+    { rows: 2, cols: 4 },  // Grand - 8 posters
+  ];
+  
+  const currentZoom = ZOOM_CONFIGS[zoomLevel];
+  const COLUMN_COUNT = currentZoom.cols;
   const ITEM_WIDTH = Math.floor((window.innerWidth - 280) / COLUMN_COUNT);
   const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.5);
   const ROW_COUNT = Math.ceil(items.length / COLUMN_COUNT);
 
   // Expose zoom methods to parent
   React.useImperativeHandle(ref, () => ({
-    zoomIn: () => setColumnCount(prev => Math.max(3, prev - 1)),   // Spread → bigger
-    zoomOut: () => setColumnCount(prev => Math.min(6, prev + 1)),  // Pinch → smaller
+    zoomIn: () => setZoomLevel(prev => Math.min(2, prev + 1)),   // Spread → cran supérieur (plus grand)
+    zoomOut: () => setZoomLevel(prev => Math.max(0, prev - 1)),  // Pinch → cran inférieur (plus petit)
   }));
 
   // Reset on items change
