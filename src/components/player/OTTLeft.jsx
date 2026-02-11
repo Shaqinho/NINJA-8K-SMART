@@ -526,7 +526,6 @@ const OTTLeft = forwardRef(({
     setSearchQuery('');
     setSearchOpen(false);
     setProgramResults([]);
-    setShowKeyboard(false);
     startHideTimer();
     onClose?.();
   }, [setSidebarOpen, startHideTimer, onClose]);
@@ -684,7 +683,6 @@ const OTTLeft = forwardRef(({
     setSearchQuery('');
     setSearchOpen(false);
     setProgramResults([]);
-    setShowKeyboard(false);
   }, []);
 
   // ========== FOLDER NAVIGATION (2-finger swipe from useGestures) ==========
@@ -857,7 +855,6 @@ const OTTLeft = forwardRef(({
     setSearchQuery('');
     setSearchOpen(false);
     setProgramResults([]);
-    setShowKeyboard(false);
     onTabChange?.(tabId);
     // Movies & Series: open ALL folder by default (triés par derniers ajouts)
     if (tabId === 'movies' || tabId === 'series') {
