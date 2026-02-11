@@ -22,10 +22,10 @@ import {
 // GLASS STYLES - Transparent pour voir les particules
 // ============================================================================
 const glassCard = {
-  background: 'rgba(18, 18, 31, 0.5)',
-  backdropFilter: 'blur(20px)',
-  WebkitBackdropFilter: 'blur(20px)',
-  border: '1px solid rgba(98, 37, 255, 0.3)',
+  background: 'rgba(10, 10, 15, 0.2)',
+  backdropFilter: 'blur(30px)',
+  WebkitBackdropFilter: 'blur(30px)',
+  border: '1px solid rgba(98, 37, 255, 0.15)',
 };
 
 const glassInput = {
@@ -456,11 +456,11 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
     <div 
       ref={containerRef}
       className="fixed inset-0 flex overflow-auto relative" 
-      style={{ background: THEME.colors.bg }}
+      style={{ background: '#000' }}
     >
       {/* Particles */}
       {particleTheme !== 'off' && (
-        <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="fixed inset-0 pointer-events-none z-0 h-screen w-screen">
           <ParticleThemes containerRef={containerRef} theme={particleTheme} />
         </div>
       )}
