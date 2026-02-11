@@ -55,24 +55,31 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
           await libVLC.setVolume(0);
           await libVLC.play(url);
           await new Promise(r => setTimeout(r, 3000));
-          const audio = await libVLC.getAudioTracks();
-          const subs = await libVLC.getSubtitleTracks();
+          
+          const audioRaw = await libVLC.getAudioTracks();
+          const subsRaw = await libVLC.getSubtitleTracks();
+          
           await libVLC.pause();
           await libVLC.setVolume(0.5);
           
-          // Mapper les tracks pour OTTRight (language + channels requis)
-          const audioTracks = (audio?.tracks || []).map(t => ({
+          // Normaliser : libVLC peut retourner tableau direct OU { tracks: [...] }
+          const audioList = Array.isArray(audioRaw) ? audioRaw : (audioRaw?.tracks || []);
+          const subsList = Array.isArray(subsRaw) ? subsRaw : (subsRaw?.tracks || []);
+          
+          const audioTracks = audioList.map(t => ({
             id: t.id,
-            language: t.language || t.name || 'und', // Force language pour getLangName
-            channels: t.channels || 2,               // Assure channels
+            language: t.language || t.name || 'und',
+            channels: t.channels || 2,
             name: t.name
           }));
           
-          const subtitleTracks = (subs?.tracks || []).map(t => ({
+          const subtitleTracks = subsList.map(t => ({
             id: t.id,
-            language: t.language || t.name || 'und', // Force language pour getLangName
+            language: t.language || t.name || 'und',
             name: t.name
           }));
+          
+          console.log('💎 NATIVE PROBE (NO CORS) RESULT:', { audioTracks, subtitleTracks });
           
           return { audioTracks, subtitleTracks };
         }
