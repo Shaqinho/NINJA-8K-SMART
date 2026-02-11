@@ -8,7 +8,7 @@ import VideoPlayer from './VideoPlayer';
 import OTTLeft from './OTTLeft';             // OTTLeft
 import OTTRight from './OTTRight';           // OTTRight (live: EPG search, movies/series: poster grid)
 import EPGGrid from './EPGGrid';             // EPGGrid fullscreen (Planby temporal proportions)
-import NinjaKeyboard from '../../utils/NinjaKeyboard'; // Smart keyboard wrapper (chooses keyboard based on settings)
+import KeyboardWrapper from '../../utils/KeyboardWrapper'; // Smart keyboard wrapper (chooses keyboard based on settings)
 
 // ============================================================================
 // NINJA 8K PLAYER - Main Component
