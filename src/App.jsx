@@ -559,7 +559,7 @@ const AppContent = () => {
 
   const handleTutorialComplete = () => {
     setShowTutorial(false);
-    setCurrentPage(playlist ? 'player' : 'landing');
+    setCurrentPage('splash');
   };
 
   const handleSplashComplete = useCallback((nextPage, service = null) => {
