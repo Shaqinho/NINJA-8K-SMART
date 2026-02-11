@@ -136,7 +136,7 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
       window.removeEventListener('mousemove', moveHandler);
       window.removeEventListener('mouseup', upHandler);
     };
-  }, [isDragging, handleDragMove]);
+  }, [isDragging, handleDragMove, handleDragEnd]);
 
   const Key = ({ char, onPress, onHover, style = {}, special, toggle, active, wide, glyph }) => {
     const [isPressed, setIsPressed] = useState(false);
