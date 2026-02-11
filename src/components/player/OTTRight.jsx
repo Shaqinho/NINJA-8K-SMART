@@ -120,6 +120,8 @@ const OTTRight = ({
       if (type === 'movies' && xtreamService) {
         // 2. On appelle la nouvelle méthode qui prépare tout
         const { info, probeUrl } = await xtreamService.getVodDetailsWithProbeUrl(streamId);
+        console.log('🎬 VOD Info reçu:', info);
+        console.log('🎬 movie_data:', info?.movie_data);
         setDetailData(info); // Affiche le synopsis, titre, etc.
 
         // 3. LANCEMENT DU SCAN AUTOMATIQUE (Le Probe)
