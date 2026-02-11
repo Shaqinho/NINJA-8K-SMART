@@ -1029,3 +1029,58 @@ export const getSeriesItemsPaginated = async (categoryId, limit = 100, offset = 
   );
 };
 
+// ========== PROGRESSIVE INDEXING (50 items par batch, pause 50ms) ==========
+/**
+ * Insertion ultra-fluide : 50 items par lot avec pause pour ne pas freeze l'UI
+ * @param {Array} items - Items à insérer (vod ou series)
+ * @param {String} type - 'vod' ou 'series'
+ * @param {Function} onProgress - Callback pour progression (percent)
+ */
+export const insertItemsProgressive = async (items, type = 'vod', onProgress) => {
+  if (!items?.length) return;
+  
+  const { getDatabase } = await import('./NinjaLocalDB');
+  const db = getDatabase();
+  const CHUNK_SIZE = 50;
+  
+  for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+    const chunk = items.slice(i, i + CHUNK_SIZE);
+    const statements = chunk.map(item => ({
+      statement: type === 'vod' 
+        ? `INSERT OR REPLACE INTO vod_items (stream_id, name, category_id, category_name, logo, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        : `INSERT OR REPLACE INTO series_items (series_id, name, category_id, category_name, cover, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      values: type === 'vod' ? [
+        item.stream_id || item.id,
+        item.name || '',
+        item.category_id || item.categoryId,
+        item.category_name || item.category || '',
+        item.logo || item.stream_icon || '',
+        item.rating || '',
+        item.year || '',
+        item.genre || ''
+      ] : [
+        item.series_id || item.id,
+        item.name || '',
+        item.category_id || item.categoryId,
+        item.category_name || item.category || '',
+        item.cover || '',
+        item.rating || '',
+        item.year || '',
+        item.genre || ''
+      ]
+    }));
+
+    await db.executeSet(statements);
+    
+    // Notification de progression
+    if (onProgress) {
+      const percent = Math.round(((i + chunk.length) / items.length) * 100);
+      onProgress(percent);
+    }
+
+    // Pause 50ms pour laisser l'UI respirer
+    await new Promise(r => setTimeout(r, 50));
+  }
+  
+  console.log(`✅ Progressive indexing complete: ${items.length} ${type} items`);
+};
