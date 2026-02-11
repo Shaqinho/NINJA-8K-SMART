@@ -12,7 +12,7 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
   const statusTimer = useRef(null);
 
   const AZERTY = ['a','z','e','r','t','y','u','i','o','p','q','s','d','f','g','h','j','k','l','m','w','x','c','v','b','n'];
-  const QWERTY = ['q','w','e','r','t','y','u','i','o','p','a','s','d','f','g','h','j','k','l',';','z','x','c','v','b','n'];
+  const QWERTY = ['q','w','e','r','t','y','u','i','o','p','a','s','d','f','g','h','j','k','l',';','z','x','c','v','b','n','m'];
   const letters = layout === 'AZERTY' ? AZERTY : QWERTY;
 
   const showStatus = (msg) => {
@@ -97,7 +97,12 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
 
   return (
     <div style={{
-      flex: 1,
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%) scale(0.5)',
+      transformOrigin: 'center',
+      zIndex: 100000,
       backgroundColor: 'rgba(10, 10, 20, 0.75)',
       backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
@@ -105,19 +110,13 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
       boxShadow: '0 4px 24px rgba(0, 0, 0, 0.15)',
       display: 'flex',
       flexDirection: 'column',
+      borderRadius: '12px',
     }}>
-      <div style={{ fontSize: '28px', fontWeight: '800', textAlign: 'center', color: '#00d4ff', marginBottom: '5px', letterSpacing: '2px' }}>
-        ⌨️ NINJA KEYBOARD
-      </div>
-      <div style={{ fontSize: '12px', textAlign: 'center', color: '#666', marginBottom: '15px' }}>
-        Extended Layout
-      </div>
-
       <input
         type="text"
         value={searchValue}
         onChange={(e) => setSearchValue(e.target.value)}
-        placeholder="Type to search..."
+        placeholder="Search channel or program"
         style={{
           width: '100%',
           padding: '15px',
@@ -135,34 +134,34 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
       />
 
       <div style={{ display: 'flex', flexDirection: 'row', gap: '10px', position: 'relative' }}>
-        {/* Status Toast */}
-        {statusVisible && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            right: '-220px',
-            padding: '15px',
-            backgroundColor: 'rgba(0, 212, 255, 0.35)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            borderRadius: '12px',
-            border: '1px solid rgba(0, 212, 255, 0.3)',
-            minWidth: '200px',
-            zIndex: 1000,
-            boxShadow: '0 4px 16px rgba(0, 212, 255, 0.25)',
-            color: '#fff',
-            fontSize: '13px',
-            fontWeight: '700',
-            textAlign: 'center',
-            textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
-          }}>
-            {statusMessage}
-          </div>
-        )}
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {/* ROW 1 */}
-          <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', minHeight: '50px' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', minHeight: '50px', position: 'relative' }}>
+            {/* Status Toast */}
+            {statusVisible && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                right: '-180px',
+                padding: '15px',
+                backgroundColor: 'rgba(0, 212, 255, 0.35)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                borderRadius: '12px',
+                border: '1px solid rgba(0, 212, 255, 0.3)',
+                minWidth: '200px',
+                zIndex: 1000,
+                boxShadow: '0 4px 16px rgba(0, 212, 255, 0.25)',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: '700',
+                textAlign: 'center',
+                textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+              }}>
+                {statusMessage}
+              </div>
+            )}
+            
             <Key char="HIDE" onPress={onClose} onHover="Hide keyboard" wide={80} />
             <div style={{ width: '20px' }} />
             <Key char="EPG GRID" onPress={() => showStatus('EPG Grid')} onHover="Navigate to EPG Grid" wide={100} special />
@@ -207,8 +206,8 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
 
               {/* ROW 5 */}
               <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', minHeight: '50px' }}>
-                <Key char="CAPS" onPress={toggleShift} onHover="Toggle CAPS" wide={140} toggle active={shiftActive} />
-                {letters.slice(20, 26).map((l, i) => (
+                <Key char="CAPS" onPress={toggleShift} onHover="Toggle CAPS" wide={70} toggle active={shiftActive} />
+                {letters.slice(20, 27).map((l, i) => (
                   <Key key={i} char={shiftActive ? l.toUpperCase() : l} onPress={() => typeLetter(i + 20)} onHover={l.toUpperCase()} />
                 ))}
               </div>
@@ -269,11 +268,11 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
               <Key key={i} char={n} onPress={() => type(n)} onHover={n} />
             ))}
             <Key char="0" onPress={() => type('0')} onHover="0" />
-            <Key char="▲" onPress={() => type('▲')} onHover="▲" />
+            <Key char="▲" onPress={() => type('▲')} onHover="UP" />
             <Key char="⏎" onPress={handleEnter} onHover="Enter" special glyph />
-            <Key char="◀" onPress={() => type('◀')} onHover="◀" />
-            <Key char="▼" onPress={() => type('▼')} onHover="▼" />
-            <Key char="▶" onPress={() => type('▶')} onHover="▶" />
+            <Key char="◀" onPress={() => type('◀')} onHover="LEFT" />
+            <Key char="▼" onPress={() => type('▼')} onHover="DOWN" />
+            <Key char="▶" onPress={() => type('▶')} onHover="RIGHT" />
           </div>
         )}
       </div>
