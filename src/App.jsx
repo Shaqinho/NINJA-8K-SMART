@@ -9,7 +9,7 @@ import GestureTutorial, { isTutorialDone } from './components/GestureTutorial';
 import ParticleThemes from './components/ParticleThemes';
 import { ninjaCentral, STORES } from './services/NinjaCentral';
 import { useGestures } from './hooks/useGestures';
-import { openDatabase, extractLangPrefix } from './database/NinjaLocalDB';
+import { extractLangPrefix } from './database/NinjaLocalDB';
 import { insertProgramsBatch, cleanExpiredPrograms } from './database/ProgramQueries';
 import XMLTVRefreshService from './services/XMLTVRefreshService';
 
