@@ -39,6 +39,7 @@ const Player = memo(({
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const sidebarRef = useRef(null);
+  const ottRightRef = useRef(null);
   const [sidebarTab, setSidebarTab] = useState('live');
 
   const [currentTime, setCurrentTime] = useState(0);
@@ -439,6 +440,7 @@ const Player = memo(({
           pointerEvents: ottSidebarOpen ? 'auto' : 'none',
         }}>
           <OTTRight
+            ref={ottRightRef}
             items={sidebarRef.current?.getFilteredItems() || []}
             sidebarTab={sidebarTab}
             xtreamService={xtreamService}
