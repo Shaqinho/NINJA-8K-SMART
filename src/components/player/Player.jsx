@@ -502,8 +502,7 @@ const Player = memo(({
             }
           }}
           onSearch={(query, mode) => {
-            // Enter - confirmation finale
-            setKeyboardSearchQuery(query);
+            // Enter - confirmation finale (query déjà dans le state via onInput)
             console.log(`[Keyboard] ${keyboardActive} search:`, query, `mode: ${mode}`);
           }}
           onClose={() => {
