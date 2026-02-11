@@ -446,6 +446,8 @@ const Player = memo(({
             xtreamService={xtreamService}
             videoRef={videoRef}
             onItemSelect={onChannelChange}
+            onToggleFavorite={(id) => console.log('Toggle favorite:', id)}
+            onClose={() => onOttSidebarChange(false)}
             visible={ottSidebarOpen}
             onRequestKeyboard={(query) => {
               setKeyboardActive('right');

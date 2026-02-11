@@ -61,6 +61,7 @@ const OTTRight = ({
   xtreamService, 
   videoRef, 
   onItemSelect,
+  onToggleFavorite,
   onClose,
   visible = false,
 }, ref) => {
@@ -334,7 +335,7 @@ const OTTRight = ({
           <button onClick={handlePlay} style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ color: '#fff', fontSize: '14px', marginLeft: '2px' }}>▶</span>
           </button>
-          <button onClick={() => onToggleFavorite?.(selectedItem)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+          <button onClick={() => onToggleFavorite?.(selectedItem.stream_id || selectedItem.id)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ fontSize: '16px' }}>☆</span>
           </button>
         </div>
