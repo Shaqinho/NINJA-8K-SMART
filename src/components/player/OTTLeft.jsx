@@ -90,6 +90,7 @@ const OTTLeft = forwardRef(({
   const [searchOpen, setSearchOpen] = useState(false);
   const [programResults, setProgramResults] = useState([]);
   const [, setProgramSearching] = useState(false);
+  const [lastCharZoom, setLastCharZoom] = useState(false);
   
   // Tab-specific data (all fetched from Xtream directly)
   const [liveChannels, setLiveChannels] = useState([]);
@@ -845,6 +846,9 @@ const OTTLeft = forwardRef(({
   useEffect(() => {
     if (onKeyboardSearchUpdate !== null) {
       setSearchQuery(onKeyboardSearchUpdate);
+      // Trigger zoom animation
+      setLastCharZoom(true);
+      setTimeout(() => setLastCharZoom(false), 200);
     }
   }, [onKeyboardSearchUpdate]);
 
@@ -1517,6 +1521,8 @@ const OTTLeft = forwardRef(({
                   style={{
                     flex: 1, background: 'transparent', border: 'none', outline: 'none',
                     color: '#fff', fontSize: '11px', padding: 0, caretColor: '#6225ff',
+                    transform: lastCharZoom ? 'scale(1.1)' : 'scale(1)',
+                    transition: 'transform 0.15s ease',
                   }}
                 />
                 {searchQuery && (

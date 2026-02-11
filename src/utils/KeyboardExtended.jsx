@@ -88,15 +88,15 @@ const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
   };
 
   // ========== DRAG HANDLERS ==========
-  const handleDragStart = (e) => {
+  const handleDragStart = useCallback((e) => {
     e.stopPropagation();
+    e.preventDefault();
     const touch = e.touches?.[0] || e;
     dragStart.current = { x: touch.clientX, y: touch.clientY, posX: position.x, posY: position.y };
     setIsDragging(true);
-  };
+  }, [position.x, position.y]);
 
   const handleDragMove = useCallback((e) => {
-    if (!isDragging) return;
     e.preventDefault();
     const touch = e.touches?.[0] || e;
     const dx = touch.clientX - dragStart.current.x;
@@ -105,7 +105,7 @@ const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
       x: dragStart.current.posX + dx,
       y: dragStart.current.posY + dy,
     });
-  }, [isDragging]);
+  }, []);
 
   const handleDragEnd = useCallback(() => {
     setIsDragging(false);
@@ -157,9 +157,9 @@ const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
     const [isPressed, setIsPressed] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
 
-    const handleClick = (e) => {
+    const handlePress = (e) => {
       setIsPressed(true);
-      setTimeout(() => setIsPressed(false), 200);
+      setTimeout(() => setIsPressed(false), 300);
       onPress(e);
     };
 
@@ -218,7 +218,11 @@ const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
             transition: 'all 0.1s ease',
           ...style,
         }}
-        onClick={handleClick}
+        onClick={handlePress}
+        onTouchStart={(e) => {
+          e.preventDefault();
+          handlePress(e);
+        }}
         onMouseEnter={() => { setIsHovered(true); onHover && showStatus(onHover); }}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -284,6 +288,8 @@ const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
         <div 
           onMouseDown={handleDragStart}
           onTouchStart={handleDragStart}
+          onTouchMove={handleDragMove}
+          onTouchEnd={handleDragEnd}
           style={{
             width: '100px',
             height: '30px',
@@ -292,6 +298,7 @@ const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
             justifyContent: 'flex-start',
             cursor: isDragging ? 'grabbing' : 'grab',
             padding: '8px',
+            touchAction: 'none',
           }}
         >
           <div style={{
