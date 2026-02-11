@@ -16,6 +16,15 @@ const Icons = {
   Minimize: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></svg>,
 };
 
+const getResolutionLabel = (width) => {
+  if (!width) return null;
+  if (width >= 7680) return '8K UHD';
+  if (width >= 3840) return '4K UHD';
+  if (width >= 1920) return '1080p FHD';
+  if (width >= 1280) return '720p HD';
+  return 'SD';
+};
+
 const formatTime = (seconds) => {
   if (!seconds || isNaN(seconds)) return '0:00';
   const h = Math.floor(seconds / 3600);
@@ -44,6 +53,10 @@ export const PlayerControls = ({
   onChannelNext,
   xtreamService,
   onServers,
+  sidebarOpen = false,
+  onTapDismiss,
+  probeData = null, // Probe video info from VOD
+}) => {
   sidebarOpen = false,
   onTapDismiss,
 }) => {
@@ -175,6 +188,30 @@ export const PlayerControls = ({
             NINJA 8K
           </span>
         </button>
+
+        {/* Resolution Badge (top-right, VOD only) */}
+        {!isLive && probeData?.video?.width && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              background: 'rgba(0,0,0,0.7)',
+              border: '1px solid rgba(76,222,128,0.4)',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            <span style={{ 
+              fontSize: '11px', 
+              fontWeight: '700', 
+              color: '#4ade80',
+            }}>
+              {getResolutionLabel(probeData.video.width)}
+            </span>
+          </div>
+        )}
 
         {/* Channel Navigation */}
         {isLive && (
