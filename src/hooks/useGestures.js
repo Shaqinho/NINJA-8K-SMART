@@ -128,28 +128,32 @@ export const useGestures = (containerRef, callbacks = {}) => {
     const center = getTouchCenter(e.touches);
 
     // ========================================
-    // 2 FINGERS — Volume + Grid Zoom + Folder Nav
+    // 2 FINGERS — Zoom (Pinch/Spread) PUIS Volume PUIS Folder Nav
     // ========================================
-    if (fingerCount === 2 && touchStartY !== null && initialPinchDistance !== null) {
+    if (fingerCount === 2 && touchStartY !== null && touchStartX !== null) {
       const currentDistance = getTouchDistance(e.touches);
-      const distanceChange = currentDistance - initialPinchDistance;
       const deltaX = center.x - touchStartX;
       const deltaY = center.y - touchStartY;
 
-      // PINCH/SPREAD → Grid zoom
-      if (Math.abs(distanceChange) > 50) {
-        if (distanceChange > 0) {
-          callbacks.onGridZoomIn?.();
-        } else {
-          callbacks.onGridZoomOut?.();
+      // PRIORITÉ 1 : ZOOM (Pinch/Spread) - Détection AVANT le volume
+      if (initialPinchDistance !== null && initialPinchDistance > 0) {
+        const distanceChange = currentDistance - initialPinchDistance;
+
+        // SEUIL DE ZOOM (35px pour plus de réactivité)
+        if (Math.abs(distanceChange) > 35) {
+          if (distanceChange > 0) {
+            callbacks.onGridZoomIn?.(); // Spread → Agrandit
+          } else {
+            callbacks.onGridZoomOut?.(); // Pinch → Réduit
+          }
+          // ON RESET LA DISTANCE POUR PERMETTRE UN ZOOM CONTINU
+          setInitialPinchDistance(currentDistance);
+          return; // On arrête là pour ne pas déclencher le volume en même temps
         }
-        setInitialPinchDistance(null);
-        setTouchStartY(null);
-        setTouchStartX(null);
-        gestureActiveRef.current = false;
       }
-      // SWIPE horizontal → Folder navigation
-      else if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+
+      // PRIORITÉ 2 : SWIPE horizontal → Folder navigation
+      if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
         if (deltaX > 0) {
           callbacks.onFolderPrev?.();
         } else {
@@ -159,14 +163,14 @@ export const useGestures = (containerRef, callbacks = {}) => {
         setTouchStartY(null);
         setTouchStartX(null);
         gestureActiveRef.current = false;
+        return;
       }
-      // VOLUME — vertical
-      else {
-        const volumeChange = (touchStartY - center.y) / 200;
-        const newVolume = Math.max(0, Math.min(1, initialVolume + volumeChange));
-        setVolume(newVolume);
-        callbacks.onVolumeChange?.(newVolume);
-      }
+
+      // PRIORITÉ 3 : VOLUME — vertical
+      const volumeChange = (touchStartY - center.y) / 200;
+      const newVolume = Math.max(0, Math.min(1, initialVolume + volumeChange));
+      setVolume(newVolume);
+      callbacks.onVolumeChange?.(newVolume);
     }
 
     // ========================================

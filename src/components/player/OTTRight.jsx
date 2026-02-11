@@ -99,38 +99,41 @@ const OTTRight = ({
 
   // Fetch detail info + probe stream
   const handleThumbnailClick = useCallback(async (item) => {
+    const streamId = item.stream_id || item.id;
+    
+    // 1. On ouvre la fiche et on reset les anciennes langues
     setSelectedItem(item);
     setDetailData(null);
     setProbeData(null);
     setSelectedSeason(1);
     setPosterOverlay(false);
-
     setLoading(true);
+
     try {
       if (type === 'movies' && xtreamService) {
-        const info = await xtreamService.getVodInfo(item.stream_id || item.id);
-        setDetailData(info);
+        // 2. On appelle la nouvelle méthode qui prépare tout
+        const { info, probeUrl } = await xtreamService.getVodDetailsWithProbeUrl(streamId);
+        setDetailData(info); // Affiche le synopsis, titre, etc.
+
+        // 3. LANCEMENT DU SCAN AUTOMATIQUE (Le Probe)
+        if (videoRef?.current?.probeStream) {
+          setProbing(true);
+          videoRef.current.probeStream(probeUrl)
+            .then(tracks => {
+              // 4. Les vraies langues arrivent ici
+              setProbeData(tracks);
+            })
+            .catch(e => console.error("Erreur scan langues:", e))
+            .finally(() => setProbing(false));
+        }
       } else if (type === 'series' && xtreamService) {
-        const info = await xtreamService.getSeriesInfo(item.series_id || item.id);
+        const info = await xtreamService.getSeriesInfo(streamId);
         setDetailData(info);
       }
     } catch (e) {
       console.error('MediaGallery: Detail fetch failed:', e);
     } finally {
       setLoading(false);
-    }
-
-    // Probe stream (fire & forget)
-    if (item.streamUrl && videoRef?.current?.probeStream) {
-      setProbing(true);
-      try {
-        const tracks = await videoRef.current.probeStream(item.streamUrl);
-        setProbeData(tracks);
-      } catch (e) {
-        console.error('MediaGallery: Probe failed:', e);
-      } finally {
-        setProbing(false);
-      }
     }
   }, [type, xtreamService, videoRef]);
 
