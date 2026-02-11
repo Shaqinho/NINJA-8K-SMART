@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 
-const Keyboard_Extended = ({ onSearch, onClose }) => {
+const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
   const [searchValue, setSearchValue] = useState('');
   const [layout, setLayout] = useState('AZERTY');
   const [mode, setMode] = useState('live');
@@ -29,13 +29,28 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
     statusTimer.current = setTimeout(() => setStatusVisible(false), 2000);
   };
 
-  const type = (char) => setSearchValue(prev => prev + char);
+  const type = (char) => {
+    setSearchValue(prev => prev + char);
+    onInput && onInput(char);
+  };
+  
   const typeLetter = (index) => {
     const char = letters[index];
-    setSearchValue(prev => prev + (shiftActive ? char.toUpperCase() : char));
+    const finalChar = shiftActive ? char.toUpperCase() : char;
+    setSearchValue(prev => prev + finalChar);
+    onInput && onInput(finalChar);
   };
-  const backspace = () => setSearchValue(prev => prev.slice(0, -1));
-  const clearAll = () => { setSearchValue(''); showStatus('Cleared'); };
+  
+  const backspace = () => {
+    setSearchValue(prev => prev.slice(0, -1));
+    onInput && onInput('BACKSPACE');
+  };
+  
+  const clearAll = () => {
+    setSearchValue('');
+    onInput && onInput('CLEAR');
+    showStatus('Cleared');
+  };
   const handleEnter = () => {
     if (searchValue.trim()) {
       onSearch && onSearch(searchValue, mode);
@@ -144,40 +159,63 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
 
     const handleClick = (e) => {
       setIsPressed(true);
-      setTimeout(() => setIsPressed(false), 150);
+      setTimeout(() => setIsPressed(false), 200);
       onPress(e);
     };
 
     return (
-      <button
-        style={{
-          backgroundColor: isPressed 
-            ? 'rgba(255, 255, 255, 0.25)' 
-            : (isHovered ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)'),
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid',
-          borderColor: isPressed 
-            ? 'rgba(255, 255, 255, 0.4)' 
-            : (isHovered ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)'),
-          borderRadius: '6px',
-          minWidth: wide ? `${wide}px` : '50px',
-          height: '50px',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: '0 8px',
-          cursor: 'pointer',
-          boxShadow: isPressed 
-            ? '0 0 16px rgba(255, 255, 255, 0.3), inset 0 2px 8px rgba(0, 0, 0, 0.3)' 
-            : (isHovered ? '0 0 10px rgba(255, 255, 255, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.1)'),
-          color: '#fff',
-          fontSize: glyph ? '16px' : '13px',
-          fontWeight: '600',
-          textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
-          fontFamily: 'Arial, sans-serif',
-          transform: isPressed ? 'scale(0.95)' : 'scale(1)',
-          transition: 'all 0.15s ease',
+      <div style={{ position: 'relative' }}>
+        {/* Popup preview au-dessus quand pressé */}
+        {isPressed && (
+          <div style={{
+            position: 'absolute',
+            bottom: '60px',
+            left: '50%',
+            transform: 'translateX(-50%) scale(1.5)',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            color: '#000',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            fontSize: '24px',
+            fontWeight: '800',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+            zIndex: 10000,
+            pointerEvents: 'none',
+            border: '2px solid rgba(255, 255, 255, 0.3)',
+          }}>
+            {typeof char === 'string' ? char : '👁️'}
+          </div>
+        )}
+        
+        <button
+          style={{
+            backgroundColor: isPressed 
+              ? 'rgba(255, 255, 255, 0.4)' 
+              : (isHovered ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)'),
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid',
+            borderColor: isPressed 
+              ? 'rgba(255, 255, 255, 0.6)' 
+              : (isHovered ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)'),
+            borderRadius: '6px',
+            minWidth: wide ? `${wide}px` : '50px',
+            height: '50px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '0 8px',
+            cursor: 'pointer',
+            boxShadow: isPressed 
+              ? '0 0 20px rgba(255, 255, 255, 0.5), inset 0 2px 8px rgba(0, 0, 0, 0.3)' 
+              : (isHovered ? '0 0 10px rgba(255, 255, 255, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.1)'),
+            color: '#fff',
+            fontSize: glyph ? '16px' : '13px',
+            fontWeight: '600',
+            textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+            fontFamily: 'Arial, sans-serif',
+            transform: isPressed ? 'scale(0.92)' : 'scale(1)',
+            transition: 'all 0.1s ease',
           ...style,
         }}
         onClick={handleClick}
@@ -186,6 +224,7 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
       >
         {char}
       </button>
+      </div>
     );
   };
 
@@ -245,17 +284,23 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
         <div 
           onMouseDown={handleDragStart}
           onTouchStart={handleDragStart}
-          onMouseMove={handleDragMove}
-          onMouseUp={handleDragEnd}
-          onMouseLeave={handleDragEnd}
           style={{
-            width: '40px',
-            height: '4px',
-            borderRadius: '2px',
-            backgroundColor: 'rgba(255, 255, 255, 0.3)',
-            cursor: 'grab',
+            width: '100px',
+            height: '30px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            padding: '8px',
           }}
-        />
+        >
+          <div style={{
+            width: '60px',
+            height: '6px',
+            borderRadius: '3px',
+            backgroundColor: 'rgba(255, 255, 255, 0.4)',
+          }} />
+        </div>
 
         {/* Status log - centre */}
         {statusVisible && (
@@ -336,7 +381,6 @@ const Keyboard_Extended = ({ onSearch, onClose }) => {
                 {letters.slice(10, 20).map((l, i) => (
                   <Key key={i} char={shiftActive ? l.toUpperCase() : l} onPress={() => typeLetter(i + 10)} onHover={l.toUpperCase()} />
                 ))}
-                <Key char="⎙" onPress={() => showStatus('Paste')} onHover="Paste" wide={90} special glyph />
               </div>
 
               {/* ROW 5 */}

@@ -474,8 +474,18 @@ const Player = memo(({
       {/* ========== SHARED KEYBOARD ========== */}
       {keyboardActive && (
         <KeyboardWrapper
+          onInput={(char) => {
+            // Temps réel - chaque touche met à jour l'input
+            if (char === 'BACKSPACE') {
+              setKeyboardSearchQuery(prev => prev.slice(0, -1));
+            } else if (char === 'CLEAR') {
+              setKeyboardSearchQuery('');
+            } else {
+              setKeyboardSearchQuery(prev => prev + char);
+            }
+          }}
           onSearch={(query, mode) => {
-            // Update search query for active component
+            // Enter - confirmation finale
             setKeyboardSearchQuery(query);
             console.log(`[Keyboard] ${keyboardActive} search:`, query, `mode: ${mode}`);
           }}

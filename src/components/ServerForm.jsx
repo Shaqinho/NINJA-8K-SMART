@@ -455,7 +455,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
   return (
     <div 
       ref={containerRef}
-      className="fixed inset-0 flex overflow-hidden relative" 
+      className="fixed inset-0 flex overflow-auto relative" 
       style={{ background: THEME.colors.bg }}
     >
       {/* Particles */}
