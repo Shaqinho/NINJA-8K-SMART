@@ -456,17 +456,17 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
     <div 
       ref={containerRef}
       className="fixed inset-0 flex overflow-auto relative" 
-      style={{ background: '#000000' }}
+      style={{ background: THEME.colors.bg }}
     >
       {/* Particles */}
       {particleTheme !== 'off' && (
-        <div className="fixed pointer-events-none z-0" style={{ inset: '-10%' }}>
+        <div className="fixed inset-0 pointer-events-none z-0">
           <ParticleThemes containerRef={containerRef} theme={particleTheme} />
         </div>
       )}
       
       {/* Main Content - Centered */}
-      <div className="relative z-10 flex w-full h-full items-center justify-center px-6" style={{ paddingTop: '40px' }}>
+      <div className="relative z-10 flex w-full h-full items-center justify-center px-6">
         <div style={{ width: '500px', maxHeight: 'none', overflowY: 'visible' }}>
           
           {/* Error Banner */}
