@@ -249,6 +249,19 @@ const OTTRight = ({
     }
   }, [selectedFolder, type, visible, loadMoreItems]);
 
+  // ========== INFINITE LOADER HELPERS ==========
+  const isItemLoaded = useCallback((index) => !!items[index], [items]);
+  
+  const handleItemsRendered = useCallback(({ visibleRowStartIndex, visibleRowStopIndex, visibleColumnStartIndex, visibleColumnStopIndex }) => {
+    const startIndex = visibleRowStartIndex * COLUMN_COUNT + visibleColumnStartIndex;
+    const stopIndex = visibleRowStopIndex * COLUMN_COUNT + visibleColumnStopIndex;
+    
+    return {
+      visibleStartIndex: startIndex,
+      visibleStopIndex: stopIndex,
+    };
+  }, [COLUMN_COUNT]);
+
   // Charger EPG (4 prochains programmes) quand on sélectionne une chaîne LIVE
   useEffect(() => {
     if (!selectedItem || type !== 'live' || !xtreamService) {
@@ -638,19 +651,6 @@ const OTTRight = ({
       </div>
     );
   };
-
-  // ========== INFINITE LOADER HELPERS ==========
-  const isItemLoaded = useCallback((index) => !!items[index], [items]);
-  
-  const handleItemsRendered = useCallback(({ visibleRowStartIndex, visibleRowStopIndex, visibleColumnStartIndex, visibleColumnStopIndex }) => {
-    const startIndex = visibleRowStartIndex * COLUMN_COUNT + visibleColumnStartIndex;
-    const stopIndex = visibleRowStopIndex * COLUMN_COUNT + visibleColumnStopIndex;
-    
-    return {
-      visibleStartIndex: startIndex,
-      visibleStopIndex: stopIndex,
-    };
-  }, [COLUMN_COUNT]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
