@@ -298,8 +298,14 @@ const OTTRight = ({
     const video = apiInfo.video || apiMovie.video || selectedItem.video || null;
     const episodeRunTime = apiInfo.episode_run_time || selectedItem.episodeRunTime || null;
 
-    const audioTracks = getAudioTracks(apiInfo);
-    const subtitleTracks = getSubtitleTracks(apiInfo);
+    // AUDIO/SUBS depuis PROBE (pas VOD info !)
+    const audioTracks = probeData?.audioTracks || [];
+    const subtitleTracks = probeData?.subtitleTracks || [];
+    
+    // RÉSOLUTION depuis PROBE
+    const resolution = probeData?.video?.width 
+      ? `${probeData.video.width}×${probeData.video.height}` 
+      : null;
 
     // Series-specific
     const seasons = detailData?.seasons || [];
@@ -328,12 +334,7 @@ const OTTRight = ({
           <button onClick={handlePlay} style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ color: '#fff', fontSize: '14px', marginLeft: '2px' }}>▶</span>
           </button>
-          {trailer && (
-            <button onClick={() => window.open(`https://www.youtube.com/watch?v=${trailer}`, '_blank')} style={{ background: 'rgba(255,0,0,0.2)', border: '1px solid rgba(255,0,0,0.4)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-              <span style={{ color: '#ff4444', fontSize: '10px', fontWeight: 800 }}>YT</span>
-            </button>
-          )}
-          <button onClick={() => {/* TODO: toggle favorite */}} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+          <button onClick={() => onToggleFavorite?.(selectedItem)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ fontSize: '16px' }}>☆</span>
           </button>
         </div>
@@ -349,6 +350,14 @@ const OTTRight = ({
             />
           )}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* ANNÉE + GENRE */}
+            {(year || genre) && (
+              <div style={{ fontSize: '10px', color: '#888', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {year && <span>{year.substring(0, 4)}</span>}
+                {genre && <span>{genre}</span>}
+              </div>
+            )}
+            
             {plot && (
               <div style={{ fontSize: '11px', color: '#aaa', lineHeight: '1.5' }}>
                 {plot.substring(0, 300)}{plot.length > 300 ? '...' : ''}
@@ -356,6 +365,7 @@ const OTTRight = ({
             )}
             {director && <div style={{ fontSize: '10px', color: '#888' }}><span style={{ fontWeight: 700 }}>Director:</span> {director}</div>}
             {cast && <div style={{ fontSize: '10px', color: '#666' }}><span style={{ fontWeight: 700 }}>Cast:</span> {cast.substring(0, 150)}</div>}
+            {resolution && <div style={{ fontSize: '10px', color: '#888' }}><span style={{ fontWeight: 700 }}>Resolution:</span> {resolution}</div>}
 
             {/* Audio */}
             <div>
@@ -364,7 +374,11 @@ const OTTRight = ({
               </span>
               {audioTracks.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                  {audioTracks.map((name, i) => <TagPill key={i} color="purple">{name}</TagPill>)}
+                  {audioTracks.map((track, i) => (
+                    <TagPill key={i} color="purple">
+                      {track.language || 'Unknown'} {track.channels ? `(${track.channels}ch)` : ''}
+                    </TagPill>
+                  ))}
                 </div>
               )}
               {!probing && audioTracks.length === 0 && (
@@ -379,7 +393,9 @@ const OTTRight = ({
               </span>
               {subtitleTracks.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                  {subtitleTracks.map((name, i) => <TagPill key={i} color="gray">{name}</TagPill>)}
+                  {subtitleTracks.map((track, i) => (
+                    <TagPill key={i} color="gray">{track.language || 'Unknown'}</TagPill>
+                  ))}
                 </div>
               )}
               {!probing && subtitleTracks.length === 0 && (
