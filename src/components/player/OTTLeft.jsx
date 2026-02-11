@@ -77,6 +77,8 @@ const OTTLeft = forwardRef(({
   onOpenEPGGrid,
   onRequestKeyboard,        // Callback to request keyboard from parent
   onKeyboardSearchUpdate,   // Search query from parent keyboard (null if keyboard not active for this component)
+  onZoomIn,                 // Zoom in thumbnails (bigger)
+  onZoomOut,                // Zoom out thumbnails (smaller)
 }, ref) => {
   // States
   const [isVisible, setIsVisible] = useState(true);
@@ -865,14 +867,9 @@ const OTTLeft = forwardRef(({
     setSearchOpen(false);
     setProgramResults([]);
     onTabChange?.(tabId);
-    // Movies & Series: open ALL folder by default (triés par derniers ajouts)
-    if (tabId === 'movies' || tabId === 'series') {
-      setCurrentCategory({ category_id: '__all__', category_name: 'ALL', isSystem: true });
-      setShowItems(true);
-    } else {
-      setShowItems(false);
-      setCurrentCategory(null);
-    }
+    // Tous les tabs: aucun dossier par défaut
+    setShowItems(false);
+    setCurrentCategory(null);
   }, [onTabChange]);
 
   // ========== VIRTUALIZED CATEGORY ROW ==========
@@ -1541,6 +1538,58 @@ const OTTLeft = forwardRef(({
                 )}
               </>
             ) : null}
+            
+            {/* Zoom controls +/- (toujours visibles à droite pour Movies/Series) */}
+            {(activeTab === 'movies' || activeTab === 'series') && (
+              <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                <button
+                  onClick={onZoomOut}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: '4px',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'rgba(255,255,255,0.7)',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                  title="Zoom out (smaller thumbnails)"
+                >
+                  −
+                </button>
+                <button
+                  onClick={onZoomIn}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: '4px',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'rgba(255,255,255,0.7)',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                  title="Zoom in (bigger thumbnails)"
+                >
+                  +
+                </button>
+              </div>
+            )}
           </div>
         )}
 

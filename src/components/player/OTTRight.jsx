@@ -277,8 +277,10 @@ const OTTRight = ({
 
   // ========== MOVIES / SERIES DETAIL VIEW ==========
   if (selectedItem && (type === 'movies' || type === 'series')) {
-    const info = detailData?.info || detailData?.movie_data || {};
-    const poster = info.cover || info.movie_image || selectedItem.logo || selectedItem.cover;
+    // Pour MOVIES: detailData est l'objet retourné par getVodInfo
+    // Pour SERIES: detailData est l'objet retourné par getSeriesInfo qui contient { info, seasons, episodes }
+    const info = (type === 'series' ? detailData?.info : detailData?.movie_data) || detailData || {};
+    const poster = info.cover || info.movie_image || selectedItem.logo || selectedItem.cover || selectedItem.stream_icon;
     const posterBig = info.cover_big || poster;
     const title = info.name || selectedItem.name || 'Untitled';
     const plot = info.plot || info.description || selectedItem.plot || '';

@@ -96,6 +96,28 @@ export class XtreamService {
     return res.json();
   }
 
+  /**
+   * Récupère les infos VOD et prépare l'URL pour le Probe (Scan des langues)
+   * Déclenché lors du Tap sur le poster
+   */
+  async getVodDetailsWithProbeUrl(vodId) {
+    // 1. Récupération des métadonnées (synopsis, cast, etc.)
+    const info = await this.getVodInfo(vodId);
+    
+    // 2. Identification de l'extension du fichier (mkv, mp4, avi, etc.)
+    const container = info.movie_data?.container_extension 
+                      || info.movie_data?.extension 
+                      || 'mkv'; // Fallback final
+    
+    // 3. Construction de l'URL pour le scan réel du flux (Probe)
+    const probeUrl = `${this.server}/movie/${this.username}/${this.password}/${vodId}.${container}`;
+    
+    return {
+      info,
+      probeUrl
+    };
+  }
+
   // ========================= SERIES =========================
   async getSeriesCategories() {
     const url = `${this.server}/player_api.php?username=${encodeURIComponent(this.username)}&password=${encodeURIComponent(this.password)}&action=get_series_categories`;
