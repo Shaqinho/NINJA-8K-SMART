@@ -390,6 +390,7 @@ const Player = memo(({
         onSpeedChange={handleSpeedChange}
         currentAspectRatio={aspectRatio}
         onAspectRatioChange={setAspectRatio}
+        onEPGGrid={() => setShowEPGGrid(true)}
       />
 
       {/* OTTLeft — Channel list sidebar */}

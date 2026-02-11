@@ -87,7 +87,7 @@ const OTTRight = ({
   const currentZoom = ZOOM_CONFIGS[zoomLevel];
   const COLUMN_COUNT = currentZoom.cols;
   const ITEM_WIDTH = Math.floor((window.innerWidth - 280) / COLUMN_COUNT);
-  const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.5);
+  const ITEM_HEIGHT = Math.round(ITEM_WIDTH * 1.4); // Réduit de 1.5 à 1.4 pour que tout rentre
   const ROW_COUNT = Math.ceil(items.length / COLUMN_COUNT);
 
   // Expose zoom methods to parent
@@ -490,6 +490,10 @@ const OTTRight = ({
     if (index >= items.length) return null;
     const item = items[index];
     const poster = item.logo || item.cover || item.stream_icon;
+    
+    // Déterminer si c'est la dernière row visible
+    const totalRows = Math.ceil(items.length / COLUMN_COUNT);
+    const isLastRow = rowIndex === totalRows - 1;
 
     return (
       <div
@@ -498,7 +502,8 @@ const OTTRight = ({
       >
         <div style={{
           width: '100%', height: '100%',
-          borderRadius: '6px', overflow: 'hidden',
+          borderRadius: isLastRow ? '6px 6px 12px 12px' : '6px',
+          overflow: 'hidden',
           background: 'rgba(255,255,255,0.03)',
           border: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', flexDirection: 'column',
