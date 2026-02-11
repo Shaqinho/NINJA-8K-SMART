@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { PlaylistProvider, usePlaylistContext } from './context/PlaylistContext';
@@ -6,7 +6,6 @@ import { ServerForm } from './components/ServerForm';
 import { Player } from './components/player';
 import GestureTutorial, { isTutorialDone } from './components/GestureTutorial';
 import ParticleThemes from './components/ParticleThemes';
-import { XtreamService } from './services/XtreamService';
 import { ninjaCentral, STORES } from './services/NinjaCentral';
 import { useGestures } from './hooks/useGestures';
 import { openDatabase, extractLangPrefix } from './database/NinjaLocalDB';
@@ -159,13 +158,13 @@ const AppContent = () => {
         console.log('✅ SQLite ready for search');
         
         // 2. Auto-login: Check if last active server exists
-        const { getLastActiveServer } = await import('./utils/NinjaLocalDB');
+        const { getLastActiveServer } = await import('./database/NinjaLocalDB');
         const lastServer = await getLastActiveServer();
         
         if (lastServer) {
           console.log('🔐 Auto-login with last server:', lastServer.name || lastServer.url);
           // Créer instance XtreamService avec les credentials sauvegardés
-          const XtreamService = (await import('./utils/XtreamService')).default;
+          const { XtreamService } = await import('./services/XtreamService');
           const xtream = new XtreamService(lastServer.url, lastServer.username, lastServer.password);
           setXtreamService(xtream);
           // Passer directement au player (data déjà en DB locale)
