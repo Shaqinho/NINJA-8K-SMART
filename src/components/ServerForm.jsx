@@ -456,7 +456,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
     <div 
       ref={containerRef}
       className="fixed inset-0 flex overflow-auto relative" 
-      style={{ background: THEME.colors.bg }}
+      style={{ background: 'transparent' }}
     >
       {/* Particles */}
       {particleTheme !== 'off' && (
