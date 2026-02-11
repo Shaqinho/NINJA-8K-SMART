@@ -84,6 +84,7 @@ const AppContent = () => {
   const { playlist, setPlaylist, clearPlaylist, isRestored } = usePlaylistContext();
   const [currentPage, setCurrentPage] = useState(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [xtreamService, setXtreamService] = useState(null);
 
   // NinjaCentral data (persisted)
   const [liveData, setLiveData] = useState([]);
