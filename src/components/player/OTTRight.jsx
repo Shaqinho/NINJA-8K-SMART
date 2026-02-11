@@ -198,30 +198,6 @@ const OTTRight = ({
     onItemSelect?.(epItem);
   }, [xtreamService, onItemSelect]);
 
-  // Extract audio tracks: probe > JSON fallback
-  const getAudioTracks = useCallback((info) => {
-    if (probeData?.audioTracks?.length > 0) {
-      return probeData.audioTracks.map(t => {
-        const lang = getLangName(t.language || t.name || 'unknown');
-        const channels = t.channels ? `${t.channels === 6 ? '5.1' : t.channels === 2 ? 'Stereo' : `${t.channels}ch`}` : '';
-        return channels ? `${lang} (${channels})` : lang;
-      });
-    }
-    if (info?.audio?.tags?.language) {
-      const lang = getLangName(info.audio.tags.language);
-      const channels = info.audio.channels ? `${info.audio.channels === 6 ? '5.1' : info.audio.channels === 2 ? 'Stereo' : `${info.audio.channels}ch`}` : '';
-      return channels ? [`${lang} (${channels})`] : [lang];
-    }
-    return [];
-  }, [probeData]);
-
-  // Extract subtitle tracks: JSON info > probe fallback
-  const getSubtitleTracks = useCallback((info) => {
-    if (info?.subtitles?.length > 0) return info.subtitles.map(s => getLangName(s.language));
-    if (probeData?.subtitleTracks?.length > 0) return probeData.subtitleTracks.map(t => getLangName(t.language || t.name));
-    return [];
-  }, [probeData]);
-
   // Only render for movies/series tabs
   if (!visible || (sidebarTab !== 'movies' && sidebarTab !== 'series')) {
     return null;
@@ -295,7 +271,6 @@ const OTTRight = ({
     const rating = apiInfo.rating || apiMovie.rating || selectedItem.rating || '';
     const year = apiInfo.releasedate || apiInfo.release_date || apiMovie.year || selectedItem.year || '';
     const duration = apiInfo.duration || apiMovie.duration || selectedItem.duration || '';
-    const trailer = apiInfo.youtube_trailer || '';
     const video = apiInfo.video || apiMovie.video || selectedItem.video || null;
     const episodeRunTime = apiInfo.episode_run_time || selectedItem.episodeRunTime || null;
 
