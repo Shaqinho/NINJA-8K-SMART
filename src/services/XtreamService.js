@@ -1,6 +1,123 @@
 // ========================= XTREAM SERVICE =========================
 // 
 // ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║                     NINJA 8K - ARCHITECTURE DATA FLOW                        ║
+// ╠══════════════════════════════════════════════════════════════════════════════╣
+// ║ 🎯 OBJECTIF: Affichage instantané + Sauvegarde background progressive       ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📊 FLUX PRINCIPAL (PREMIER LANCEMENT)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// 1️⃣  SERVERFORM.JSX - Connexion & Fetch rapide
+//     ├─ tryConnect() → Authentification Xtream
+//     ├─ fetchXtreamData() → Récupère TOUT (Live/VOD/Series + Categories)
+//     │  ├─ getLiveCategories() + getLiveStreams()
+//     │  ├─ getVodCategories() + getVodStreams()
+//     │  ├─ getSeriesCategories() + getSeries()
+//     │  └─ loadXMLTV() en parallèle (EPG basique)
+//     ├─ Return data → RAM (pas encore sauvegardé!)
+//     └─ onNavigateToPlayer({ data, service }) → Navigate immédiat
+//
+// 2️⃣  APP.JSX - Réception & Storage service
+//     ├─ handleNavigateToPlayer(data)
+//     ├─ setPlaylist(data) → Stocke en context
+//     ├─ setXtreamService(data.service) → Stocke le service
+//     └─ setCurrentPage('player') → Navigate
+//
+// 3️⃣  PLAYER.JSX - Affichage immédiat
+//     ├─ Reçoit playlist.data.live/vod/series
+//     ├─ Passe au OTTLeft via props
+//     └─ UI s'affiche INSTANTANÉMENT (données en RAM)
+//
+// 4️⃣  SERVERFORM.JSX - Background Save (PARALLÈLE)
+//     ├─ window.__ninjaSavePromise = async () => {
+//     │  ├─ PRIORITY 1: saveServer() → Table servers (auto-login)
+//     │  ├─ PRIORITY 2: Categories → Tables live/vod/series_categories
+//     │  ├─ PRIORITY 3: insertChannels() → Table channels
+//     │  ├─ PRIORITY 4: insertVODItemsChunked(500/batch) → Table vod_items
+//     │  └─ PRIORITY 5: insertSeriesItemsChunked(500/batch) → Table series_items
+//     │  }
+//     ├─ localStorage.setItem('ninja_save_status', 'complete/incomplete')
+//     └─ Logs: 💾 VOD Progress: 5000/185000, etc.
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔄 FLUX SECONDAIRE (RELANCEMENT / AUTO-LOGIN)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// 1️⃣  NINJASPLASH.JSX - Init DB & Auto-login
+//     ├─ openDatabase() → Init window.db (SQLite)
+//     ├─ getLastActiveServer() → Charge credentials depuis table servers
+//     ├─ new XtreamService(url, user, pass) → Reconstruit service
+//     └─ onComplete('player', xtreamService) → Navigate avec service
+//
+// 2️⃣  OTTLEFT.JSX - Load depuis SQLite (INSTANTANÉ)
+//     ├─ querySql('SELECT * FROM live_categories')
+//     ├─ querySql('SELECT * FROM channels')
+//     ├─ querySql('SELECT * FROM vod_items')
+//     ├─ querySql('SELECT * FROM series_items')
+//     ├─ Map SQLite → OTT format (id, name, logo, categoryId, etc.)
+//     └─ setLiveChannels/setVodItems/setSeriesItems → Affichage
+//
+// 3️⃣  FALLBACK SI SQLITE VIDE
+//     ├─ xtreamService.getLiveStreams() → Fetch depuis API
+//     ├─ xtreamService.getVodStreams()
+//     └─ Affiche + Continue background save
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔁 PROCESSUS PARALLÈLES & CONCENTRIQUES
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// CERCLE 1 - EPG ON-DEMAND (OTTLeft.jsx)
+//   ├─ Visible channels → getProgramsForChannel(SQLite)
+//   ├─ Si vide → getShortEPGBatch(streamIds, limit=2, concurrency=20)
+//   └─ insertProgramsBatch() → Table programs
+//
+// CERCLE 2 - XMLTV BACKGROUND (ServerForm.jsx)
+//   ├─ loadXMLTV() lancé en parallèle du fetch principal
+//   ├─ Parse XMLTV.gz → Extract channels + programs
+//   └─ insertProgramsBatch() → EPG complet pour ~30-40% channels
+//
+// CERCLE 3 - BACKGROUND EPG SYNC (App.jsx)
+//   ├─ Démarre 10s après chargement initial
+//   ├─ Detect user langs (FR, BE, VIP) depuis first 30 categories
+//   ├─ Sync folders 1-150 matching user langs
+//   ├─ getShortEPGBatch(50 channels/batch, limit=24h)
+//   └─ Progress: setEpgSyncProgress(0-100%) → Barre visible OTT
+//
+// CERCLE 4 - INTEGRITY CHECK (Future)
+//   ├─ checkDataIntegrity() compare expected vs actual counts
+//   ├─ Si incomplete → Silent resume background save
+//   └─ Logs: 🔄 Missing VOD: 50000, resuming...
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📊 TABLES SQLITE (NinjaLocalDB.js)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// servers → Auto-login (url, username, password, is_last_active)
+// live_categories → Dossiers Live (category_id, category_name)
+// vod_categories → Dossiers VOD
+// series_categories → Dossiers Series
+// channels → 47K+ Live channels (stream_id, name, logo, category_id, epg_channel_id)
+// vod_items → 185K+ Movies (stream_id, name, logo, category_id, rating, year)
+// series_items → 45K+ Series (series_id, name, cover, category_id)
+// programs → EPG data (stream_id, title, start_time, end_time, is_live)
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎨 UI PROGRESSION VISUELLE (TODO)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// OTTLeft.jsx - Barre de progression background (bas gauche)
+//   ├─ Position: fixed bottom-left, 200px width, 3px height
+//   ├─ Affiche si: window.__ninjaSavePromise existe ET pas complete
+//   ├─ Progress: Calculé via localStorage counts (current/expected)
+//   ├─ Style: Gradient purple, semi-transparent, backdrop-blur
+//   └─ Label: "Indexing 25k/185k movies..." (10px font, uppercase)
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║                        XTREAM API ENDPOINTS REFERENCE                        ║
 // ╠══════════════════════════════════════════════════════════════════════════════╣
 // ║ ENDPOINT                          │ METHOD              │ STATUS             ║

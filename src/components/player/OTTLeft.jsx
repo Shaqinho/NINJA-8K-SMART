@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { FixedSizeList as List } from 'react-window';
-import { ninjaCentral, STORES } from '../../services/NinjaCentral';
+import { querySql } from '../../database/NinjaLocalDB';
 import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch, syncEmptyChannels } from '../../database/ProgramQueries';
 
 // ============================================================================
@@ -350,44 +350,115 @@ const OTTLeft = forwardRef(({
     return [...systemFolders, ...cats];
   }, [activeTab, liveCategories, vodCategories, seriesCategories, systemFolders]);
 
-  // ========== LOAD DATA: NinjaCentral FIRST → Xtream fallback ==========
+  // ========== LOAD DATA: SQLite FIRST → Xtream fallback ==========
   useEffect(() => {
     if (!xtreamService || dataLoaded) return;
 
     const loadData = async () => {
       try {
-        // STEP 1: Try NinjaCentral first (instant, already populated by App.jsx)
-        await ninjaCentral.init();
+        console.log('[OTT] Loading from SQLite...');
         const counts = {};
 
-        const [live, vod, series, lc, vc, sc] = await Promise.all([
-          ninjaCentral.getAll(STORES.LIVE),
-          ninjaCentral.getAll(STORES.VOD),
-          ninjaCentral.getAll(STORES.SERIES),
-          ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
-          ninjaCentral.getAll(STORES.VOD_CATEGORIES),
-          ninjaCentral.getAll(STORES.SERIES_CATEGORIES),
+        // STEP 1: Load categories from SQLite (FAST - just metadata)
+        const [liveCats, vodCats, seriesCats] = await Promise.all([
+          querySql('SELECT * FROM live_categories ORDER BY category_id'),
+          querySql('SELECT * FROM vod_categories ORDER BY category_id'),
+          querySql('SELECT * FROM series_categories ORDER BY category_id'),
         ]);
 
-        if (live.length > 0 || vod.length > 0 || series.length > 0) {
-          live.forEach(ch => { counts[`live_${String(ch.categoryId)}`] = (counts[`live_${String(ch.categoryId)}`] || 0) + 1; });
-          vod.forEach(item => { counts[`vod_${String(item.categoryId)}`] = (counts[`vod_${String(item.categoryId)}`] || 0) + 1; });
-          series.forEach(item => { counts[`series_${String(item.categoryId)}`] = (counts[`series_${String(item.categoryId)}`] || 0) + 1; });
+        // STEP 2: If categories exist in SQLite, load items
+        if (liveCats.length > 0 || vodCats.length > 0 || seriesCats.length > 0) {
+          console.log(`[OTT] SQLite: ${liveCats.length} live cats, ${vodCats.length} vod cats, ${seriesCats.length} series cats`);
+          
+          // Load live channels
+          const liveChannels = await querySql('SELECT * FROM channels ORDER BY stream_id');
+          liveChannels.forEach(ch => {
+            const catId = String(ch.category_id);
+            counts[`live_${catId}`] = (counts[`live_${catId}`] || 0) + 1;
+          });
 
-          setLiveChannels(live);
-          setLiveCategories(lc);
-          setVodItems(vod);
-          setVodCategories(vc);
-          setSeriesItems(series);
-          setSeriesCategories(sc);
+          // Load VOD items
+          const vodItems = await querySql('SELECT * FROM vod_items ORDER BY stream_id');
+          vodItems.forEach(item => {
+            const catId = String(item.category_id);
+            counts[`vod_${catId}`] = (counts[`vod_${catId}`] || 0) + 1;
+          });
+
+          // Load Series items
+          const seriesItems = await querySql('SELECT * FROM series_items ORDER BY series_id');
+          seriesItems.forEach(item => {
+            const catId = String(item.category_id);
+            counts[`series_${catId}`] = (counts[`series_${catId}`] || 0) + 1;
+          });
+
+          // Map SQLite data to OTT format
+          const mappedLive = liveChannels.map(ch => ({
+            id: ch.stream_id,
+            stream_id: ch.stream_id,
+            name: ch.name,
+            logo: ch.logo,
+            categoryId: ch.category_id,
+            category: ch.category_name,
+            epgChannelId: ch.epg_channel_id,
+          }));
+
+          const mappedVod = vodItems.map(item => ({
+            id: item.stream_id,
+            stream_id: item.stream_id,
+            name: item.name,
+            logo: item.logo,
+            categoryId: item.category_id,
+            category: item.category_name,
+            rating: item.rating,
+            year: item.year,
+            genre: item.genre,
+          }));
+
+          const mappedSeries = seriesItems.map(item => ({
+            id: item.series_id,
+            series_id: item.series_id,
+            name: item.name,
+            cover: item.cover,
+            categoryId: item.category_id,
+            category: item.category_name,
+            rating: item.rating,
+            year: item.year,
+            genre: item.genre,
+          }));
+
+          const mappedLiveCats = liveCats.map(cat => ({
+            category_id: cat.category_id,
+            category_name: cat.category_name,
+            parent_id: cat.parent_id || 0,
+          }));
+
+          const mappedVodCats = vodCats.map(cat => ({
+            category_id: cat.category_id,
+            category_name: cat.category_name,
+            parent_id: cat.parent_id || 0,
+          }));
+
+          const mappedSeriesCats = seriesCats.map(cat => ({
+            category_id: cat.category_id,
+            category_name: cat.category_name,
+            parent_id: cat.parent_id || 0,
+          }));
+
+          setLiveChannels(mappedLive);
+          setLiveCategories(mappedLiveCats);
+          setVodItems(mappedVod);
+          setVodCategories(mappedVodCats);
+          setSeriesItems(mappedSeries);
+          setSeriesCategories(mappedSeriesCats);
           setCategoryCounts(counts);
           setDataLoaded(true);
-          console.log(`[OTT] NinjaCentral: ${live.length} live, ${vod.length} vod, ${series.length} series`);
+          
+          console.log(`[OTT] ✅ SQLite loaded: ${mappedLive.length} live, ${mappedVod.length} vod, ${mappedSeries.length} series`);
           return; // Done — no Xtream fetch needed
         }
 
-        // STEP 2: NinjaCentral empty → fallback to Xtream fetch
-        console.log('[OTT] NinjaCentral empty, fetching from Xtream...');
+        // STEP 3: SQLite empty → fallback to Xtream fetch
+        console.log('[OTT] SQLite empty, fetching from Xtream...');
         const [
           rawLive, rawLiveCats,
           rawVod, rawVodCats,
@@ -433,24 +504,7 @@ const OTTLeft = forwardRef(({
 
         setCategoryCounts(counts);
         setDataLoaded(true);
-        console.log(`[OTT] Xtream fallback: ${liveParsed.length} live, ${vodParsed.length} vod, ${seriesParsed.length} series`);
-
-        // Save to NinjaCentral in background (non-blocking)
-        ninjaCentral.init().then(async () => {
-          try {
-            await Promise.all([
-              ninjaCentral.saveItems(STORES.LIVE, liveParsed),
-              ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, liveCats),
-              ninjaCentral.saveItems(STORES.VOD, vodParsed),
-              ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, vodCats),
-              ninjaCentral.saveItems(STORES.SERIES, seriesParsed),
-              ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, seriesCats),
-            ]);
-            console.log('[OTT] Saved to NinjaCentral');
-          } catch (e) {
-            console.warn('[OTT] NinjaCentral save failed:', e);
-          }
-        });
+        console.log(`[OTT] ✅ Xtream fallback: ${liveParsed.length} live, ${vodParsed.length} vod, ${seriesParsed.length} series`);
 
       } catch (err) {
         console.error('[OTT] Load failed:', err);
