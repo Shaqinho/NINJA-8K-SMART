@@ -523,7 +523,7 @@ const OTTLeft = forwardRef(({
     };
 
     loadData();
-  }, [xtreamService, dataLoaded]);
+  }, [xtreamService, dataLoaded, preloadedCategories]);
 
   // ========== LAZY-LOAD SERIES SEASONS ==========
   const loadSeriesSeasons = useCallback(async (seriesId) => {
