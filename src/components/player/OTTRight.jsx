@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
-import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, getLiveChannelsPaginated, getLiveChannelsCount } from '../../database/ProgramQueries';
+import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked } from '../../database/ProgramQueries';
+// TODO: getLiveChannelsPaginated, getLiveChannelsCount not implemented yet
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -146,7 +147,7 @@ const OTTRight = ({
       const offset = startIndex;
       
       const newItems = type === 'live'
-        ? await getLiveChannelsPaginated(selectedFolder, limit, offset)
+        ? [] // TODO: getLiveChannelsPaginated not implemented - skip for now
         : type === 'movies' 
           ? await getVODItemsPaginated(selectedFolder, limit, offset)
           : await getSeriesItemsPaginated(selectedFolder, limit, offset);
@@ -173,7 +174,7 @@ const OTTRight = ({
         
         // STEP 1: Check if SQLite has data for this folder
         const sqlCount = type === 'live'
-          ? await getLiveChannelsCount(selectedFolder)
+          ? 0 // TODO: getLiveChannelsCount not implemented - always use Xtream API for now
           : type === 'movies' 
             ? await getVODItemsCount(selectedFolder)
             : await getSeriesItemsCount(selectedFolder);
