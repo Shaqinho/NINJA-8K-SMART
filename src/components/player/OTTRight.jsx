@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
-import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount } from '../../database/ProgramQueries';
+import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked } from '../../database/ProgramQueries';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -206,6 +206,18 @@ const OTTRight = ({
 
           setItems(filteredData);
           setTotalCount(filteredData.length);
+          
+          // OVERWRITE: Save fetched data to SQLite for next time (background, non-blocking)
+          if (parsedData.length > 0) {
+            console.log(`[OTTRight] Saving ${parsedData.length} items to SQLite (background)...`);
+            const savePromise = type === 'movies' 
+              ? insertVODItemsChunked(parsedData)
+              : insertSeriesItemsChunked(parsedData);
+            
+            savePromise
+              .then(() => console.log(`[OTTRight] ✅ Background save complete (${parsedData.length} items)`))
+              .catch(err => console.error('[OTTRight] ❌ Background save failed:', err));
+          }
         } else {
           // No SQLite, no Xtream service
           console.warn('[OTTRight] No data source available');
