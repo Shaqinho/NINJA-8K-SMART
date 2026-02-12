@@ -79,6 +79,7 @@ const OTTLeft = forwardRef(({
   onKeyboardSearchUpdate,   // Search query from parent keyboard (null if keyboard not active for this component)
   onZoomIn,                 // Zoom in thumbnails (bigger)
   onZoomOut,                // Zoom out thumbnails (smaller)
+  preloadedCategories = null, // Categories from Splash (instant display)
 }, ref) => {
   // States
   const [isVisible, setIsVisible] = useState(true);
@@ -359,12 +360,22 @@ const OTTLeft = forwardRef(({
         console.log('[OTT] Loading from SQLite...');
         const counts = {};
 
-        // STEP 1: Load categories from SQLite (FAST - just metadata)
-        const [localLiveCats, localVodCats, localSeriesCats] = await Promise.all([
-          querySql('SELECT * FROM live_categories ORDER BY display_order'),
-          querySql('SELECT * FROM vod_categories ORDER BY display_order'),
-          querySql('SELECT * FROM series_categories ORDER BY display_order'),
-        ]);
+        // STEP 1: Load categories (use preloaded if available, else SQLite)
+        let localLiveCats, localVodCats, localSeriesCats;
+        
+        if (preloadedCategories) {
+          console.log('[OTT] Using preloaded categories from Splash (instant display)');
+          localLiveCats = preloadedCategories.live || [];
+          localVodCats = preloadedCategories.vod || [];
+          localSeriesCats = preloadedCategories.series || [];
+        } else {
+          console.log('[OTT] Loading categories from SQLite...');
+          [localLiveCats, localVodCats, localSeriesCats] = await Promise.all([
+            querySql('SELECT * FROM live_categories ORDER BY display_order'),
+            querySql('SELECT * FROM vod_categories ORDER BY display_order'),
+            querySql('SELECT * FROM series_categories ORDER BY display_order'),
+          ]);
+        }
 
         // STEP 2: If categories exist in SQLite, load items
         if (localLiveCats.length > 0 || localVodCats.length > 0 || localSeriesCats.length > 0) {

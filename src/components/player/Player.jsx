@@ -35,6 +35,8 @@ const Player = memo(({
   epgSyncProgress = 0,
   epgSyncingFolders = new Set(),
   userLangs = [],
+  // Preloaded categories from Splash (instant OTT display)
+  preloadedCategories = null,
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -416,6 +418,7 @@ const Player = memo(({
           xtreamService={xtreamService}
           epgSyncProgress={epgSyncProgress}
           epgSyncingFolders={epgSyncingFolders}
+          preloadedCategories={preloadedCategories}
           onRequestKeyboard={(query) => {
             setKeyboardActive('left');
             setKeyboardSearchQuery(query || '');

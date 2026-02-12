@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
 import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount } from '../../database/ProgramQueries';
+import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
 // OTT RIGHT - Movies & Series Gallery (WINDOWING for 185K items)
@@ -11,68 +12,6 @@ import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSer
 // - Series: poster grid → detail with seasons tabs, episodes list
 // - Pagination: Load 100 items at a time (no more 10s lag!)
 // ============================================================================
-
-// Language code mapping (ISO 639-2/3 → display name) - 30 languages
-const LANG_MAP = {
-  // French
-  fra: 'FRENCH', fre: 'FRENCH', fr: 'FRENCH',
-  // English
-  eng: 'ENGLISH', en: 'ENGLISH',
-  // Turkish
-  tur: 'TURKISH', tr: 'TURKISH',
-  // Arabic
-  ara: 'ARABIC', ar: 'ARABIC',
-  // Spanish
-  spa: 'SPANISH', esp: 'SPANISH', es: 'SPANISH',
-  // German
-  ger: 'GERMAN', deu: 'GERMAN', de: 'GERMAN',
-  // Italian
-  ita: 'ITALIAN', it: 'ITALIAN',
-  // Portuguese
-  por: 'PORTUGUESE', pt: 'PORTUGUESE',
-  // Russian
-  rus: 'RUSSIAN', ru: 'RUSSIAN',
-  // Dutch
-  dut: 'DUTCH', nld: 'DUTCH', nl: 'DUTCH',
-  // Polish
-  pol: 'POLISH', pl: 'POLISH',
-  // Japanese
-  jpn: 'JAPANESE', ja: 'JAPANESE',
-  // Chinese
-  chi: 'CHINESE', zho: 'CHINESE', zh: 'CHINESE',
-  // Korean
-  kor: 'KOREAN', ko: 'KOREAN',
-  // Hindi
-  hin: 'HINDI', hi: 'HINDI',
-  // Greek
-  gre: 'GREEK', ell: 'GREEK', el: 'GREEK',
-  // Swedish
-  swe: 'SWEDISH', sv: 'SWEDISH',
-  // Norwegian
-  nor: 'NORWEGIAN', no: 'NORWEGIAN',
-  // Danish
-  dan: 'DANISH', da: 'DANISH',
-  // Finnish
-  fin: 'FINNISH', fi: 'FINNISH',
-  // Hebrew
-  heb: 'HEBREW', he: 'HEBREW',
-  // Romanian
-  rum: 'ROMANIAN', ron: 'ROMANIAN', ro: 'ROMANIAN',
-  // Hungarian
-  hun: 'HUNGARIAN', hu: 'HUNGARIAN',
-  // Czech
-  cze: 'CZECH', ces: 'CZECH', cs: 'CZECH',
-  // Vietnamese
-  vie: 'VIETNAMESE', vi: 'VIETNAMESE',
-  // Thai
-  tha: 'THAI', th: 'THAI'
-};
-
-const getLangName = (code) => {
-  if (!code) return 'UNKNOWN';
-  const cleanCode = code.toLowerCase().trim();
-  return LANG_MAP[cleanCode] || cleanCode.toUpperCase();
-};
 
 // Format duration seconds → "1h35"
 const formatDuration = (secs) => {
@@ -122,6 +61,8 @@ const OTTRight = ({
   const [probing, setProbing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [posterOverlay, setPosterOverlay] = useState(false);
+  const [showAllAudio, setShowAllAudio] = useState(false); // Overlay audio tracks
+  const [showAllSubs, setShowAllSubs] = useState(false);   // Overlay subtitle tracks
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [zoomLevel, setZoomLevel] = useState(0); // 0=Petit(4rows défaut), 1=Moyen, 2=Grand
   const [epgPrograms, setEpgPrograms] = useState([]); // 4 prochains programmes
@@ -458,13 +399,33 @@ const OTTRight = ({
                 AUDIO {probing ? '...' : audioTracks.length > 0 ? `(${audioTracks.length})` : ''}
               </span>
               {audioTracks.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                  {audioTracks.map((track, i) => (
-                    <TagPill key={i} color="purple">
-                      {getLangName(track.language)} {track.channels ? `(${track.channels}ch)` : ''}
-                    </TagPill>
-                  ))}
-                </div>
+                <>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                    {audioTracks.slice(0, 10).map((track, i) => (
+                      <TagPill key={i} color="purple">
+                        {getLangName(track.language)} {track.channels ? `(${track.channels}ch)` : ''}
+                      </TagPill>
+                    ))}
+                  </div>
+                  {audioTracks.length > 10 && (
+                    <button
+                      onClick={() => setShowAllAudio(true)}
+                      style={{
+                        background: 'rgba(98,37,255,0.2)',
+                        border: '1px solid rgba(98,37,255,0.4)',
+                        borderRadius: '4px',
+                        padding: '4px 8px',
+                        fontSize: '9px',
+                        color: '#a020f0',
+                        cursor: 'pointer',
+                        marginTop: '6px',
+                        fontWeight: 700
+                      }}
+                    >
+                      Show More +{audioTracks.length - 10}
+                    </button>
+                  )}
+                </>
               )}
               {!probing && audioTracks.length === 0 && (
                 <div style={{ fontSize: '10px', color: '#555', marginTop: '4px' }}>No audio info</div>
@@ -477,11 +438,31 @@ const OTTRight = ({
                 SUBTITLES {probing ? '...' : subtitleTracks.length > 0 ? `(${subtitleTracks.length})` : ''}
               </span>
               {subtitleTracks.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                  {subtitleTracks.map((track, i) => (
-                    <TagPill key={i} color="gray">{getLangName(track.language)}</TagPill>
-                  ))}
-                </div>
+                <>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                    {subtitleTracks.slice(0, 10).map((track, i) => (
+                      <TagPill key={i} color="gray">{getLangName(track.language)}</TagPill>
+                    ))}
+                  </div>
+                  {subtitleTracks.length > 10 && (
+                    <button
+                      onClick={() => setShowAllSubs(true)}
+                      style={{
+                        background: 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '4px',
+                        padding: '4px 8px',
+                        fontSize: '9px',
+                        color: '#ccc',
+                        cursor: 'pointer',
+                        marginTop: '6px',
+                        fontWeight: 700
+                      }}
+                    >
+                      Show More +{subtitleTracks.length - 10}
+                    </button>
+                  )}
+                </>
               )}
               {!probing && subtitleTracks.length === 0 && (
                 <div style={{ fontSize: '10px', color: '#555', marginTop: '4px' }}>No subtitles</div>
@@ -585,6 +566,108 @@ const OTTRight = ({
             }}
           >
             <img src={posterBig || poster} alt="" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '12px' }} />
+          </div>
+        )}
+
+        {/* Audio Tracks Overlay */}
+        {showAllAudio && (
+          <div
+            onClick={() => setShowAllAudio(false)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.95)', zIndex: 99998,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '20px', cursor: 'pointer'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#111', border: '2px solid #6225ff', borderRadius: '12px',
+                padding: '30px', maxWidth: '700px', width: '100%',
+                maxHeight: '80vh', overflow: 'auto', cursor: 'default'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ color: '#6225ff', fontSize: '18px', fontWeight: 800, margin: 0 }}>
+                  🔊 AUDIO TRACKS ({audioTracks.length})
+                </h3>
+                <button
+                  onClick={() => setShowAllAudio(false)}
+                  style={{
+                    background: 'transparent', border: 'none', color: '#fff',
+                    fontSize: '24px', cursor: 'pointer', padding: 0, lineHeight: 1
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {audioTracks.map((track, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      background: 'rgba(98,37,255,0.15)', border: '1px solid rgba(98,37,255,0.4)',
+                      borderRadius: '6px', padding: '10px 14px', fontSize: '11px',
+                      color: '#fff', fontWeight: 600
+                    }}
+                  >
+                    {getLangName(track.language)} {track.channels ? `(${track.channels}ch)` : ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Subtitle Tracks Overlay */}
+        {showAllSubs && (
+          <div
+            onClick={() => setShowAllSubs(false)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.95)', zIndex: 99998,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '20px', cursor: 'pointer'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#111', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '12px',
+                padding: '30px', maxWidth: '700px', width: '100%',
+                maxHeight: '80vh', overflow: 'auto', cursor: 'default'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ color: '#fff', fontSize: '18px', fontWeight: 800, margin: 0 }}>
+                  💬 SUBTITLE TRACKS ({subtitleTracks.length})
+                </h3>
+                <button
+                  onClick={() => setShowAllSubs(false)}
+                  style={{
+                    background: 'transparent', border: 'none', color: '#fff',
+                    fontSize: '24px', cursor: 'pointer', padding: 0, lineHeight: 1
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {subtitleTracks.map((track, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '6px', padding: '10px 14px', fontSize: '11px',
+                      color: '#ccc', fontWeight: 600
+                    }}
+                  >
+                    {getLangName(track.language)}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -85,6 +85,7 @@ const AppContent = () => {
   const [currentPage, setCurrentPage] = useState('splash');
   const [showTutorial, setShowTutorial] = useState(false);
   const [xtreamService, setXtreamService] = useState(null);
+  const [preloadedCategories, setPreloadedCategories] = useState(null); // Categories from Splash
 
   // NinjaCentral data (persisted)
   const [liveData, setLiveData] = useState([]);
@@ -562,8 +563,17 @@ const AppContent = () => {
     setCurrentPage('splash');
   };
 
-  const handleSplashComplete = useCallback((nextPage, service = null) => {
-    if (service) setXtreamService(service);
+  const handleSplashComplete = useCallback((nextPage, sessionData = null) => {
+    if (sessionData) {
+      // Splash sent complete session data (service + categories)
+      if (sessionData.service) setXtreamService(sessionData.service);
+      if (sessionData.categories) setPreloadedCategories(sessionData.categories);
+      console.log('✅ Session data loaded from Splash:', {
+        liveCats: sessionData.categories?.live?.length || 0,
+        vodCats: sessionData.categories?.vod?.length || 0,
+        seriesCats: sessionData.categories?.series?.length || 0
+      });
+    }
     setCurrentPage(nextPage);
   }, []);
 
@@ -694,6 +704,7 @@ const AppContent = () => {
         epgSyncProgress={epgSyncProgress}
         epgSyncingFolders={epgSyncingFolders}
         userLangs={userLangs}
+        preloadedCategories={preloadedCategories}
         liveChannels={playlist?.data?.live || []}
         vodItems={playlist?.data?.vod || []}
         seriesItems={playlist?.data?.series || []}

@@ -47,12 +47,36 @@ export const NinjaSplash = ({ onComplete }) => {
         await new Promise(r => setTimeout(r, 1500));
         
         if (lastServer) {
-          setStatus('Connexion automatique...');
+          setStatus('Chargement de votre interface...');
+          
+          // Load categories in parallel (lightweight, instant OTT display)
+          const [liveCats, vodCats, seriesCats] = await Promise.all([
+            db.query('SELECT * FROM live_categories ORDER BY display_order'),
+            db.query('SELECT * FROM vod_categories ORDER BY display_order'),
+            db.query('SELECT * FROM series_categories ORDER BY display_order')
+          ]);
+          
           const xtream = new XtreamService(lastServer.url, lastServer.username, lastServer.password);
           
-          // Complete with player + xtream service
+          // Prepare complete session data
+          const sessionData = {
+            service: xtream,
+            categories: {
+              live: liveCats || [],
+              vod: vodCats || [],
+              series: seriesCats || []
+            },
+            serverInfo: {
+              name: lastServer.name,
+              url: lastServer.url,
+              username: lastServer.username,
+              password: lastServer.password
+            }
+          };
+          
+          // Complete with player + all data
           setTimeout(() => {
-            onComplete('player', xtream);
+            onComplete('player', sessionData);
           }, 500);
         } else {
           // No server found → go to login

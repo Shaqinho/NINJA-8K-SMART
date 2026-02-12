@@ -357,6 +357,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
         
         // Launch background save with tracking
         if (window.db) {
+          localStorage.setItem('ninja_save_status', 'incomplete'); // Set incomplete at start
           window.__ninjaSavePromise = (async () => {
             try {
               console.log('💾 Starting background save...');
