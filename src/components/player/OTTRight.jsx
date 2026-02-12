@@ -167,28 +167,64 @@ const OTTRight = ({
   useEffect(() => {
     const loadInitial = async () => {
       try {
-        const count = type === 'movies' 
+        setLoading(true);
+        
+        // STEP 1: Check if SQLite has data for this folder
+        const sqlCount = type === 'movies' 
           ? await getVODItemsCount(selectedFolder)
           : await getSeriesItemsCount(selectedFolder);
         
-        setTotalCount(count);
-        setItems(new Array(count).fill(null)); // Placeholder array
-        
-        // Load first 100 items
-        if (count > 0) {
-          await loadMoreItems(0, Math.min(99, count - 1));
+        if (sqlCount > 0) {
+          // CONDITION: SQL data present → Use paginated local load (FAST)
+          console.log(`[OTTRight] SQLite data found (${sqlCount} items), using local DB`);
+          setTotalCount(sqlCount);
+          setItems(new Array(sqlCount).fill(null)); // Placeholder array
+          
+          // Load first 100 items
+          await loadMoreItems(0, Math.min(99, sqlCount - 1));
+          
+        } else if (xtreamService) {
+          // CONDITION: SQL empty → Fetch from Xtream API (FALLBACK)
+          console.log(`[OTTRight] SQLite empty, fetching from Xtream API for folder: ${selectedFolder}`);
+          
+          let rawData;
+          if (type === 'movies') {
+            rawData = await xtreamService.getVodStreams();
+          } else {
+            rawData = await xtreamService.getSeries();
+          }
+
+          // Parse and filter by category
+          const parsedData = type === 'movies' 
+            ? xtreamService.parseVodStreams(rawData)
+            : xtreamService.parseSeries(rawData);
+          
+          // Filter by selected folder (category_id)
+          const filteredData = selectedFolder === '__all__' 
+            ? parsedData 
+            : parsedData.filter(item => String(item.category_id) === String(selectedFolder));
+
+          setItems(filteredData);
+          setTotalCount(filteredData.length);
+        } else {
+          // No SQLite, no Xtream service
+          console.warn('[OTTRight] No data source available');
+          setTotalCount(0);
+          setItems([]);
         }
       } catch (err) {
-        console.error('❌ Initial load failed:', err);
+        console.error('❌ Hybrid load failed:', err);
         setTotalCount(0);
         setItems([]);
+      } finally {
+        setLoading(false);
       }
     };
     
     if (visible) {
       loadInitial();
     }
-  }, [selectedFolder, type, visible, loadMoreItems]);
+  }, [selectedFolder, type, visible, xtreamService, loadMoreItems]);
 
   // ========== INFINITE LOADER HELPERS ==========
   const isItemLoaded = useCallback((index) => !!items[index], [items]);
