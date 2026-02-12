@@ -40,7 +40,7 @@
 //     │  └─ PRIORITY 5: insertSeriesItemsChunked(500/batch) → Table series_items
 //     │  }
 //     ├─ localStorage.setItem('ninja_save_status', 'complete/incomplete')
-//     └─ Logs: 💾 VOD Progress: 5000/185000, etc.
+//     └─ Logs: 💾 VOD Progress: {current}/{total}, etc.
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🔄 FLUX SECONDAIRE (RELANCEMENT / AUTO-LOGIN)
@@ -77,19 +77,19 @@
 // CERCLE 2 - XMLTV BACKGROUND (ServerForm.jsx)
 //   ├─ loadXMLTV() lancé en parallèle du fetch principal
 //   ├─ Parse XMLTV.gz → Extract channels + programs
-//   └─ insertProgramsBatch() → EPG complet pour ~30-40% channels
+//   └─ insertProgramsBatch() → EPG complet pour une partie des channels
 //
 // CERCLE 3 - BACKGROUND EPG SYNC (App.jsx)
 //   ├─ Démarre 10s après chargement initial
-//   ├─ Detect user langs (FR, BE, VIP) depuis first 30 categories
-//   ├─ Sync folders 1-150 matching user langs
-//   ├─ getShortEPGBatch(50 channels/batch, limit=24h)
+//   ├─ Detect user langs (ex: FR, BE, VIP) depuis first 30 categories
+//   ├─ Sync matching folders progressivement
+//   ├─ getShortEPGBatch(batch channels, limit=24h)
 //   └─ Progress: setEpgSyncProgress(0-100%) → Barre visible OTT
 //
 // CERCLE 4 - INTEGRITY CHECK (Future)
 //   ├─ checkDataIntegrity() compare expected vs actual counts
 //   ├─ Si incomplete → Silent resume background save
-//   └─ Logs: 🔄 Missing VOD: 50000, resuming...
+//   └─ Logs: 🔄 Missing items detected, resuming...
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 // 📊 TABLES SQLITE (NinjaLocalDB.js)
@@ -99,9 +99,9 @@
 // live_categories → Dossiers Live (category_id, category_name)
 // vod_categories → Dossiers VOD
 // series_categories → Dossiers Series
-// channels → 47K+ Live channels (stream_id, name, logo, category_id, epg_channel_id)
-// vod_items → 185K+ Movies (stream_id, name, logo, category_id, rating, year)
-// series_items → 45K+ Series (series_id, name, cover, category_id)
+// channels → Live channels (stream_id, name, logo, category_id, epg_channel_id)
+// vod_items → Movies (stream_id, name, logo, category_id, rating, year)
+// series_items → Series (series_id, name, cover, category_id)
 // programs → EPG data (stream_id, title, start_time, end_time, is_live)
 //
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -113,7 +113,7 @@
 //   ├─ Affiche si: window.__ninjaSavePromise existe ET pas complete
 //   ├─ Progress: Calculé via localStorage counts (current/expected)
 //   ├─ Style: Gradient purple, semi-transparent, backdrop-blur
-//   └─ Label: "Indexing 25k/185k movies..." (10px font, uppercase)
+//   └─ Label: "Indexing {current}/{total} items..." (10px font, uppercase)
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 //
