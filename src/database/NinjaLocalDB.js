@@ -135,6 +135,7 @@ const initSchema = async () => {
       category_id TEXT PRIMARY KEY,
       category_name TEXT NOT NULL,
       parent_id INTEGER DEFAULT 0,
+      display_order INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `);
@@ -145,6 +146,7 @@ const initSchema = async () => {
       category_id TEXT PRIMARY KEY,
       category_name TEXT NOT NULL,
       parent_id INTEGER DEFAULT 0,
+      display_order INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `);
@@ -155,6 +157,7 @@ const initSchema = async () => {
       category_id TEXT PRIMARY KEY,
       category_name TEXT NOT NULL,
       parent_id INTEGER DEFAULT 0,
+      display_order INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s', 'now'))
     )
   `);

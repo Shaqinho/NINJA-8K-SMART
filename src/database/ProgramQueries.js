@@ -45,13 +45,15 @@ export const insertLiveCategories = async (categories) => {
   
   await db.execute('BEGIN TRANSACTION');
   try {
-    for (const cat of categories) {
+    for (let i = 0; i < categories.length; i++) {
+      const cat = categories[i];
       await db.execute(
-        `INSERT OR REPLACE INTO live_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+        `INSERT OR REPLACE INTO live_categories (category_id, category_name, parent_id, display_order) VALUES (?, ?, ?, ?)`,
         [
           cat.category_id || cat.id,
           cat.category_name || cat.name || '',
-          cat.parent_id || 0
+          cat.parent_id || 0,
+          i
         ]
       );
     }
@@ -72,13 +74,15 @@ export const insertVODCategories = async (categories) => {
   
   await db.execute('BEGIN TRANSACTION');
   try {
-    for (const cat of categories) {
+    for (let i = 0; i < categories.length; i++) {
+      const cat = categories[i];
       await db.execute(
-        `INSERT OR REPLACE INTO vod_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+        `INSERT OR REPLACE INTO vod_categories (category_id, category_name, parent_id, display_order) VALUES (?, ?, ?, ?)`,
         [
           cat.category_id || cat.id,
           cat.category_name || cat.name || '',
-          cat.parent_id || 0
+          cat.parent_id || 0,
+          i
         ]
       );
     }
@@ -99,13 +103,15 @@ export const insertSeriesCategories = async (categories) => {
   
   await db.execute('BEGIN TRANSACTION');
   try {
-    for (const cat of categories) {
+    for (let i = 0; i < categories.length; i++) {
+      const cat = categories[i];
       await db.execute(
-        `INSERT OR REPLACE INTO series_categories (category_id, category_name, parent_id) VALUES (?, ?, ?)`,
+        `INSERT OR REPLACE INTO series_categories (category_id, category_name, parent_id, display_order) VALUES (?, ?, ?, ?)`,
         [
           cat.category_id || cat.id,
           cat.category_name || cat.name || '',
-          cat.parent_id || 0
+          cat.parent_id || 0,
+          i
         ]
       );
     }

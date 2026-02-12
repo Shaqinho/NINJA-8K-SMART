@@ -360,15 +360,15 @@ const OTTLeft = forwardRef(({
         const counts = {};
 
         // STEP 1: Load categories from SQLite (FAST - just metadata)
-        const [liveCats, vodCats, seriesCats] = await Promise.all([
-          querySql('SELECT * FROM live_categories ORDER BY category_id'),
-          querySql('SELECT * FROM vod_categories ORDER BY category_id'),
-          querySql('SELECT * FROM series_categories ORDER BY category_id'),
+        const [localLiveCats, localVodCats, localSeriesCats] = await Promise.all([
+          querySql('SELECT * FROM live_categories ORDER BY display_order'),
+          querySql('SELECT * FROM vod_categories ORDER BY display_order'),
+          querySql('SELECT * FROM series_categories ORDER BY display_order'),
         ]);
 
         // STEP 2: If categories exist in SQLite, load items
-        if (liveCats.length > 0 || vodCats.length > 0 || seriesCats.length > 0) {
-          console.log(`[OTT] SQLite: ${liveCats.length} live cats, ${vodCats.length} vod cats, ${seriesCats.length} series cats`);
+        if (localLiveCats.length > 0 || localVodCats.length > 0 || localSeriesCats.length > 0) {
+          console.log(`[OTT] SQLite: ${localLiveCats.length} live cats, ${localVodCats.length} vod cats, ${localSeriesCats.length} series cats`);
           
           // Load live channels
           const liveChannels = await querySql('SELECT * FROM channels ORDER BY stream_id');
@@ -426,19 +426,19 @@ const OTTLeft = forwardRef(({
             genre: item.genre,
           }));
 
-          const mappedLiveCats = liveCats.map(cat => ({
+          const mappedLiveCats = localLiveCats.map(cat => ({
             category_id: cat.category_id,
             category_name: cat.category_name,
             parent_id: cat.parent_id || 0,
           }));
 
-          const mappedVodCats = vodCats.map(cat => ({
+          const mappedVodCats = localVodCats.map(cat => ({
             category_id: cat.category_id,
             category_name: cat.category_name,
             parent_id: cat.parent_id || 0,
           }));
 
-          const mappedSeriesCats = seriesCats.map(cat => ({
+          const mappedSeriesCats = localSeriesCats.map(cat => ({
             category_id: cat.category_id,
             category_name: cat.category_name,
             parent_id: cat.parent_id || 0,
@@ -473,34 +473,34 @@ const OTTLeft = forwardRef(({
         ]);
 
         // Parse live
-        const liveCats = Array.isArray(rawLiveCats) ? rawLiveCats : [];
-        const liveParsed = xtreamService.parseLiveStreams(rawLive, liveCats);
+        const liveCatsFallback = Array.isArray(rawLiveCats) ? rawLiveCats : [];
+        const liveParsed = xtreamService.parseLiveStreams(rawLive, liveCatsFallback);
         liveParsed.forEach(ch => {
           const catId = String(ch.categoryId);
           counts[`live_${catId}`] = (counts[`live_${catId}`] || 0) + 1;
         });
         setLiveChannels(liveParsed);
-        setLiveCategories(liveCats);
+        setLiveCategories(liveCatsFallback);
 
         // Parse VOD
-        const vodCats = Array.isArray(rawVodCats) ? rawVodCats : [];
-        const vodParsed = xtreamService.parseVodStreams(rawVod, vodCats);
+        const vodCatsFallback = Array.isArray(rawVodCats) ? rawVodCats : [];
+        const vodParsed = xtreamService.parseVodStreams(rawVod, vodCatsFallback);
         vodParsed.forEach(item => {
           const catId = String(item.categoryId);
           counts[`vod_${catId}`] = (counts[`vod_${catId}`] || 0) + 1;
         });
         setVodItems(vodParsed);
-        setVodCategories(vodCats);
+        setVodCategories(vodCatsFallback);
 
         // Parse Series
-        const seriesCats = Array.isArray(rawSeriesCats) ? rawSeriesCats : [];
-        const seriesParsed = xtreamService.parseSeries(rawSeries, seriesCats);
+        const seriesCatsFallback = Array.isArray(rawSeriesCats) ? rawSeriesCats : [];
+        const seriesParsed = xtreamService.parseSeries(rawSeries, seriesCatsFallback);
         seriesParsed.forEach(item => {
           const catId = String(item.categoryId);
           counts[`series_${catId}`] = (counts[`series_${catId}`] || 0) + 1;
         });
         setSeriesItems(seriesParsed);
-        setSeriesCategories(seriesCats);
+        setSeriesCategories(seriesCatsFallback);
 
         setCategoryCounts(counts);
         setDataLoaded(true);
@@ -1578,8 +1578,9 @@ const OTTLeft = forwardRef(({
                   style={{
                     flex: 1, background: 'transparent', border: 'none', outline: 'none',
                     color: '#fff', fontSize: '11px', padding: 0, caretColor: '#6225ff',
-                    transform: lastCharZoom ? 'scale(1.1)' : 'scale(1)',
-                    transition: 'transform 0.15s ease',
+                    transform: lastCharZoom ? 'scale(1.15)' : 'scale(1)',
+                    transformOrigin: 'left center',
+                    transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
                   }}
                 />
                 {searchQuery && (
@@ -1603,8 +1604,8 @@ const OTTLeft = forwardRef(({
                     onZoomOut?.();
                   }}
                   style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'none',
+                    border: 'none',
                     borderRadius: '4px',
                     width: '24px',
                     height: '24px',
@@ -1617,8 +1618,8 @@ const OTTLeft = forwardRef(({
                     fontWeight: '600',
                     transition: 'all 0.2s',
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                  onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255,255,255,1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
                   title="Zoom out (smaller thumbnails)"
                 >
                   −
@@ -1630,8 +1631,8 @@ const OTTLeft = forwardRef(({
                     onZoomIn?.();
                   }}
                   style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'none',
+                    border: 'none',
                     borderRadius: '4px',
                     width: '24px',
                     height: '24px',
@@ -1644,8 +1645,8 @@ const OTTLeft = forwardRef(({
                     fontWeight: '600',
                     transition: 'all 0.2s',
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                  onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255,255,255,1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
                   title="Zoom in (bigger thumbnails)"
                 >
                   +
@@ -1654,6 +1655,41 @@ const OTTLeft = forwardRef(({
             )}
           </div>
         )}
+
+        {/* ========== BACKGROUND SAVE PROGRESS BAR (4px, bottom, z10) ========== */}
+        {(() => {
+          const status = localStorage.getItem('ninja_save_status');
+          if (status === 'complete' || !window.__ninjaSavePromise) return null;
+          
+          const expectedVod = parseInt(localStorage.getItem('ninja_expected_vod') || '0');
+          const expectedSeries = parseInt(localStorage.getItem('ninja_expected_series') || '0');
+          const total = expectedVod + expectedSeries;
+          
+          if (total === 0) return null;
+          
+          // Progress estimation (50% car on ne peut pas compter en temps réel facilement)
+          const progress = 50;
+          
+          return (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '4px',
+              background: 'rgba(255,255,255,0.05)',
+              zIndex: 10,
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${progress}%`,
+                background: '#6225ff',
+                borderRadius: '0 2px 2px 0',
+                transition: 'width 0.5s ease-out',
+              }} />
+            </div>
+          );
+        })()}
 
         {/* ========== EPG SYNC PROGRESS BAR (2px, bottom) ========== */}
         {externalEpgSyncProgress > 0 && externalEpgSyncProgress < 100 && (
