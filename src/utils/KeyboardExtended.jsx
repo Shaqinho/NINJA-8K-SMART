@@ -246,6 +246,7 @@ const Keyboard_Extended = ({ onSearch, onClose, onInput }) => {
           right: 0,
           bottom: 0,
           zIndex: 99999,
+          background: 'transparent', // INVISIBLE - just for click detection
         }}
         onClick={onClose}
         onTouchEnd={onClose}

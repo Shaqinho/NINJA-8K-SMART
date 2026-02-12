@@ -319,8 +319,8 @@ const Player = memo(({
             className="absolute inset-0"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'transparent' }}>
-            <p className="text-gray-600 text-xs">Select content</p>
+          <div className="absolute inset-0" style={{ backgroundColor: '#000000' }}>
+            {/* Pas de vidéo - Fond noir OLED pur */}
           </div>
         )}
       </div>

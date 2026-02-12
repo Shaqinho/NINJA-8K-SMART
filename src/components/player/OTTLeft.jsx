@@ -1053,30 +1053,9 @@ const OTTLeft = forwardRef(({
           </TickerText>
           {/* EPG under channel name (vertical layout) */}
           {epgTitle && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <TickerText style={{ fontSize: '8px', color: '#888', flex: 1, minWidth: 0 }}>
-                {epgTitle}
-              </TickerText>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenEPGGrid?.(channel);
-                }}
-                style={{
-                  background: 'rgba(98, 37, 255, 0.2)',
-                  border: '1px solid rgba(98, 37, 255, 0.4)',
-                  borderRadius: '3px',
-                  padding: '1px 4px',
-                  fontSize: '7px',
-                  color: '#b85cff',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  fontWeight: 600,
-                }}
-              >
-                EPG
-              </button>
-            </div>
+            <TickerText style={{ fontSize: '8px', color: '#888', flex: 1, minWidth: 0 }}>
+              {epgTitle}
+            </TickerText>
           )}
           {/* Mini progress bar for live program */}
           {epgTitle && epgProgress > 0 && (
@@ -1410,6 +1389,26 @@ const OTTLeft = forwardRef(({
                   {filteredItems.length} {activeTab === 'live' ? 'channels' : activeTab === 'movies' ? 'movies' : 'series'}
                 </div>
               </div>
+              {/* EPG GRID button */}
+              {activeTab === 'live' && onOpenEPGGrid && (
+                <button
+                  onClick={() => onOpenEPGGrid(null)}
+                  style={{
+                    background: 'rgba(98,37,255,0.15)',
+                    border: '1px solid rgba(98,37,255,0.3)',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    color: '#a020f0',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    marginRight: '6px',
+                  }}
+                >
+                  📺 EPG
+                </button>
+              )}
               {/* EPG NOW button (manual fetch, always from Xtream) */}
               {activeTab === 'live' && (
                 <button
@@ -1563,7 +1562,7 @@ const OTTLeft = forwardRef(({
               onClick={() => {
                 if (!searchOpen) {
                   setSearchOpen(true);
-                  onRequestKeyboard?.(searchQuery); // Request keyboard from parent
+                  setTimeout(() => searchInputRef.current?.focus(), 100); // Focus native input
                 } else {
                   setSearchOpen(false);
                   setSearchQuery('');
@@ -1582,9 +1581,7 @@ const OTTLeft = forwardRef(({
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
-                  readOnly
-                  onFocus={() => onRequestKeyboard?.(searchQuery)}
-                  onClick={() => onRequestKeyboard?.(searchQuery)}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={currentCategory?.category_id === '__all__' && activeTab === 'live' ? "Search channels..." : "Search channels & programs..."}
                   style={{
                     flex: 1, background: 'transparent', border: 'none', outline: 'none',

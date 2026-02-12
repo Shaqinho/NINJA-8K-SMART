@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
-import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked } from '../../database/ProgramQueries';
+import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, getLiveChannelsPaginated, getLiveChannelsCount } from '../../database/ProgramQueries';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -48,7 +48,7 @@ const OTTRight = ({
   onClose,
   visible = false,
 }, ref) => {
-  const type = sidebarTab; // 'movies' or 'series'
+  const type = sidebarTab; // 'live', 'movies', or 'series'
   
   // ========== WINDOWING STATES (Infinite Loader) ==========
   const [items, setItems] = useState([]);           // Paginated items
@@ -145,9 +145,11 @@ const OTTRight = ({
       const limit = stopIndex - startIndex + 1;
       const offset = startIndex;
       
-      const newItems = type === 'movies' 
-        ? await getVODItemsPaginated(selectedFolder, limit, offset)
-        : await getSeriesItemsPaginated(selectedFolder, limit, offset);
+      const newItems = type === 'live'
+        ? await getLiveChannelsPaginated(selectedFolder, limit, offset)
+        : type === 'movies' 
+          ? await getVODItemsPaginated(selectedFolder, limit, offset)
+          : await getSeriesItemsPaginated(selectedFolder, limit, offset);
       
       setItems(prev => {
         const updated = [...prev];
@@ -170,9 +172,11 @@ const OTTRight = ({
         setLoading(true);
         
         // STEP 1: Check if SQLite has data for this folder
-        const sqlCount = type === 'movies' 
-          ? await getVODItemsCount(selectedFolder)
-          : await getSeriesItemsCount(selectedFolder);
+        const sqlCount = type === 'live'
+          ? await getLiveChannelsCount(selectedFolder)
+          : type === 'movies' 
+            ? await getVODItemsCount(selectedFolder)
+            : await getSeriesItemsCount(selectedFolder);
         
         if (sqlCount > 0) {
           // CONDITION: SQL data present → Use paginated local load (FAST)
@@ -188,21 +192,25 @@ const OTTRight = ({
           console.log(`[OTTRight] SQLite empty, fetching from Xtream API for folder: ${selectedFolder}`);
           
           let rawData;
-          if (type === 'movies') {
+          if (type === 'live') {
+            rawData = await xtreamService.getLiveStreams();
+          } else if (type === 'movies') {
             rawData = await xtreamService.getVodStreams();
           } else {
             rawData = await xtreamService.getSeries();
           }
 
           // Parse and filter by category
-          const parsedData = type === 'movies' 
-            ? xtreamService.parseVodStreams(rawData)
-            : xtreamService.parseSeries(rawData);
+          const parsedData = type === 'live'
+            ? xtreamService.parseLiveStreams(rawData)
+            : type === 'movies' 
+              ? xtreamService.parseVodStreams(rawData)
+              : xtreamService.parseSeries(rawData);
           
-          // Filter by selected folder (category_id)
+          // Filter by selected folder (categoryId || category_id for API/SQLite compatibility)
           const filteredData = selectedFolder === '__all__' 
             ? parsedData 
-            : parsedData.filter(item => String(item.category_id) === String(selectedFolder));
+            : parsedData.filter(item => String(item.categoryId || item.category_id) === String(selectedFolder));
 
           setItems(filteredData);
           setTotalCount(filteredData.length);
@@ -304,8 +312,8 @@ const OTTRight = ({
     onItemSelect?.(epItem);
   }, [xtreamService, onItemSelect]);
 
-  // Only render for movies/series tabs
-  if (!visible || (sidebarTab !== 'movies' && sidebarTab !== 'series')) {
+  // Render for live/movies/series tabs
+  if (!visible || (sidebarTab !== 'live' && sidebarTab !== 'movies' && sidebarTab !== 'series')) {
     return null;
   }
 
@@ -727,7 +735,18 @@ const OTTRight = ({
     const index = rowIndex * COLUMN_COUNT + columnIndex;
     if (index >= items.length) return null;
     const item = items[index];
-    const poster = item.logo || item.cover || item.stream_icon;
+    
+    // Placeholder during loading (null items from windowing)
+    if (!item) {
+      return (
+        <div style={{ ...style, padding: '4px' }}>
+          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }} />
+        </div>
+      );
+    }
+    
+    // ROBUST POSTER MAPPING: API vs SQLite compatibility
+    const poster = item.cover || item.movie_image || item.logo || item.stream_icon || item.cover_big;
     
     // Déterminer si c'est la dernière row visible
     const totalRows = Math.ceil(items.length / COLUMN_COUNT);
@@ -752,9 +771,15 @@ const OTTRight = ({
         onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'}
         >
           {poster ? (
-            <img src={poster} alt="" style={{ width: '100%', flex: 1, objectFit: 'cover' }} />
+            <img 
+              src={poster} 
+              alt="" 
+              loading="lazy"
+              style={{ width: '100%', flex: 1, objectFit: 'cover' }} 
+              onError={(e) => { e.target.src = 'https://via.placeholder.com/150x220?text=No+Poster'; }}
+            />
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: '10px' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: '20px' }}>
               🎬
             </div>
           )}
