@@ -15,6 +15,8 @@ import {
   insertSeriesCategories,
   insertVODItems,
   insertSeriesItems,
+  insertVODItemsChunked,
+  insertSeriesItemsChunked,
   loadXMLTV 
 } from '../database/ProgramQueries';
 
@@ -347,6 +349,49 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
         const { service, auth, server: connectedServer } = await tryConnect(form.server, form.username, form.password);
         
         const data = await fetchXtreamData(service, auth, connectedServer);
+        
+        // Store expected totals for integrity check
+        localStorage.setItem('ninja_expected_live', data.live.length);
+        localStorage.setItem('ninja_expected_vod', data.vod.length);
+        localStorage.setItem('ninja_expected_series', data.series.length);
+        
+        // Launch background save with tracking
+        if (window.db) {
+          window.__ninjaSavePromise = (async () => {
+            try {
+              console.log('💾 Starting background save...');
+              
+              // Save server + categories first (for auto-login)
+              const { saveServer } = await import('../database/NinjaLocalDB');
+              await saveServer({ 
+                name: form.name || 'My Server', 
+                url: connectedServer, 
+                username: form.username, 
+                password: form.password 
+              });
+              
+              await Promise.all([
+                insertLiveCategories(data.liveCategories),
+                insertVODCategories(data.vodCategories),
+                insertSeriesCategories(data.seriesCategories),
+                insertChannels(data.live),
+              ]);
+              
+              console.log('✅ Priority data saved (server + categories + channels)');
+              
+              // VOD/Series with chunking (sequential to avoid DB lock)
+              await insertVODItemsChunked(data.vod);
+              await insertSeriesItemsChunked(data.series);
+              
+              console.log('✅ Background save complete');
+              localStorage.setItem('ninja_save_status', 'complete');
+            } catch (err) {
+              console.error('❌ Background save failed:', err);
+              localStorage.setItem('ninja_save_status', 'incomplete');
+              throw err;
+            }
+          })();
+        }
 
         setTimeout(() => onNavigateToPlayer({
           id: Date.now(), 
@@ -356,6 +401,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
           username: form.username, 
           password: form.password,
           data,
+          service,  // ← PASS THE SERVICE!
           userInfo: auth.user, 
           expirationDate: auth.expirationDate, 
           addedAt: new Date().toISOString(),
@@ -373,6 +419,47 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
           const { service, auth, server: connectedServer } = await tryConnect(parsed.server, parsed.username, parsed.password);
           
           const data = await fetchXtreamData(service, auth, connectedServer);
+          
+          // Store expected totals for integrity check
+          localStorage.setItem('ninja_expected_live', data.live.length);
+          localStorage.setItem('ninja_expected_vod', data.vod.length);
+          localStorage.setItem('ninja_expected_series', data.series.length);
+          
+          // Launch background save with tracking
+          if (window.db) {
+            window.__ninjaSavePromise = (async () => {
+              try {
+                console.log('💾 Starting background save...');
+                
+                const { saveServer } = await import('../database/NinjaLocalDB');
+                await saveServer({ 
+                  name: form.name || 'My Server', 
+                  url: connectedServer, 
+                  username: parsed.username, 
+                  password: parsed.password 
+                });
+                
+                await Promise.all([
+                  insertLiveCategories(data.liveCategories),
+                  insertVODCategories(data.vodCategories),
+                  insertSeriesCategories(data.seriesCategories),
+                  insertChannels(data.live),
+                ]);
+                
+                console.log('✅ Priority data saved');
+                
+                await insertVODItemsChunked(data.vod);
+                await insertSeriesItemsChunked(data.series);
+                
+                console.log('✅ Background save complete');
+                localStorage.setItem('ninja_save_status', 'complete');
+              } catch (err) {
+                console.error('❌ Background save failed:', err);
+                localStorage.setItem('ninja_save_status', 'incomplete');
+                throw err;
+              }
+            })();
+          }
 
           setTimeout(() => onNavigateToPlayer({
             id: Date.now(), 
@@ -382,6 +469,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
             username: parsed.username, 
             password: parsed.password,
             data,
+            service,  // ← PASS THE SERVICE!
             userInfo: auth.user, 
             expirationDate: auth.expirationDate, 
             addedAt: new Date().toISOString(),
@@ -404,6 +492,47 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
           const { service, auth, server: connectedServer } = await tryConnect(parsed.server, parsed.username, parsed.password);
           
           const data = await fetchXtreamData(service, auth, connectedServer);
+          
+          // Store expected totals for integrity check
+          localStorage.setItem('ninja_expected_live', data.live.length);
+          localStorage.setItem('ninja_expected_vod', data.vod.length);
+          localStorage.setItem('ninja_expected_series', data.series.length);
+          
+          // Launch background save with tracking
+          if (window.db) {
+            window.__ninjaSavePromise = (async () => {
+              try {
+                console.log('💾 Starting background save...');
+                
+                const { saveServer } = await import('../database/NinjaLocalDB');
+                await saveServer({ 
+                  name: form.name || form.file.name, 
+                  url: connectedServer, 
+                  username: parsed.username, 
+                  password: parsed.password 
+                });
+                
+                await Promise.all([
+                  insertLiveCategories(data.liveCategories),
+                  insertVODCategories(data.vodCategories),
+                  insertSeriesCategories(data.seriesCategories),
+                  insertChannels(data.live),
+                ]);
+                
+                console.log('✅ Priority data saved');
+                
+                await insertVODItemsChunked(data.vod);
+                await insertSeriesItemsChunked(data.series);
+                
+                console.log('✅ Background save complete');
+                localStorage.setItem('ninja_save_status', 'complete');
+              } catch (err) {
+                console.error('❌ Background save failed:', err);
+                localStorage.setItem('ninja_save_status', 'incomplete');
+                throw err;
+              }
+            })();
+          }
 
           setTimeout(() => onNavigateToPlayer({
             id: Date.now(), 
@@ -413,6 +542,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
             username: parsed.username, 
             password: parsed.password,
             data,
+            service,  // ← PASS THE SERVICE!
             userInfo: auth.user, 
             expirationDate: auth.expirationDate, 
             addedAt: new Date().toISOString(),

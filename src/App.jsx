@@ -569,6 +569,10 @@ const AppContent = () => {
 
   const handleNavigateToPlayer = useCallback((data) => {
     setPlaylist(data);
+    if (data.service) {
+      setXtreamService(data.service);
+      console.log('✅ XtreamService stored from ServerForm');
+    }
     setCurrentPage('player');
   }, [setPlaylist]);
 

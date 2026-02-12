@@ -151,6 +151,52 @@ export const insertVODItems = async (items) => {
   }
 };
 
+// Insert VOD Items with Chunking (for large datasets 100k+)
+export const insertVODItemsChunked = async (items, chunkSize = 500) => {
+  if (!items?.length) return 0;
+  const db = getDatabase();
+  let totalInserted = 0;
+
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize);
+    
+    try {
+      await db.execute('BEGIN TRANSACTION');
+      
+      for (const item of chunk) {
+        await db.execute(
+          `INSERT OR REPLACE INTO vod_items (stream_id, name, category_id, category_name, logo, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            item.stream_id || item.id,
+            item.name || '',
+            item.categoryId || item.category_id || null,
+            item.category || item.category_name || null,
+            item.logo || item.stream_icon || null,
+            item.rating || null,
+            item.year || null,
+            item.genre || null
+          ]
+        );
+      }
+      
+      await db.execute('COMMIT');
+      totalInserted += chunk.length;
+      
+      // Progress logging every 5000 items
+      if (i > 0 && i % 5000 === 0) {
+        console.log(`💾 VOD Progress: ${i}/${items.length}`);
+      }
+    } catch (err) {
+      await db.execute('ROLLBACK');
+      console.error(`❌ VOD Chunk failed at ${i}:`, err);
+      // Continue with next chunk instead of throwing
+    }
+  }
+  
+  console.log(`✅ ${totalInserted}/${items.length} VOD items inserted (chunked)`);
+  return totalInserted;
+};
+
 // Insert Series Items (bulk)
 export const insertSeriesItems = async (items) => {
   if (!items?.length) return 0;
@@ -181,6 +227,52 @@ export const insertSeriesItems = async (items) => {
     console.error('❌ insertSeriesItems failed:', err);
     throw err;
   }
+};
+
+// Insert Series Items with Chunking (for large datasets 40k+)
+export const insertSeriesItemsChunked = async (items, chunkSize = 500) => {
+  if (!items?.length) return 0;
+  const db = getDatabase();
+  let totalInserted = 0;
+
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize);
+    
+    try {
+      await db.execute('BEGIN TRANSACTION');
+      
+      for (const item of chunk) {
+        await db.execute(
+          `INSERT OR REPLACE INTO series_items (series_id, name, category_id, category_name, cover, rating, year, genre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            item.series_id || item.id,
+            item.name || '',
+            item.categoryId || item.category_id || null,
+            item.category || item.category_name || null,
+            item.cover || item.cover_big || null,
+            item.rating || null,
+            item.year || null,
+            item.genre || null
+          ]
+        );
+      }
+      
+      await db.execute('COMMIT');
+      totalInserted += chunk.length;
+      
+      // Progress logging every 5000 items
+      if (i > 0 && i % 5000 === 0) {
+        console.log(`💾 Series Progress: ${i}/${items.length}`);
+      }
+    } catch (err) {
+      await db.execute('ROLLBACK');
+      console.error(`❌ Series Chunk failed at ${i}:`, err);
+      // Continue with next chunk instead of throwing
+    }
+  }
+  
+  console.log(`✅ ${totalInserted}/${items.length} Series items inserted (chunked)`);
+  return totalInserted;
 };
 
 // Clean expired programs (end_time < now)
