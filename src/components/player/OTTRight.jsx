@@ -1,17 +1,16 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
-import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked } from '../../database/ProgramQueries';
-// TODO: getLiveChannelsPaginated, getLiveChannelsCount not implemented yet
+import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, searchChannelsByName, searchProgramsByTitle, getProgramsForChannel } from '../../database/ProgramQueries';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
-// OTT RIGHT - Movies & Series Gallery (WINDOWING for 185K items)
+// OTT RIGHT - Live Search/Detail + Movies & Series Gallery
 // 
-// - Windowed grid (react-window FixedSizeGrid + InfiniteLoader)
-// - Movies: poster grid → detail with TMDB info, trailer, audio/subtitles
-// - Series: poster grid → detail with seasons tabs, episodes list
-// - Pagination: Load 100 items at a time (no more 10s lag!)
+// LIVE: Search bar (channels + EPG programs) with ALL/NOW/NEXT filters
+//       Channel detail view with full day EPG schedule
+// MOVIES: Windowed poster grid → detail with TMDB info, audio/subtitles
+// SERIES: Windowed poster grid → detail with seasons tabs, episodes list
 // ============================================================================
 
 // Format duration seconds → "1h35"
@@ -22,6 +21,13 @@ const formatDuration = (secs) => {
   const m = Math.floor((s % 3600) / 60);
   if (h > 0) return `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
   return `${m}min`;
+};
+
+// Format Unix timestamp → "14:30"
+const formatEpgTime = (ts) => {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 };
 
 // Tag pill component
@@ -48,8 +54,21 @@ const OTTRight = ({
   onToggleFavorite,
   onClose,
   visible = false,
+  // Live mode props
+  currentChannel = null,      // Channel selected from OTTLeft → show detail
+  onShowInFolder,             // Navigate OTTLeft to channel's folder
+  onPlayChannel,              // Play a channel from search results
 }, ref) => {
   const type = sidebarTab; // 'live', 'movies', or 'series'
+  
+  // ========== LIVE SEARCH STATES ==========
+  const [liveSearchQuery, setLiveSearchQuery] = useState('');
+  const [liveSearchFilter, setLiveSearchFilter] = useState('ALL'); // ALL | NOW | NEXT
+  const [liveSearchResults, setLiveSearchResults] = useState({ channels: [], programs: [] });
+  const [liveSearching, setLiveSearching] = useState(false);
+  const [showChannelDetail, setShowChannelDetail] = useState(false); // true = show detail, false = show search
+  const [channelDayPrograms, setChannelDayPrograms] = useState([]); // Full day EPG for selected channel
+  const [loadingDayEpg, setLoadingDayEpg] = useState(false);
   
   // ========== WINDOWING STATES (Infinite Loader) ==========
   const [items, setItems] = useState([]);           // Paginated items
@@ -286,6 +305,98 @@ const OTTRight = ({
     });
   }, [selectedItem, type, xtreamService]);
 
+  // ========== LIVE: When currentChannel changes from OTTLeft, show detail ==========
+  useEffect(() => {
+    if (type !== 'live') return;
+    if (currentChannel) {
+      setShowChannelDetail(true);
+      setChannelDayPrograms([]);
+      // Load full day EPG from SQLite first, then fallback to API
+      const streamId = currentChannel.stream_id || currentChannel.id;
+      if (!streamId) return;
+      setLoadingDayEpg(true);
+      getProgramsForChannel(streamId, false).then(programs => {
+        if (programs.length > 0) {
+          setChannelDayPrograms(programs);
+          setLoadingDayEpg(false);
+        } else if (xtreamService) {
+          // Fallback: fetch from API with high limit
+          xtreamService.getShortEPG(streamId, 20).then(epgList => {
+            const now = Math.floor(Date.now() / 1000);
+            const mapped = (epgList || []).map(p => {
+              const st = p.startTimestamp || 0;
+              const en = p.stopTimestamp || 0;
+              const isLive = (st <= now && en > now) ? 1 : 0;
+              return {
+                title: p.title,
+                description: p.description || '',
+                start_time: st,
+                end_time: en,
+                start_formatted: p.start || '',
+                end_formatted: p.end || '',
+                is_currently_live: isLive,
+                progress: isLive && en > st ? Math.min(100, Math.round(((now - st) / (en - st)) * 100)) : 0,
+              };
+            });
+            setChannelDayPrograms(mapped);
+          }).catch(() => setChannelDayPrograms([])).finally(() => setLoadingDayEpg(false));
+        } else {
+          setLoadingDayEpg(false);
+        }
+      }).catch(() => { setChannelDayPrograms([]); setLoadingDayEpg(false); });
+    } else {
+      setShowChannelDetail(false);
+    }
+  }, [currentChannel, type, xtreamService]);
+
+  // ========== LIVE: Debounced search (channels + programs) ==========
+  useEffect(() => {
+    if (type !== 'live' || showChannelDetail) return;
+    if (!liveSearchQuery.trim()) {
+      setLiveSearchResults({ channels: [], programs: [] });
+      return;
+    }
+    const debounce = setTimeout(async () => {
+      setLiveSearching(true);
+      try {
+        const q = liveSearchQuery.trim();
+        const now = Math.floor(Date.now() / 1000);
+        
+        // Search channels by name (always)
+        const channels = await searchChannelsByName(q, [], true, 50);
+        
+        // Search programs based on filter
+        let programs = [];
+        if (liveSearchFilter === 'ALL') {
+          programs = await searchProgramsByTitle(q, [], true, true, 50);
+        } else if (liveSearchFilter === 'NOW') {
+          const allProgs = await searchProgramsByTitle(q, [], true, true, 100);
+          programs = allProgs.filter(p => p.is_currently_live === 1);
+        } else if (liveSearchFilter === 'NEXT') {
+          const allProgs = await searchProgramsByTitle(q, [], true, false, 100);
+          programs = allProgs.filter(p => p.start_time > now).slice(0, 50);
+        }
+        
+        setLiveSearchResults({ channels, programs });
+      } catch (err) {
+        console.error('Live search error:', err);
+        setLiveSearchResults({ channels: [], programs: [] });
+      } finally {
+        setLiveSearching(false);
+      }
+    }, 250);
+    return () => clearTimeout(debounce);
+  }, [liveSearchQuery, liveSearchFilter, type, showChannelDetail]);
+
+  // Reset live search when switching tabs
+  useEffect(() => {
+    if (type !== 'live') {
+      setLiveSearchQuery('');
+      setLiveSearchResults({ channels: [], programs: [] });
+      setShowChannelDetail(false);
+    }
+  }, [type]);
+
   const handleBack = useCallback(() => {
     setSelectedItem(null);
     setDetailData(null);
@@ -318,51 +429,331 @@ const OTTRight = ({
     return null;
   }
 
-  // ========== LIVE DETAIL VIEW ==========
-  if (selectedItem && type === 'live') {
-    const channelId = selectedItem.stream_id || selectedItem.id;
+  // ========== LIVE: SEARCH VIEW + CHANNEL DETAIL VIEW ==========
+  if (type === 'live') {
+    const now = Math.floor(Date.now() / 1000);
 
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: 'transparent' }}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff' }}>{selectedItem.name}</div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-              <span style={{ fontSize: '9px', color: '#888', fontFamily: 'monospace' }}>#{selectedItem.num || '—'}</span>
-              <span style={{ fontSize: '9px', color: '#6225ff', fontWeight: 700 }}>ID: {channelId}</span>
-              {selectedItem.epgChannelId && <span style={{ fontSize: '9px', color: '#888' }}>EPG: {selectedItem.epgChannelId}</span>}
+    // ===== CHANNEL DETAIL VIEW (when channel selected from OTTLeft) =====
+    if (showChannelDetail && currentChannel) {
+      const ch = currentChannel;
+      const channelId = ch.stream_id || ch.id;
+      const nowProg = channelDayPrograms.find(p => p.is_currently_live === 1);
+      const nextProg = channelDayPrograms.find(p => p.start_time > now);
+      const upcomingProgs = channelDayPrograms.filter(p => p.start_time > now);
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'transparent' }}>
+          {/* Back arrow + header */}
+          <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px 8px', flexShrink: 0, gap: '10px' }}>
+            <button 
+              onClick={() => setShowChannelDetail(false)} 
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, color: '#fff', fontSize: '14px' }}
+            >
+              ←
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px' }}>
+                <span style={{ fontSize: '8px', color: '#888', fontFamily: 'monospace' }}>#{ch.num || '—'}</span>
+                <span style={{ fontSize: '8px', color: '#6225ff', fontWeight: 700 }}>ID: {channelId}</span>
+                {ch.epgChannelId && <span style={{ fontSize: '8px', color: '#555' }}>EPG: {ch.epgChannelId}</span>}
+              </div>
+            </div>
+            <button 
+              onClick={() => { onPlayChannel?.(ch); }}
+              style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+            >
+              <span style={{ color: '#fff', fontSize: '13px', marginLeft: '2px' }}>▶</span>
+            </button>
+          </div>
+
+          {/* Channel info row */}
+          <div style={{ padding: '0 16px 10px', display: 'flex', gap: '12px', flexShrink: 0 }}>
+            {ch.logo && (
+              <img src={ch.logo} alt="" style={{ width: '80px', height: '45px', objectFit: 'contain', borderRadius: '6px', background: 'rgba(255,255,255,0.04)', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+            )}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center' }}>
+              {ch.category && <div style={{ fontSize: '9px', color: '#666' }}>📁 {ch.category || ch.category_name}</div>}
+              {ch.tvArchive ? <div style={{ fontSize: '9px', color: '#888' }}>📼 Catch-up: {ch.tvArchiveDuration || '?'} days</div> : null}
+              <button 
+                onClick={() => onShowInFolder?.(ch.categoryId || ch.category_id, channelId)}
+                style={{ background: 'rgba(98,37,255,0.12)', border: '1px solid rgba(98,37,255,0.3)', borderRadius: '4px', padding: '3px 8px', fontSize: '8px', color: '#a78bfa', fontWeight: 700, cursor: 'pointer', alignSelf: 'flex-start', marginTop: '2px' }}
+              >
+                SHOW IN FOLDER
+              </button>
             </div>
           </div>
-          <button onClick={handlePlay} style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-            <span style={{ color: '#fff', fontSize: '14px', marginLeft: '2px' }}>▶</span>
-          </button>
-          <button onClick={handleBack} style={{ background: 'none', border: 'none', color: '#6225ff', fontSize: '18px', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>✕</button>
-        </div>
 
-        <div style={{ padding: '0 20px 15px', display: 'flex', gap: '16px' }}>
-          {selectedItem.logo && (
-            <img src={selectedItem.logo} alt="" style={{ width: '120px', height: '60px', objectFit: 'contain', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
-          )}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {selectedItem.category && <div style={{ fontSize: '9px', color: '#666' }}>📁 {selectedItem.category}</div>}
-            {selectedItem.tvArchive && <div style={{ fontSize: '9px', color: '#888' }}>📼 Catch-up: {selectedItem.tvArchiveDuration || '?'} days</div>}
-          </div>
-        </div>
-
-        {/* 4 PROCHAINS PROGRAMMES EPG */}
-        {epgPrograms.length > 0 && (
-          <div style={{ padding: '0 20px 15px' }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: '#888', marginBottom: '8px' }}>PROGRAMMES</div>
-            {epgPrograms.map((prog, i) => (
-              <div key={i} style={{ padding: '8px 0', borderBottom: i < epgPrograms.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                <div style={{ fontSize: '11px', color: '#fff', marginBottom: '2px' }}>{prog.title}</div>
-                <div style={{ fontSize: '9px', color: '#888' }}>
-                  {prog.start} - {prog.end}
+          {/* NOW playing */}
+          {nowProg && (
+            <div style={{ padding: '0 16px 8px', flexShrink: 0 }}>
+              <div style={{ background: 'rgba(98,37,255,0.12)', border: '1px solid rgba(98,37,255,0.25)', borderRadius: '8px', padding: '10px 12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '8px', fontWeight: 800, color: '#8b5cf6', letterSpacing: '1px' }}>NOW</span>
+                  <span style={{ fontSize: '8px', color: '#666' }}>
+                    {formatEpgTime(nowProg.start_time)} — {formatEpgTime(nowProg.end_time)}
+                  </span>
+                </div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff', marginBottom: '6px' }}>{nowProg.title}</div>
+                {nowProg.description && <div style={{ fontSize: '9px', color: '#888', lineHeight: '1.4', marginBottom: '6px' }}>{nowProg.description.substring(0, 200)}</div>}
+                {/* Progress bar */}
+                <div style={{ height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${nowProg.progress || 0}%`, background: 'linear-gradient(90deg, #6225ff, #8b5cf6)', borderRadius: '2px', transition: 'width 0.3s' }} />
                 </div>
               </div>
-            ))}
+            </div>
+          )}
+
+          {/* NEXT */}
+          {nextProg && (
+            <div style={{ padding: '0 16px 8px', flexShrink: 0 }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '8px 12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                  <span style={{ fontSize: '8px', fontWeight: 800, color: '#555', letterSpacing: '1px' }}>NEXT</span>
+                  <span style={{ fontSize: '8px', color: '#555' }}>
+                    {formatEpgTime(nextProg.start_time)} — {formatEpgTime(nextProg.end_time)}
+                  </span>
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#ccc' }}>{nextProg.title}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Full day schedule header */}
+          <div style={{ padding: '4px 16px 6px', flexShrink: 0 }}>
+            <div style={{ fontSize: '9px', fontWeight: 800, color: '#555', letterSpacing: '1px' }}>
+              SCHEDULE {loadingDayEpg && '...'}
+            </div>
           </div>
-        )}
+
+          {/* Full day schedule list */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
+            {channelDayPrograms.length === 0 && !loadingDayEpg && (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: '#444', fontSize: '10px' }}>No EPG data available</div>
+            )}
+            {channelDayPrograms.map((prog, i) => {
+              const isNow = prog.is_currently_live === 1;
+              const isPast = prog.end_time && prog.end_time < now;
+              return (
+                <div key={i} style={{ 
+                  padding: '7px 0', 
+                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  opacity: isPast ? 0.4 : 1,
+                }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '9px', color: isNow ? '#8b5cf6' : '#555', fontWeight: 700, fontFamily: 'monospace', minWidth: '38px', flexShrink: 0 }}>
+                      {formatEpgTime(prog.start_time)}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '10px', fontWeight: isNow ? 700 : 500, color: isNow ? '#fff' : '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {isNow && <span style={{ color: '#8b5cf6', marginRight: '4px' }}>●</span>}
+                        {prog.title}
+                      </div>
+                      {prog.description && isNow && (
+                        <div style={{ fontSize: '8px', color: '#666', marginTop: '2px', lineHeight: '1.3' }}>{prog.description.substring(0, 120)}</div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '8px', color: '#444', flexShrink: 0 }}>{formatEpgTime(prog.end_time)}</span>
+                  </div>
+                  {isNow && prog.progress > 0 && (
+                    <div style={{ height: '2px', background: 'rgba(255,255,255,0.06)', borderRadius: '1px', marginTop: '4px', marginLeft: '46px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${prog.progress}%`, background: '#6225ff', borderRadius: '1px' }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // ===== SEARCH VIEW (default live view — no channel selected) =====
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'transparent' }}>
+        {/* Search bar */}
+        <div style={{ padding: '12px 16px 8px', flexShrink: 0 }}>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#555', fontSize: '12px', pointerEvents: 'none' }}>🔍</span>
+            <input
+              type="text"
+              value={liveSearchQuery}
+              onChange={(e) => setLiveSearchQuery(e.target.value)}
+              placeholder="Search channels & programs..."
+              style={{
+                width: '100%', padding: '8px 10px 8px 32px', 
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '8px', color: '#fff', fontSize: '11px', outline: 'none',
+                fontWeight: 500,
+              }}
+              onFocus={(e) => { e.target.style.borderColor = 'rgba(98,37,255,0.4)'; }}
+              onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+            />
+            {liveSearchQuery && (
+              <button 
+                onClick={() => setLiveSearchQuery('')} 
+                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#555', fontSize: '14px', cursor: 'pointer', padding: '0 4px' }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter pills: ALL | NOW | NEXT */}
+        <div style={{ display: 'flex', gap: '6px', padding: '0 16px 10px', flexShrink: 0 }}>
+          {['ALL', 'NOW', 'NEXT'].map(f => (
+            <button
+              key={f}
+              onClick={() => setLiveSearchFilter(f)}
+              style={{
+                flex: 1, padding: '5px 0', borderRadius: '6px', fontSize: '9px', fontWeight: 800,
+                letterSpacing: '0.5px', cursor: 'pointer', transition: 'all 0.2s',
+                background: liveSearchFilter === f ? 'rgba(98,37,255,0.25)' : 'rgba(255,255,255,0.03)',
+                border: liveSearchFilter === f ? '1px solid rgba(98,37,255,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                color: liveSearchFilter === f ? '#fff' : '#666',
+              }}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+
+        {/* Results */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
+          {liveSearching && (
+            <div style={{ padding: '15px 0', textAlign: 'center', color: '#6225ff', fontSize: '10px', fontWeight: 700 }}>Searching...</div>
+          )}
+
+          {!liveSearchQuery.trim() && !liveSearching && (
+            <div style={{ padding: '30px 0', textAlign: 'center', color: '#444', fontSize: '10px' }}>
+              Type to search channels & programs
+            </div>
+          )}
+
+          {/* Channel results */}
+          {liveSearchResults.channels.length > 0 && (
+            <>
+              <div style={{ fontSize: '8px', fontWeight: 800, color: '#555', letterSpacing: '1px', padding: '4px 0 6px' }}>
+                CHANNELS ({liveSearchResults.channels.length})
+              </div>
+              {liveSearchResults.channels.map((ch, i) => (
+                <div
+                  key={`ch-${ch.stream_id || i}`}
+                  onClick={() => {
+                    // Play + select in OTTLeft
+                    const streamId = ch.stream_id || ch.id;
+                    const playItem = {
+                      ...ch,
+                      id: streamId,
+                      stream_id: streamId,
+                      name: ch.name,
+                      logo: ch.logo,
+                      streamUrl: xtreamService ? `${xtreamService.server}/live/${xtreamService.username}/${xtreamService.password}/${streamId}.m3u8` : null,
+                      type: 'live',
+                    };
+                    onPlayChannel?.(playItem);
+                  }}
+                  style={{
+                    display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 0',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer',
+                  }}
+                >
+                  {ch.logo ? (
+                    <img src={ch.logo} alt="" style={{ width: '36px', height: '24px', objectFit: 'contain', borderRadius: '3px', background: 'rgba(255,255,255,0.04)', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                  ) : (
+                    <div style={{ width: '36px', height: '24px', background: 'rgba(255,255,255,0.04)', borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>📺</div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</div>
+                    {ch.category_name && <div style={{ fontSize: '8px', color: '#555' }}>{ch.category_name}</div>}
+                  </div>
+                  {/* Show in folder button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShowInFolder?.(ch.category_id, ch.stream_id);
+                    }}
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '3px', padding: '2px 6px', fontSize: '7px', color: '#666', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    📁
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Program results */}
+          {liveSearchResults.programs.length > 0 && (
+            <>
+              <div style={{ fontSize: '8px', fontWeight: 800, color: '#555', letterSpacing: '1px', padding: '8px 0 6px' }}>
+                PROGRAMS ({liveSearchResults.programs.length})
+              </div>
+              {liveSearchResults.programs.map((prog, i) => (
+                <div
+                  key={`prog-${prog.id || i}`}
+                  onClick={() => {
+                    // Play the channel that has this program
+                    const streamId = prog.stream_id;
+                    const playItem = {
+                      id: streamId,
+                      stream_id: streamId,
+                      name: prog.channel_name || `Channel ${streamId}`,
+                      logo: prog.channel_logo,
+                      streamUrl: xtreamService ? `${xtreamService.server}/live/${xtreamService.username}/${xtreamService.password}/${streamId}.m3u8` : null,
+                      type: 'live',
+                    };
+                    onPlayChannel?.(playItem);
+                  }}
+                  style={{
+                    padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    {prog.channel_logo ? (
+                      <img src={prog.channel_logo} alt="" style={{ width: '30px', height: '20px', objectFit: 'contain', borderRadius: '3px', background: 'rgba(255,255,255,0.04)', flexShrink: 0, marginTop: '1px' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <div style={{ width: '30px', height: '20px', background: 'rgba(255,255,255,0.04)', borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', flexShrink: 0 }}>📺</div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '10px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prog.title}</div>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                        <span style={{ fontSize: '8px', color: '#888' }}>{prog.channel_name}</span>
+                        <span style={{ fontSize: '8px', color: '#555' }}>
+                          {formatEpgTime(prog.start_time)} — {formatEpgTime(prog.end_time)}
+                        </span>
+                        {prog.is_currently_live === 1 && (
+                          <span style={{ fontSize: '7px', fontWeight: 800, color: '#8b5cf6', background: 'rgba(98,37,255,0.15)', padding: '1px 4px', borderRadius: '2px' }}>LIVE</span>
+                        )}
+                      </div>
+                      {/* Progress bar for live programs */}
+                      {prog.is_currently_live === 1 && prog.progress > 0 && (
+                        <div style={{ height: '2px', background: 'rgba(255,255,255,0.06)', borderRadius: '1px', marginTop: '4px', overflow: 'hidden', maxWidth: '120px' }}>
+                          <div style={{ height: '100%', width: `${prog.progress}%`, background: '#6225ff', borderRadius: '1px' }} />
+                        </div>
+                      )}
+                    </div>
+                    {/* Show in folder */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShowInFolder?.(prog.category_id, prog.stream_id);
+                      }}
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '3px', padding: '2px 6px', fontSize: '7px', color: '#666', fontWeight: 700, cursor: 'pointer', flexShrink: 0, marginTop: '2px' }}
+                    >
+                      📁
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* No results */}
+          {liveSearchQuery.trim() && !liveSearching && liveSearchResults.channels.length === 0 && liveSearchResults.programs.length === 0 && (
+            <div style={{ padding: '20px 0', textAlign: 'center', color: '#444', fontSize: '10px' }}>No results found</div>
+          )}
+        </div>
       </div>
     );
   }

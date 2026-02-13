@@ -586,8 +586,8 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
   return (
     <div 
       ref={containerRef}
-      className="fixed inset-0 flex overflow-auto relative" 
-      style={{ background: THEME.colors.bg }}
+      className="fixed inset-0 flex overflow-y-auto relative z-50" 
+      style={{ background: THEME.colors.bg, minHeight: '100vh' }}
     >
       {/* Particles */}
       {particleTheme !== 'off' && (
@@ -597,7 +597,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
       )}
       
       {/* Main Content - Centered */}
-      <div className="relative z-10 flex w-full h-full items-center justify-center px-6" style={{ paddingTop: '15px' }}>
+      <div className="relative z-10 flex w-full min-h-full items-center justify-center px-6 py-6" style={{ paddingTop: '15px' }}>
         <div style={{ width: '500px', maxHeight: 'none', overflowY: 'visible' }}>
           
           {/* Error Banner */}

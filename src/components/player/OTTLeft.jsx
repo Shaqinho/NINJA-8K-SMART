@@ -830,9 +830,36 @@ const OTTLeft = forwardRef(({
         focusTimerRef.current = setTimeout(() => setFocusedStreamId(null), 2000);
       }
     },
+    // Navigate to a specific folder and optionally scroll to a channel
+    navigateToFolder: (categoryId, streamId) => {
+      const cat = activeCategories.find(c => String(c.category_id) === String(categoryId));
+      if (cat) {
+        setCurrentCategory(cat);
+        setShowItems(true);
+        setSearchQuery('');
+        setSearchOpen(false);
+        // Scroll to channel after items load (slight delay for render)
+        if (streamId) {
+          setTimeout(() => {
+            const sid = String(streamId);
+            // Re-read filteredItems after category change (use activeItems directly)
+            const items = String(categoryId) === '__all__'
+              ? activeItems
+              : activeItems.filter(item => String(item.categoryId) === String(categoryId));
+            const index = items.findIndex(item => String(item.stream_id || item.id) === sid);
+            if (index !== -1 && listRef.current) {
+              listRef.current.scrollToItem(index, 'center');
+              setFocusedStreamId(sid);
+              clearTimeout(focusTimerRef.current);
+              focusTimerRef.current = setTimeout(() => setFocusedStreamId(null), 2000);
+            }
+          }, 300);
+        }
+      }
+    },
     getActiveTab: () => activeTab,
     getFilteredItems: () => filteredItems,
-  }), [filteredItems, activeTab]);
+  }), [filteredItems, activeTab, activeCategories, activeItems]);
 
   // Trigger EPG load when entering a category
   useEffect(() => {

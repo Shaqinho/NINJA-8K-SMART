@@ -452,6 +452,19 @@ const Player = memo(({
             onToggleFavorite={(id) => console.log('Toggle favorite:', id)}
             onClose={() => onOttSidebarChange(false)}
             visible={ottSidebarOpen}
+            // Live mode props
+            currentChannel={sidebarTab === 'live' ? channel : null}
+            onShowInFolder={(categoryId, streamId) => {
+              sidebarRef.current?.navigateToFolder(categoryId, streamId);
+            }}
+            onPlayChannel={(ch) => {
+              onChannelChange?.(ch);
+              // Also scroll OTTLeft to show this channel
+              const sid = ch.stream_id || ch.id;
+              if (sid) {
+                setTimeout(() => sidebarRef.current?.scrollToChannel(sid), 200);
+              }
+            }}
             onRequestKeyboard={(query) => {
               setKeyboardActive('right');
               setKeyboardSearchQuery(query || '');
