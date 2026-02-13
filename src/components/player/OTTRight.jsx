@@ -8,7 +8,7 @@ import { getLangName } from '../../services/ProbeService';
 // OTT RIGHT - Live Search/Detail + Movies & Series Gallery
 // 
 // LIVE: Search bar (channels + EPG programs) with ALL/NOW/NEXT filters
-//       Channel detail view with full day EPG schedule
+//       Channel detail view with EPG (4 quick + SHOW MORE for full day)
 // MOVIES: Windowed poster grid → detail with TMDB info, audio/subtitles
 // SERIES: Windowed poster grid → detail with seasons tabs, episodes list
 // ============================================================================
@@ -66,9 +66,10 @@ const OTTRight = ({
   const [liveSearchFilter, setLiveSearchFilter] = useState('ALL'); // ALL | NOW | NEXT
   const [liveSearchResults, setLiveSearchResults] = useState({ channels: [], programs: [] });
   const [liveSearching, setLiveSearching] = useState(false);
-  const [showChannelDetail, setShowChannelDetail] = useState(false); // true = show detail, false = show search
-  const [channelDayPrograms, setChannelDayPrograms] = useState([]); // Full day EPG for selected channel
+  const [showChannelDetail, setShowChannelDetail] = useState(false);
+  const [channelDayPrograms, setChannelDayPrograms] = useState([]);
   const [loadingDayEpg, setLoadingDayEpg] = useState(false);
+  const [showFullSchedule, setShowFullSchedule] = useState(false);
   
   // ========== WINDOWING STATES (Infinite Loader) ==========
   const [items, setItems] = useState([]);           // Paginated items
@@ -311,43 +312,52 @@ const OTTRight = ({
     if (currentChannel) {
       setShowChannelDetail(true);
       setChannelDayPrograms([]);
-      // Load full day EPG from SQLite first, then fallback to API
-      const streamId = currentChannel.stream_id || currentChannel.id;
-      if (!streamId) return;
-      setLoadingDayEpg(true);
-      getProgramsForChannel(streamId, false).then(programs => {
-        if (programs.length > 0) {
-          setChannelDayPrograms(programs);
-          setLoadingDayEpg(false);
-        } else if (xtreamService) {
-          // Fallback: fetch from API with high limit
-          xtreamService.getShortEPG(streamId, 20).then(epgList => {
-            const now = Math.floor(Date.now() / 1000);
-            const mapped = (epgList || []).map(p => {
-              const st = p.startTimestamp || 0;
-              const en = p.stopTimestamp || 0;
-              const isLive = (st <= now && en > now) ? 1 : 0;
-              return {
-                title: p.title,
-                description: p.description || '',
-                start_time: st,
-                end_time: en,
-                start_formatted: p.start || '',
-                end_formatted: p.end || '',
-                is_currently_live: isLive,
-                progress: isLive && en > st ? Math.min(100, Math.round(((now - st) / (en - st)) * 100)) : 0,
-              };
-            });
-            setChannelDayPrograms(mapped);
-          }).catch(() => setChannelDayPrograms([])).finally(() => setLoadingDayEpg(false));
-        } else {
-          setLoadingDayEpg(false);
-        }
-      }).catch(() => { setChannelDayPrograms([]); setLoadingDayEpg(false); });
+      setShowFullSchedule(false);
+      // Load 4 quick programs via existing epgPrograms mechanism (already handled above)
+      // Full day only loads on SHOW MORE click
     } else {
       setShowChannelDetail(false);
     }
-  }, [currentChannel, type, xtreamService]);
+  }, [currentChannel, type]);
+
+  // ========== LIVE: Load full day EPG (triggered by SHOW MORE) ==========
+  const loadFullDayEpg = useCallback(async () => {
+    if (!currentChannel) return;
+    const streamId = currentChannel.stream_id || currentChannel.id;
+    if (!streamId) return;
+    setLoadingDayEpg(true);
+    try {
+      // SQLite first
+      const programs = await getProgramsForChannel(streamId, false);
+      if (programs.length > 0) {
+        setChannelDayPrograms(programs);
+      } else if (xtreamService) {
+        // Fallback: API with high limit
+        const epgList = await xtreamService.getShortEPG(streamId, 20);
+        const now = Math.floor(Date.now() / 1000);
+        const mapped = (epgList || []).map(p => {
+          const st = p.startTimestamp || 0;
+          const en = p.stopTimestamp || 0;
+          const isLive = (st <= now && en > now) ? 1 : 0;
+          return {
+            title: p.title,
+            description: p.description || '',
+            start_time: st,
+            end_time: en,
+            is_currently_live: isLive,
+            progress: isLive && en > st ? Math.min(100, Math.round(((now - st) / (en - st)) * 100)) : 0,
+          };
+        });
+        setChannelDayPrograms(mapped);
+      }
+    } catch (err) {
+      console.warn('Full day EPG load failed:', err);
+      setChannelDayPrograms([]);
+    } finally {
+      setLoadingDayEpg(false);
+      setShowFullSchedule(true);
+    }
+  }, [currentChannel, xtreamService]);
 
   // ========== LIVE: Debounced search (channels + programs) ==========
   useEffect(() => {
@@ -394,6 +404,7 @@ const OTTRight = ({
       setLiveSearchQuery('');
       setLiveSearchResults({ channels: [], programs: [] });
       setShowChannelDetail(false);
+      setShowFullSchedule(false);
     }
   }, [type]);
 
@@ -437,16 +448,13 @@ const OTTRight = ({
     if (showChannelDetail && currentChannel) {
       const ch = currentChannel;
       const channelId = ch.stream_id || ch.id;
-      const nowProg = channelDayPrograms.find(p => p.is_currently_live === 1);
-      const nextProg = channelDayPrograms.find(p => p.start_time > now);
-      const upcomingProgs = channelDayPrograms.filter(p => p.start_time > now);
 
       return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'transparent' }}>
           {/* Back arrow + header */}
           <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px 8px', flexShrink: 0, gap: '10px' }}>
             <button 
-              onClick={() => setShowChannelDetail(false)} 
+              onClick={() => { setShowChannelDetail(false); setShowFullSchedule(false); }} 
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, color: '#fff', fontSize: '14px' }}
             >
               ←
@@ -473,7 +481,7 @@ const OTTRight = ({
               <img src={ch.logo} alt="" style={{ width: '80px', height: '45px', objectFit: 'contain', borderRadius: '6px', background: 'rgba(255,255,255,0.04)', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
             )}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center' }}>
-              {ch.category && <div style={{ fontSize: '9px', color: '#666' }}>📁 {ch.category || ch.category_name}</div>}
+              {(ch.category || ch.category_name) && <div style={{ fontSize: '9px', color: '#666' }}>📁 {ch.category || ch.category_name}</div>}
               {ch.tvArchive ? <div style={{ fontSize: '9px', color: '#888' }}>📼 Catch-up: {ch.tvArchiveDuration || '?'} days</div> : null}
               <button 
                 onClick={() => onShowInFolder?.(ch.categoryId || ch.category_id, channelId)}
@@ -484,85 +492,100 @@ const OTTRight = ({
             </div>
           </div>
 
-          {/* NOW playing */}
-          {nowProg && (
-            <div style={{ padding: '0 16px 8px', flexShrink: 0 }}>
-              <div style={{ background: 'rgba(98,37,255,0.12)', border: '1px solid rgba(98,37,255,0.25)', borderRadius: '8px', padding: '10px 12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '8px', fontWeight: 800, color: '#8b5cf6', letterSpacing: '1px' }}>NOW</span>
-                  <span style={{ fontSize: '8px', color: '#666' }}>
-                    {formatEpgTime(nowProg.start_time)} — {formatEpgTime(nowProg.end_time)}
-                  </span>
-                </div>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff', marginBottom: '6px' }}>{nowProg.title}</div>
-                {nowProg.description && <div style={{ fontSize: '9px', color: '#888', lineHeight: '1.4', marginBottom: '6px' }}>{nowProg.description.substring(0, 200)}</div>}
-                {/* Progress bar */}
-                <div style={{ height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${nowProg.progress || 0}%`, background: 'linear-gradient(90deg, #6225ff, #8b5cf6)', borderRadius: '2px', transition: 'width 0.3s' }} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* NEXT */}
-          {nextProg && (
-            <div style={{ padding: '0 16px 8px', flexShrink: 0 }}>
-              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '8px 12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                  <span style={{ fontSize: '8px', fontWeight: 800, color: '#555', letterSpacing: '1px' }}>NEXT</span>
-                  <span style={{ fontSize: '8px', color: '#555' }}>
-                    {formatEpgTime(nextProg.start_time)} — {formatEpgTime(nextProg.end_time)}
-                  </span>
-                </div>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#ccc' }}>{nextProg.title}</div>
-              </div>
-            </div>
-          )}
-
-          {/* Full day schedule header */}
-          <div style={{ padding: '4px 16px 6px', flexShrink: 0 }}>
-            <div style={{ fontSize: '9px', fontWeight: 800, color: '#555', letterSpacing: '1px' }}>
-              SCHEDULE {loadingDayEpg && '...'}
-            </div>
-          </div>
-
-          {/* Full day schedule list */}
+          {/* Scrollable content area */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
-            {channelDayPrograms.length === 0 && !loadingDayEpg && (
-              <div style={{ padding: '20px 0', textAlign: 'center', color: '#444', fontSize: '10px' }}>No EPG data available</div>
-            )}
-            {channelDayPrograms.map((prog, i) => {
-              const isNow = prog.is_currently_live === 1;
-              const isPast = prog.end_time && prog.end_time < now;
-              return (
-                <div key={i} style={{ 
-                  padding: '7px 0', 
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
-                  opacity: isPast ? 0.4 : 1,
-                }}>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '9px', color: isNow ? '#8b5cf6' : '#555', fontWeight: 700, fontFamily: 'monospace', minWidth: '38px', flexShrink: 0 }}>
-                      {formatEpgTime(prog.start_time)}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '10px', fontWeight: isNow ? 700 : 500, color: isNow ? '#fff' : '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {isNow && <span style={{ color: '#8b5cf6', marginRight: '4px' }}>●</span>}
-                        {prog.title}
+            {/* 4 quick EPG programs (from existing epgPrograms state - fast) */}
+            {!showFullSchedule && epgPrograms.length > 0 && (
+              <div style={{ marginBottom: '8px' }}>
+                {epgPrograms.map((prog, i) => {
+                  const isFirst = i === 0;
+                  return (
+                    <div key={i} style={{ 
+                      padding: isFirst ? '10px 12px' : '8px 12px', 
+                      marginBottom: '4px',
+                      background: isFirst ? 'rgba(98,37,255,0.12)' : 'rgba(255,255,255,0.03)',
+                      border: isFirst ? '1px solid rgba(98,37,255,0.25)' : '1px solid rgba(255,255,255,0.04)',
+                      borderRadius: '8px',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                        <span style={{ fontSize: '8px', fontWeight: 800, color: isFirst ? '#8b5cf6' : '#555', letterSpacing: '1px' }}>
+                          {isFirst ? 'NOW' : i === 1 ? 'NEXT' : ''}
+                        </span>
+                        <span style={{ fontSize: '8px', color: '#555' }}>
+                          {prog.start ? prog.start.split(' ')[1]?.substring(0, 5) : ''} — {prog.end ? prog.end.split(' ')[1]?.substring(0, 5) : ''}
+                        </span>
                       </div>
-                      {prog.description && isNow && (
-                        <div style={{ fontSize: '8px', color: '#666', marginTop: '2px', lineHeight: '1.3' }}>{prog.description.substring(0, 120)}</div>
+                      <div style={{ fontSize: isFirst ? '12px' : '10px', fontWeight: isFirst ? 700 : 600, color: isFirst ? '#fff' : '#ccc' }}>{prog.title}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* SHOW MORE button (loads full day schedule) */}
+            {!showFullSchedule && (
+              <button
+                onClick={loadFullDayEpg}
+                disabled={loadingDayEpg}
+                style={{
+                  width: '100%', padding: '8px 0', borderRadius: '6px', fontSize: '9px', fontWeight: 800,
+                  letterSpacing: '0.5px', cursor: loadingDayEpg ? 'wait' : 'pointer',
+                  background: 'rgba(98,37,255,0.1)', border: '1px solid rgba(98,37,255,0.25)',
+                  color: '#8b5cf6', marginBottom: '10px',
+                }}
+              >
+                {loadingDayEpg ? 'LOADING...' : 'SHOW FULL SCHEDULE'}
+              </button>
+            )}
+
+            {/* Full day schedule (after SHOW MORE) */}
+            {showFullSchedule && (
+              <>
+                <div style={{ fontSize: '9px', fontWeight: 800, color: '#555', letterSpacing: '1px', padding: '4px 0 6px' }}>
+                  FULL SCHEDULE ({channelDayPrograms.length})
+                </div>
+                {channelDayPrograms.length === 0 && !loadingDayEpg && (
+                  <div style={{ padding: '15px 0', textAlign: 'center', color: '#444', fontSize: '10px' }}>No EPG data available</div>
+                )}
+                {channelDayPrograms.map((prog, i) => {
+                  const isNow = prog.is_currently_live === 1;
+                  const isPast = prog.end_time && prog.end_time < now;
+                  return (
+                    <div key={i} style={{ 
+                      padding: '7px 0', 
+                      borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      opacity: isPast ? 0.4 : 1,
+                    }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: '9px', color: isNow ? '#8b5cf6' : '#555', fontWeight: 700, fontFamily: 'monospace', minWidth: '38px', flexShrink: 0 }}>
+                          {formatEpgTime(prog.start_time)}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '10px', fontWeight: isNow ? 700 : 500, color: isNow ? '#fff' : '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {isNow && <span style={{ color: '#8b5cf6', marginRight: '4px' }}>●</span>}
+                            {prog.title}
+                          </div>
+                          {prog.description && isNow && (
+                            <div style={{ fontSize: '8px', color: '#666', marginTop: '2px', lineHeight: '1.3' }}>{prog.description.substring(0, 120)}</div>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '8px', color: '#444', flexShrink: 0 }}>{formatEpgTime(prog.end_time)}</span>
+                      </div>
+                      {isNow && prog.progress > 0 && (
+                        <div style={{ height: '2px', background: 'rgba(255,255,255,0.06)', borderRadius: '1px', marginTop: '4px', marginLeft: '46px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${prog.progress}%`, background: '#6225ff', borderRadius: '1px' }} />
+                        </div>
                       )}
                     </div>
-                    <span style={{ fontSize: '8px', color: '#444', flexShrink: 0 }}>{formatEpgTime(prog.end_time)}</span>
-                  </div>
-                  {isNow && prog.progress > 0 && (
-                    <div style={{ height: '2px', background: 'rgba(255,255,255,0.06)', borderRadius: '1px', marginTop: '4px', marginLeft: '46px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${prog.progress}%`, background: '#6225ff', borderRadius: '1px' }} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </>
+            )}
+
+            {/* No EPG at all */}
+            {!showFullSchedule && epgPrograms.length === 0 && (
+              <div style={{ padding: '15px 0', textAlign: 'center', color: '#444', fontSize: '10px' }}>No EPG data available</div>
+            )}
           </div>
         </div>
       );
@@ -641,7 +664,6 @@ const OTTRight = ({
                 <div
                   key={`ch-${ch.stream_id || i}`}
                   onClick={() => {
-                    // Play + select in OTTLeft
                     const streamId = ch.stream_id || ch.id;
                     const playItem = {
                       ...ch,
@@ -668,7 +690,6 @@ const OTTRight = ({
                     <div style={{ fontSize: '10px', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</div>
                     {ch.category_name && <div style={{ fontSize: '8px', color: '#555' }}>{ch.category_name}</div>}
                   </div>
-                  {/* Show in folder button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -693,7 +714,6 @@ const OTTRight = ({
                 <div
                   key={`prog-${prog.id || i}`}
                   onClick={() => {
-                    // Play the channel that has this program
                     const streamId = prog.stream_id;
                     const playItem = {
                       id: streamId,
@@ -726,14 +746,12 @@ const OTTRight = ({
                           <span style={{ fontSize: '7px', fontWeight: 800, color: '#8b5cf6', background: 'rgba(98,37,255,0.15)', padding: '1px 4px', borderRadius: '2px' }}>LIVE</span>
                         )}
                       </div>
-                      {/* Progress bar for live programs */}
                       {prog.is_currently_live === 1 && prog.progress > 0 && (
                         <div style={{ height: '2px', background: 'rgba(255,255,255,0.06)', borderRadius: '1px', marginTop: '4px', overflow: 'hidden', maxWidth: '120px' }}>
                           <div style={{ height: '100%', width: `${prog.progress}%`, background: '#6225ff', borderRadius: '1px' }} />
                         </div>
                       )}
                     </div>
-                    {/* Show in folder */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -818,6 +836,9 @@ const OTTRight = ({
           </button>
           <button onClick={() => onToggleFavorite?.(selectedItem.stream_id || selectedItem.id)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <span style={{ fontSize: '16px' }}>☆</span>
+          </button>
+          <button onClick={handleBack} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, color: '#888', fontSize: '14px' }}>
+            ✕
           </button>
         </div>
 
