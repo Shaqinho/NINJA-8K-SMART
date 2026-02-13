@@ -169,7 +169,7 @@ export const VideoPlayer = forwardRef(({ src, onTap, className = '', isFullScree
 
   // Get container style based on aspect ratio
   const getContainerStyle = () => {
-    const baseStyle = { background: '#000000' }; // OLED Black
+    const baseStyle = { background: 'transparent' };
     
     if (aspectRatio === '16:9') {
       return { ...baseStyle, aspectRatio: '16/9' };
