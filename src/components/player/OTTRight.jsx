@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
-import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, searchProgramsByTitle, getProgramsForChannel } from '../../database/ProgramQueries';
+import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -280,7 +280,7 @@ const OTTRight = ({
     };
   }, [COLUMN_COUNT]);
 
-  // Charger EPG (4 prochains programmes) quand on sélectionne une chaîne LIVE
+  // Load 4 EPG programs when selecting a LIVE channel (API) + save to DB
   useEffect(() => {
     if (!selectedItem || type !== 'live' || !xtreamService) {
       setEpgPrograms([]);
@@ -291,15 +291,36 @@ const OTTRight = ({
     if (!channelId) return;
     
     xtreamService.getShortEPG(channelId, 4).then(data => {
-      const programs = [];
-      if (data.epg_now) programs.push({ title: data.epg_now, start: data.epg_start, end: data.epg_end });
-      if (data.epg_next) programs.push({ title: data.epg_next, start: data.epg_next_start, end: data.epg_next_end });
-      if (data.epg_listings) {
-        data.epg_listings.forEach(p => {
-          if (programs.length < 4) programs.push({ title: p.title, start: p.start, end: p.stop });
+      const listings = Array.isArray(data) ? data : [];
+      const now = Math.floor(Date.now() / 1000);
+      const programs = listings.slice(0, 4).map(p => ({
+        title: p.title || '',
+        description: p.description || '',
+        start: p.start || '',
+        end: p.end || '',
+        start_time: p.startTimestamp || 0,
+        end_time: p.stopTimestamp || 0,
+        is_currently_live: (p.startTimestamp <= now && p.stopTimestamp > now) ? 1 : 0,
+        progress: (p.startTimestamp <= now && p.stopTimestamp > now && p.stopTimestamp > p.startTimestamp)
+          ? Math.min(100, Math.round(((now - p.startTimestamp) / (p.stopTimestamp - p.startTimestamp)) * 100)) : 0,
+      }));
+      setEpgPrograms(programs);
+
+      // Save to DB in background
+      if (programs.length > 0) {
+        const epgForInsert = {};
+        epgForInsert[channelId] = programs.map(p => ({
+          title: p.title,
+          start: p.start,
+          end: p.end,
+          startTimestamp: p.start_time,
+          stopTimestamp: p.end_time,
+          description: p.description,
+        }));
+        insertProgramsBatch(epgForInsert).catch(err => {
+          console.warn('[OTTRight] EPG save to DB failed:', err);
         });
       }
-      setEpgPrograms(programs.slice(0, 4));
     }).catch(err => {
       console.warn('EPG fetch failed:', err);
       setEpgPrograms([]);
@@ -320,39 +341,54 @@ const OTTRight = ({
     }
   }, [currentChannel, type]);
 
-  // ========== LIVE: Load full day EPG (triggered by SHOW MORE) ==========
+  // ========== LIVE: Load full day EPG via getFullEPG (triggered by SHOW FULL EPG) ==========
   const loadFullDayEpg = useCallback(async () => {
-    if (!currentChannel) return;
+    if (!currentChannel || !xtreamService) return;
     const streamId = currentChannel.stream_id || currentChannel.id;
     if (!streamId) return;
     setLoadingDayEpg(true);
     try {
-      // SQLite first
-      const programs = await getProgramsForChannel(streamId, false);
+      const rawData = await xtreamService.getFullEPG(streamId);
+      const now = Math.floor(Date.now() / 1000);
+      
+      // Parse: getFullEPG returns { epg_listings: [...] } with base64 encoded fields
+      const listings = rawData?.epg_listings || [];
+      const programs = listings.map(p => {
+        const st = parseInt(p.start_timestamp) || 0;
+        const en = parseInt(p.stop_timestamp) || 0;
+        const isLive = (st <= now && en > now) ? 1 : 0;
+        return {
+          title: p.title ? atob(p.title) : '',
+          description: p.description ? atob(p.description) : '',
+          start: p.start || '',
+          end: p.end || '',
+          start_time: st,
+          end_time: en,
+          is_currently_live: isLive,
+          progress: isLive && en > st ? Math.min(100, Math.round(((now - st) / (en - st)) * 100)) : 0,
+        };
+      });
+
+      // Overwrite the 4 initial programs with full day
+      setEpgPrograms(programs);
+
+      // Save to DB in background
       if (programs.length > 0) {
-        setChannelDayPrograms(programs);
-      } else if (xtreamService) {
-        // Fallback: API with high limit
-        const epgList = await xtreamService.getShortEPG(streamId, 20);
-        const now = Math.floor(Date.now() / 1000);
-        const mapped = (epgList || []).map(p => {
-          const st = p.startTimestamp || 0;
-          const en = p.stopTimestamp || 0;
-          const isLive = (st <= now && en > now) ? 1 : 0;
-          return {
-            title: p.title,
-            description: p.description || '',
-            start_time: st,
-            end_time: en,
-            is_currently_live: isLive,
-            progress: isLive && en > st ? Math.min(100, Math.round(((now - st) / (en - st)) * 100)) : 0,
-          };
+        const epgForInsert = {};
+        epgForInsert[streamId] = programs.map(p => ({
+          title: p.title,
+          start: p.start,
+          end: p.end,
+          startTimestamp: p.start_time,
+          stopTimestamp: p.end_time,
+          description: p.description,
+        }));
+        insertProgramsBatch(epgForInsert).catch(err => {
+          console.warn('[OTTRight] Full EPG save to DB failed:', err);
         });
-        setChannelDayPrograms(mapped);
       }
     } catch (err) {
       console.warn('Full day EPG load failed:', err);
-      setChannelDayPrograms([]);
     } finally {
       setLoadingDayEpg(false);
       setShowFullSchedule(true);
@@ -485,10 +521,14 @@ const OTTRight = ({
               </div>
             </div>
             <button 
-              onClick={() => { onPlayChannel?.(ch); }}
-              style={{ background: 'linear-gradient(135deg, #6225ff, #8b5cf6)', border: 'none', borderRadius: '50%', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+              onClick={() => { onClose?.(); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'background 0.2s' }}
             >
-              <span style={{ color: '#fff', fontSize: '13px', marginLeft: '2px' }}>▶</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2.5" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+                <polyline points="14 9 17 12 14 15" />
+              </svg>
             </button>
           </div>
 
@@ -511,35 +551,49 @@ const OTTRight = ({
 
           {/* Scrollable content area */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
-            {/* 4 quick EPG programs (from existing epgPrograms state - fast) */}
-            {!showFullSchedule && epgPrograms.length > 0 && (
+            {/* EPG programs list (4 initially, full day after SHOW FULL EPG) */}
+            {epgPrograms.length > 0 && (
               <div style={{ marginBottom: '8px' }}>
-                {epgPrograms.map((prog, i) => {
-                  const isFirst = i === 0;
+                {epgPrograms.slice(0, showFullSchedule ? epgPrograms.length : 4).map((prog, i) => {
+                  const isNow = prog.is_currently_live === 1;
+                  const isPast = prog.end_time && prog.end_time < now;
+                  const isFirst = i === 0 && isNow;
                   return (
                     <div key={i} style={{ 
-                      padding: isFirst ? '10px 12px' : '8px 12px', 
-                      marginBottom: '4px',
-                      background: isFirst ? 'rgba(98,37,255,0.12)' : 'rgba(255,255,255,0.03)',
+                      padding: isFirst ? '10px 12px' : '7px 12px', 
+                      marginBottom: '3px',
+                      background: isFirst ? 'rgba(98,37,255,0.12)' : isPast ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.03)',
                       border: isFirst ? '1px solid rgba(98,37,255,0.25)' : '1px solid rgba(255,255,255,0.04)',
-                      borderRadius: '8px',
+                      borderRadius: '6px',
+                      opacity: isPast ? 0.4 : 1,
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                        <span style={{ fontSize: '8px', fontWeight: 800, color: isFirst ? '#8b5cf6' : '#555', letterSpacing: '1px' }}>
-                          {isFirst ? 'NOW' : i === 1 ? 'NEXT' : ''}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '8px', fontWeight: 800, color: isNow ? '#8b5cf6' : '#555', letterSpacing: '1px' }}>
+                          {isNow ? 'NOW' : i === 1 && !showFullSchedule ? 'NEXT' : ''}
                         </span>
-                        <span style={{ fontSize: '8px', color: '#555' }}>
-                          {prog.start ? prog.start.split(' ')[1]?.substring(0, 5) : ''} — {prog.end ? prog.end.split(' ')[1]?.substring(0, 5) : ''}
+                        <span style={{ fontSize: '8px', color: '#555', fontFamily: 'monospace' }}>
+                          {formatEpgTime(prog.start_time)} — {formatEpgTime(prog.end_time)}
                         </span>
                       </div>
-                      <div style={{ fontSize: isFirst ? '12px' : '10px', fontWeight: isFirst ? 700 : 600, color: isFirst ? '#fff' : '#ccc' }}>{prog.title}</div>
+                      <div style={{ fontSize: isFirst ? '12px' : '10px', fontWeight: isFirst ? 700 : 500, color: isFirst ? '#fff' : '#ccc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {isNow && <span style={{ color: '#8b5cf6', marginRight: '4px' }}>●</span>}
+                        {prog.title}
+                      </div>
+                      {prog.description && isNow && (
+                        <div style={{ fontSize: '8px', color: '#666', marginTop: '2px', lineHeight: '1.3' }}>{prog.description.substring(0, 120)}</div>
+                      )}
+                      {isNow && prog.progress > 0 && (
+                        <div style={{ height: '2px', background: 'rgba(255,255,255,0.06)', borderRadius: '1px', marginTop: '4px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${prog.progress}%`, background: '#6225ff', borderRadius: '1px' }} />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
 
-            {/* SHOW MORE button (loads full day schedule) */}
+            {/* SHOW FULL EPG button (disappears after click, triggers getFullEPG) */}
             {!showFullSchedule && (
               <button
                 onClick={loadFullDayEpg}
@@ -551,52 +605,8 @@ const OTTRight = ({
                   color: '#8b5cf6', marginBottom: '10px',
                 }}
               >
-                {loadingDayEpg ? 'LOADING...' : 'SHOW FULL SCHEDULE'}
+                {loadingDayEpg ? 'LOADING...' : 'SHOW FULL EPG'}
               </button>
-            )}
-
-            {/* Full day schedule (after SHOW MORE) */}
-            {showFullSchedule && (
-              <>
-                <div style={{ fontSize: '9px', fontWeight: 800, color: '#555', letterSpacing: '1px', padding: '4px 0 6px' }}>
-                  FULL SCHEDULE ({channelDayPrograms.length})
-                </div>
-                {channelDayPrograms.length === 0 && !loadingDayEpg && (
-                  <div style={{ padding: '15px 0', textAlign: 'center', color: '#444', fontSize: '10px' }}>No EPG data available</div>
-                )}
-                {channelDayPrograms.map((prog, i) => {
-                  const isNow = prog.is_currently_live === 1;
-                  const isPast = prog.end_time && prog.end_time < now;
-                  return (
-                    <div key={i} style={{ 
-                      padding: '7px 0', 
-                      borderBottom: '1px solid rgba(255,255,255,0.04)',
-                      opacity: isPast ? 0.4 : 1,
-                    }}>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                        <span style={{ fontSize: '9px', color: isNow ? '#8b5cf6' : '#555', fontWeight: 700, fontFamily: 'monospace', minWidth: '38px', flexShrink: 0 }}>
-                          {formatEpgTime(prog.start_time)}
-                        </span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '10px', fontWeight: isNow ? 700 : 500, color: isNow ? '#fff' : '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {isNow && <span style={{ color: '#8b5cf6', marginRight: '4px' }}>●</span>}
-                            {prog.title}
-                          </div>
-                          {prog.description && isNow && (
-                            <div style={{ fontSize: '8px', color: '#666', marginTop: '2px', lineHeight: '1.3' }}>{prog.description.substring(0, 120)}</div>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '8px', color: '#444', flexShrink: 0 }}>{formatEpgTime(prog.end_time)}</span>
-                      </div>
-                      {isNow && prog.progress > 0 && (
-                        <div style={{ height: '2px', background: 'rgba(255,255,255,0.06)', borderRadius: '1px', marginTop: '4px', marginLeft: '46px', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${prog.progress}%`, background: '#6225ff', borderRadius: '1px' }} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </>
             )}
 
             {/* No EPG at all */}
