@@ -96,7 +96,8 @@ const AppContent = () => {
 
   // EPG background sync state
   const [epgSyncProgress, setEpgSyncProgress] = useState(0);
-  const [epgSyncingFolders, setEpgSyncingFolders] = useState(new Set()); // category_ids being synced
+  const [epgSyncingFolders, setEpgSyncingFolders] = useState(new Set());
+  const [epgSyncedFolders, setEpgSyncedFolders] = useState(new Set());
   const epgAbortRef = useRef(null);
   const epgIntervalRef = useRef(null);
 
@@ -353,19 +354,19 @@ const AppContent = () => {
   }, [xtreamService]);
 
   // ============================================================================
-  // EPG BACKGROUND SYNC — Concentric, lang-filtered, every 30 minutes
+  // EPG BACKGROUND SYNC — First 250 folders, server order, every 30 minutes
   //
-  // - Reads channels from NinjaCentral (no refetch)
-  // - Filters by userLangs (top 2 + VIP)
-  // - Batches of 20, limit=1, no pause
-  // - Stores in SQLite for search
-  // - Exposes progress via epgSyncProgress + epgSyncingFolders
+  // - Reads categories from NinjaCentral in server order
+  // - Takes first 250 folders
+  // - For each folder: fetch EPG for all channels → save to SQLite → next
+  // - Progress: folder-level (e.g. 25/250 = 10%)
+  // - epgSyncingFolders: Set of category_ids currently syncing
+  // - epgSyncedFolders: Set of category_ids fully synced (bars stay visible)
   // - Repeats every 30 minutes
   // ============================================================================
-  const runEpgSync = useCallback(async (service, langs) => {
+  const runEpgSync = useCallback(async (service) => {
     if (!service) return;
 
-    // Abort previous sync if running
     if (epgAbortRef.current) {
       epgAbortRef.current.abort();
     }
@@ -374,56 +375,56 @@ const AppContent = () => {
     const signal = abortController.signal;
 
     try {
-      // Read channels + categories from NinjaCentral
       await ninjaCentral.init();
       const [allChannels, liveCats] = await Promise.all([
         ninjaCentral.getAll(STORES.LIVE),
         ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
       ]);
 
-      if (allChannels.length === 0) {
-        console.log('[EPG Sync] No channels in NinjaCentral, skipping');
+      if (allChannels.length === 0 || liveCats.length === 0) {
+        console.log('[EPG Sync] No channels or categories, skipping');
         return;
       }
 
-      // Filter by user languages
-      const channels = langs.length > 0
-        ? filterChannelsByLangs(allChannels, liveCats, langs)
-        : allChannels;
+      const MAX_FOLDERS = 250;
+      const targetCats = liveCats.slice(0, MAX_FOLDERS);
 
-      console.log(`[EPG Sync] Starting: ${channels.length} channels (filtered from ${allChannels.length}) | Langs: ${langs.join(', ')}`);
-
-      // Group channels by category for folder-level tracking
       const categoryMap = {};
-      channels.forEach(ch => {
-        const catId = String(ch.categoryId || 'unknown');
-        if (!categoryMap[catId]) categoryMap[catId] = [];
-        categoryMap[catId].push(ch);
+      targetCats.forEach(cat => {
+        categoryMap[String(cat.category_id)] = [];
       });
-      const categoryIds = Object.keys(categoryMap);
+      allChannels.forEach(ch => {
+        const catId = String(ch.categoryId || '');
+        if (categoryMap[catId]) {
+          categoryMap[catId].push(ch);
+        }
+      });
 
-      // Clean expired programs
+      const categoryIds = targetCats.map(cat => String(cat.category_id));
+      const totalFolders = categoryIds.length;
+
+      console.log(`[EPG Sync] Starting: ${totalFolders} folders, ${allChannels.length} total channels`);
+
       try {
         await cleanExpiredPrograms();
       } catch (e) {
         console.warn('[EPG Sync] Cleanup skipped:', e);
       }
 
-      const BATCH_SIZE = 20;
-      let totalProcessed = 0;
-      const totalChannels = channels.length;
+      setEpgSyncedFolders(new Set());
+      setEpgSyncProgress(0);
 
-      // Process folder by folder (concentric)
+      const BATCH_SIZE = 20;
+      let foldersProcessed = 0;
+
       for (const catId of categoryIds) {
         if (signal.aborted) break;
 
-        const catChannels = categoryMap[catId];
+        const catChannels = categoryMap[catId] || [];
         const streamIds = catChannels.map(ch => ch.id || ch.stream_id).filter(Boolean);
 
-        // Mark folder as syncing
         setEpgSyncingFolders(prev => new Set([...prev, catId]));
 
-        // Batch within folder
         for (let i = 0; i < streamIds.length; i += BATCH_SIZE) {
           if (signal.aborted) break;
 
@@ -431,10 +432,8 @@ const AppContent = () => {
 
           try {
             const epgResults = await service.getShortEPGBatch(batchIds, 1, 20);
-
             if (signal.aborted) break;
 
-            // Transform for SQLite insert
             const epgForInsert = {};
             Object.entries(epgResults).forEach(([streamId, data]) => {
               if (data.epg_now) {
@@ -444,7 +443,7 @@ const AppContent = () => {
                   end: data.epg_end || '',
                   startTimestamp: data.epg_start_timestamp || null,
                   stopTimestamp: data.epg_end_timestamp || null,
-                  description: '',
+                  description: data.epg_description || '',
                 }];
               }
             });
@@ -453,30 +452,29 @@ const AppContent = () => {
               await insertProgramsBatch(epgForInsert);
             }
           } catch (batchErr) {
-            console.warn(`[EPG Sync] Batch failed (cat ${catId}):`, batchErr);
+            console.warn(`[EPG Sync] Batch failed (folder ${catId}):`, batchErr);
           }
-
-          totalProcessed += batchIds.length;
-          const progress = Math.round((totalProcessed / totalChannels) * 100);
-          setEpgSyncProgress(progress);
         }
 
-        // Unmark folder
         setEpgSyncingFolders(prev => {
           const next = new Set(prev);
           next.delete(catId);
           return next;
         });
+        setEpgSyncedFolders(prev => new Set([...prev, catId]));
+
+        foldersProcessed++;
+        const progress = Math.round((foldersProcessed / totalFolders) * 100);
+        setEpgSyncProgress(progress);
       }
 
       if (!signal.aborted) {
         setEpgSyncProgress(100);
-        console.log(`✅ [EPG Sync] Complete: ${totalProcessed} channels indexed`);
+        console.log(`[EPG Sync] Complete: ${foldersProcessed}/${totalFolders} folders`);
 
-        // Reset progress after 3 seconds
         setTimeout(() => {
           if (!signal.aborted) setEpgSyncProgress(0);
-        }, 3000);
+        }, 5000);
       }
     } catch (err) {
       if (!signal.aborted) {
@@ -486,18 +484,16 @@ const AppContent = () => {
     }
   }, []);
 
-  // Start EPG sync when xtreamService + userLangs are ready
+  // Start EPG sync when xtreamService is ready
   useEffect(() => {
-    if (!xtreamService || userLangs.length === 0) return;
+    if (!xtreamService) return;
 
-    // Initial sync (small delay to let UI settle)
     const initialTimer = setTimeout(() => {
-      runEpgSync(xtreamService, userLangs);
+      runEpgSync(xtreamService);
     }, 2000);
 
-    // Repeat every 30 minutes
     epgIntervalRef.current = setInterval(() => {
-      runEpgSync(xtreamService, userLangs);
+      runEpgSync(xtreamService);
     }, 30 * 60 * 1000);
 
     return () => {
@@ -505,7 +501,7 @@ const AppContent = () => {
       clearInterval(epgIntervalRef.current);
       if (epgAbortRef.current) epgAbortRef.current.abort();
     };
-  }, [xtreamService, userLangs, runEpgSync]);
+  }, [xtreamService, runEpgSync]);
 
   // ============================================================================
   // GESTURES — attached to playerRef
@@ -703,6 +699,7 @@ const AppContent = () => {
         onServers={handleLogout}
         epgSyncProgress={epgSyncProgress}
         epgSyncingFolders={epgSyncingFolders}
+        epgSyncedFolders={epgSyncedFolders}
         userLangs={userLangs}
         preloadedCategories={preloadedCategories}
         liveChannels={playlist?.data?.live || []}

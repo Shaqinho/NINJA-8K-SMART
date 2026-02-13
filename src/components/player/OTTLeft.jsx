@@ -74,6 +74,7 @@ const OTTLeft = forwardRef(({
   xtreamService,
   epgSyncProgress: externalEpgSyncProgress = 0,
   epgSyncingFolders = new Set(),
+  epgSyncedFolders = new Set(),
   onOpenEPGGrid,
   onRequestKeyboard,        // Callback to request keyboard from parent
   onKeyboardSearchUpdate,   // Search query from parent keyboard (null if keyboard not active for this component)
@@ -981,6 +982,10 @@ const OTTLeft = forwardRef(({
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     ) : null;
     
+    const catId = String(cat.category_id);
+    const isSyncing = epgSyncingFolders.has(catId);
+    const isSynced = epgSyncedFolders.has(catId);
+    
     return (
       <div
         style={{
@@ -992,6 +997,7 @@ const OTTLeft = forwardRef(({
           cursor: 'pointer',
           background: isActive ? 'rgba(98, 37, 255, 0.25)' : 'transparent',
           borderLeft: isActive ? '3px solid #6225ff' : '3px solid transparent',
+          position: 'relative',
         }}
         onClick={() => handleCategoryClick(cat)}
       >
@@ -1009,9 +1015,24 @@ const OTTLeft = forwardRef(({
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2" style={{ flexShrink: 0 }}>
           <path d="M9 18l6-6-6-6"/>
         </svg>
+        {/* EPG sync progress bar per folder (2px) */}
+        {(isSyncing || isSynced) && !cat.isSystem && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            height: '2px', background: 'rgba(255,255,255,0.06)',
+          }}>
+            <div style={{
+              height: '100%', borderRadius: '0 1px 1px 0',
+              background: isSynced ? '#22c55e' : '#6225ff',
+              width: isSyncing ? '60%' : '100%',
+              transition: 'width 0.5s ease-out',
+              animation: isSyncing ? 'epgPulse 1.5s ease-in-out infinite' : 'none',
+            }} />
+          </div>
+        )}
       </div>
     );
-  }, [activeCategories, selectedCategory, getCategoryCount, getCountLabel, handleCategoryClick]);
+  }, [activeCategories, selectedCategory, getCategoryCount, getCountLabel, handleCategoryClick, epgSyncingFolders, epgSyncedFolders]);
 
   // ========== VIRTUALIZED LIVE ROW (SQLite-first, Cercle 1) ==========
   const LiveRow = useCallback(({ index, style }) => {
@@ -1692,19 +1713,21 @@ const OTTLeft = forwardRef(({
           </div>
         )}
 
-        {/* ========== BACKGROUND SAVE PROGRESS BAR (4px, bottom, z10) ========== */}
+        {/* ========== BACKGROUND SAVE PROGRESS BAR (2px, bottom, z10) ========== */}
         {(() => {
           const status = localStorage.getItem('ninja_save_status');
           if (status === 'complete' || !window.__ninjaSavePromise) return null;
           
           const expectedVod = parseInt(localStorage.getItem('ninja_expected_vod') || '0');
           const expectedSeries = parseInt(localStorage.getItem('ninja_expected_series') || '0');
+          const savedVod = parseInt(localStorage.getItem('ninja_saved_vod') || '0');
+          const savedSeries = parseInt(localStorage.getItem('ninja_saved_series') || '0');
           const total = expectedVod + expectedSeries;
           
           if (total === 0) return null;
           
-          // Progress estimation (50% car on ne peut pas compter en temps réel facilement)
-          const progress = 50;
+          const saved = savedVod + savedSeries;
+          const progress = Math.min(99, Math.round((saved / total) * 100)) || 5;
           
           return (
             <div style={{
@@ -1712,7 +1735,7 @@ const OTTLeft = forwardRef(({
               bottom: 0,
               left: 0,
               right: 0,
-              height: '4px',
+              height: '2px',
               background: 'rgba(255,255,255,0.05)',
               zIndex: 10,
             }}>
@@ -1720,8 +1743,9 @@ const OTTLeft = forwardRef(({
                 height: '100%',
                 width: `${progress}%`,
                 background: '#6225ff',
-                borderRadius: '0 2px 2px 0',
+                borderRadius: '0 1px 1px 0',
                 transition: 'width 0.5s ease-out',
+                animation: 'epgPulse 1.5s ease-in-out infinite',
               }} />
             </div>
           );
@@ -1763,6 +1787,10 @@ const OTTLeft = forwardRef(({
         @keyframes ottFocus {
           0%, 100% { background: rgba(98, 37, 255, 0.4); }
           50% { background: rgba(98, 37, 255, 0.15); }
+        }
+        @keyframes epgPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
         }
       `}</style>
     </>

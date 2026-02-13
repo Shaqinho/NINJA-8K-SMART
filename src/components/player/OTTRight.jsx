@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
-import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, searchChannelsByName, searchProgramsByTitle, getProgramsForChannel } from '../../database/ProgramQueries';
+import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, searchProgramsByTitle, getProgramsForChannel } from '../../database/ProgramQueries';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -359,43 +359,60 @@ const OTTRight = ({
     }
   }, [currentChannel, xtreamService]);
 
-  // ========== LIVE: Debounced search (channels + programs) ==========
+  // ========== LIVE: Channel search (in-memory, instant — same as OTTLeft) ==========
   useEffect(() => {
     if (type !== 'live' || showChannelDetail) return;
-    if (!liveSearchQuery.trim()) {
-      setLiveSearchResults({ channels: [], programs: [] });
+    const q = liveSearchQuery.trim().toLowerCase();
+    if (!q) {
+      setLiveSearchResults(prev => ({ ...prev, channels: [] }));
       return;
     }
-    const debounce = setTimeout(async () => {
+    // Filter channels from propsItems by name (instant, in-memory)
+    const channels = propsItems.filter(item => {
+      const name = (item.name || '').toLowerCase();
+      return name.includes(q);
+    }).slice(0, 50);
+    setLiveSearchResults(prev => ({ ...prev, channels }));
+  }, [liveSearchQuery, type, showChannelDetail, propsItems]);
+
+  // ========== LIVE: Program search (SQLite, debounced 300ms, min 2 chars — same as OTTLeft) ==========
+  const programSearchTimerRef = useRef(null);
+  useEffect(() => {
+    if (type !== 'live' || showChannelDetail) {
+      setLiveSearchResults(prev => ({ ...prev, programs: [] }));
+      return;
+    }
+    const q = liveSearchQuery.trim();
+    if (q.length < 2) {
+      setLiveSearchResults(prev => ({ ...prev, programs: [] }));
+      return;
+    }
+    clearTimeout(programSearchTimerRef.current);
+    programSearchTimerRef.current = setTimeout(async () => {
       setLiveSearching(true);
       try {
-        const q = liveSearchQuery.trim();
         const now = Math.floor(Date.now() / 1000);
+        const results = await searchProgramsByTitle(q, [], true, true, 100);
         
-        // Search channels by name (always)
-        const channels = await searchChannelsByName(q, [], true, 50);
-        
-        // Search programs based on filter
         let programs = [];
-        if (liveSearchFilter === 'ALL') {
-          programs = await searchProgramsByTitle(q, [], true, true, 50);
-        } else if (liveSearchFilter === 'NOW') {
-          const allProgs = await searchProgramsByTitle(q, [], true, true, 100);
-          programs = allProgs.filter(p => p.is_currently_live === 1);
+        if (liveSearchFilter === 'NOW') {
+          programs = results.filter(p => p.is_currently_live === 1);
         } else if (liveSearchFilter === 'NEXT') {
-          const allProgs = await searchProgramsByTitle(q, [], true, false, 100);
-          programs = allProgs.filter(p => p.start_time > now).slice(0, 50);
+          programs = results.filter(p => p.start_time > now).slice(0, 50);
+        } else {
+          // ALL: tout — NOW + NEXT + sauvegardés en DB
+          programs = results.slice(0, 50);
         }
         
-        setLiveSearchResults({ channels, programs });
+        setLiveSearchResults(prev => ({ ...prev, programs }));
       } catch (err) {
-        console.error('Live search error:', err);
-        setLiveSearchResults({ channels: [], programs: [] });
+        console.warn('Program search error:', err);
+        setLiveSearchResults(prev => ({ ...prev, programs: [] }));
       } finally {
         setLiveSearching(false);
       }
-    }, 250);
-    return () => clearTimeout(debounce);
+    }, 300);
+    return () => clearTimeout(programSearchTimerRef.current);
   }, [liveSearchQuery, liveSearchFilter, type, showChannelDetail]);
 
   // Reset live search when switching tabs
@@ -602,6 +619,7 @@ const OTTRight = ({
               type="text"
               value={liveSearchQuery}
               onChange={(e) => setLiveSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
               placeholder="Search channels & programs..."
               style={{
                 width: '100%', padding: '8px 10px 8px 32px', 
