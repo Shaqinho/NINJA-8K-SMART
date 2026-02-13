@@ -434,9 +434,10 @@ const Player = memo(({
         <div style={{
           position: 'absolute',
           top: 0, bottom: 0, left: '280px', right: 0,
-          background: 'rgba(0,0,0,0.75)',
-          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
-          zIndex: 10001,
+          background: ottSidebarOpen ? 'rgba(0,0,0,0.75)' : 'transparent',
+          borderLeft: ottSidebarOpen ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
+          zIndex: ottSidebarOpen ? 10001 : -1,
+          visibility: ottSidebarOpen ? 'visible' : 'hidden',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
           transform: ottSidebarOpen ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
