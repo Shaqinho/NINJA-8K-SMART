@@ -960,9 +960,14 @@ const OTTLeft = forwardRef(({
     setSearchOpen(false);
     setProgramResults([]);
     onTabChange?.(tabId);
-    // Tous les tabs: aucun dossier par défaut
-    setShowItems(false);
-    setCurrentCategory(null);
+    // Auto-select ALL folder for movies/series, none for live
+    if (tabId === 'movies' || tabId === 'series') {
+      setCurrentCategory({ category_id: '__all__', category_name: 'ALL', isSystem: true });
+      setShowItems(true);
+    } else {
+      setShowItems(false);
+      setCurrentCategory(null);
+    }
   }, [onTabChange]);
 
   // ========== VIRTUALIZED CATEGORY ROW ==========
