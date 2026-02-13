@@ -1609,6 +1609,7 @@ const OTTLeft = forwardRef(({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
                   placeholder={currentCategory?.category_id === '__all__' && activeTab === 'live' ? "Search channels..." : "Search channels & programs..."}
                   style={{
                     flex: 1, background: 'transparent', border: 'none', outline: 'none',
