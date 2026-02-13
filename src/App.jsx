@@ -62,24 +62,6 @@ const detectUserLangs = (liveCategories) => {
   return sorted; // e.g. ['FR', 'BE', 'VIP'] or ['DE', 'AT'] (no VIP in abo)
 };
 
-// ============================================================================
-// FILTER CHANNELS BY LANGUAGE — match category lang prefix
-// ============================================================================
-const filterChannelsByLangs = (channels, categories, langs) => {
-  if (!langs || langs.length === 0) return channels;
-
-  // Get category IDs that match our langs
-  const matchingCatIds = new Set();
-  (categories || []).forEach(cat => {
-    const prefix = extractLangPrefix(cat.category_name);
-    if (langs.includes(prefix)) {
-      matchingCatIds.add(String(cat.category_id));
-    }
-  });
-
-  return channels.filter(ch => matchingCatIds.has(String(ch.categoryId)));
-};
-
 const AppContent = () => {
   const { playlist, setPlaylist, clearPlaylist, isRestored } = usePlaylistContext();
   const [currentPage, setCurrentPage] = useState('splash');
