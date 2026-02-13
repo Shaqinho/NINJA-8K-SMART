@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
-import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
+import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, searchProgramsByTitle, insertProgramsBatch } from '../../database/ProgramQueries';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -67,7 +67,6 @@ const OTTRight = ({
   const [liveSearchResults, setLiveSearchResults] = useState({ channels: [], programs: [] });
   const [liveSearching, setLiveSearching] = useState(false);
   const [showChannelDetail, setShowChannelDetail] = useState(false);
-  const [channelDayPrograms, setChannelDayPrograms] = useState([]);
   const [loadingDayEpg, setLoadingDayEpg] = useState(false);
   const [showFullSchedule, setShowFullSchedule] = useState(false);
   
@@ -332,7 +331,6 @@ const OTTRight = ({
     if (type !== 'live') return;
     if (currentChannel) {
       setShowChannelDetail(true);
-      setChannelDayPrograms([]);
       setShowFullSchedule(false);
       // Load 4 quick programs via existing epgPrograms mechanism (already handled above)
       // Full day only loads on SHOW MORE click
