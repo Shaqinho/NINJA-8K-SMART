@@ -3,6 +3,7 @@ import { FixedSizeGrid as Grid } from 'react-window';
 import InfiniteLoader from 'react-window-infinite-loader';
 import { getVODItemsPaginated, getVODItemsCount, getSeriesItemsPaginated, getSeriesItemsCount, insertVODItemsChunked, insertSeriesItemsChunked, searchProgramsByTitle, insertProgramsBatch } from '../../database/ProgramQueries';
 import { getLangName } from '../../services/ProbeService';
+import ProbeService from '../../services/ProbeService';
 
 // ============================================================================
 // OTT RIGHT - Live Search/Detail + Movies & Series Gallery
@@ -115,34 +116,41 @@ const OTTRight = ({
     setSelectedSeason(1);
   }, [items]);
 
-  // Fetch detail info + probe stream
+  // Fetch detail info + probe stream via ProbeService (no videoRef dependency)
   const handleThumbnailClick = useCallback(async (item) => {
     const streamId = item.stream_id || item.id;
     
-    // 1. On ouvre la fiche et on reset les anciennes langues
+    // 1. Reset detail view
     setSelectedItem(item);
     setDetailData(null);
     setProbeData(null);
     setSelectedSeason(1);
     setPosterOverlay(false);
     setLoading(true);
+    setProbing(true);
 
     try {
       if (type === 'movies' && xtreamService) {
-        // 2. On appelle la nouvelle méthode qui prépare tout
-        const { info, probeUrl } = await xtreamService.getVodDetailsWithProbeUrl(streamId);
-        setDetailData(info); // Affiche le synopsis, titre, etc.
+        const credentials = {
+          server: xtreamService.server,
+          username: xtreamService.username,
+          password: xtreamService.password,
+        };
 
-        // 3. LANCEMENT DU SCAN AUTOMATIQUE (Le Probe)
-        if (videoRef?.current?.probeStream) {
-          setProbing(true);
-          videoRef.current.probeStream(probeUrl)
-            .then(tracks => {
-              // 4. Les vraies langues arrivent ici
-              setProbeData(tracks);
-            })
-            .catch(e => console.error("Erreur scan langues:", e))
-            .finally(() => setProbing(false));
+        // 2. Load VOD info (synopsis, title, etc.) + Probe audio/subs in parallel
+        const [details, probeResult] = await Promise.all([
+          xtreamService.getVodInfo(streamId),
+          ProbeService.probeTracks(credentials, item, 'vod'),
+        ]);
+
+        setDetailData(details);
+
+        if (probeResult.success) {
+          setProbeData({
+            audioTracks: probeResult.audioTracks,
+            subtitleTracks: probeResult.subtitleTracks,
+            video: probeResult.technical,
+          });
         }
       } else if (type === 'series' && xtreamService) {
         const info = await xtreamService.getSeriesInfo(streamId);
@@ -152,8 +160,9 @@ const OTTRight = ({
       console.error('MediaGallery: Detail fetch failed:', e);
     } finally {
       setLoading(false);
+      setProbing(false);
     }
-  }, [type, xtreamService, videoRef]);
+  }, [type, xtreamService]);
 
   // ========== WINDOWING: Load More Items (Infinite Loader) ==========
   const loadMoreItems = useCallback(async (startIndex, stopIndex) => {

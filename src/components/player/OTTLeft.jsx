@@ -179,6 +179,12 @@ const OTTLeft = forwardRef(({
   const longPressTimerRef = useRef(null);
   const listRef = useRef(null);
   const searchInputRef = useRef(null);
+  const epgSyncingFoldersRef = useRef(epgSyncingFolders);
+  const epgSyncedFoldersRef = useRef(epgSyncedFolders);
+
+  // Keep refs in sync with props (avoids CategoryRow recreation → scroll reset)
+  useEffect(() => { epgSyncingFoldersRef.current = epgSyncingFolders; }, [epgSyncingFolders]);
+  useEffect(() => { epgSyncedFoldersRef.current = epgSyncedFolders; }, [epgSyncedFolders]);
 
   // Focus visuel : chaîne qui clignote après scroll depuis EPGSearch
   const [focusedStreamId, setFocusedStreamId] = useState(null);
@@ -960,10 +966,10 @@ const OTTLeft = forwardRef(({
     setSearchOpen(false);
     setProgramResults([]);
     onTabChange?.(tabId);
-    // Auto-select ALL folder for movies/series, none for live
+    // Auto-select ALL folder for movies/series (OTTRight loads items), but show categories list
     if (tabId === 'movies' || tabId === 'series') {
       setCurrentCategory({ category_id: '__all__', category_name: 'ALL', isSystem: true });
-      setShowItems(true);
+      setShowItems(false);
     } else {
       setShowItems(false);
       setCurrentCategory(null);
@@ -988,8 +994,8 @@ const OTTLeft = forwardRef(({
     ) : null;
     
     const catId = String(cat.category_id);
-    const isSyncing = epgSyncingFolders.has(catId);
-    const isSynced = epgSyncedFolders.has(catId);
+    const isSyncing = epgSyncingFoldersRef.current.has(catId);
+    const isSynced = epgSyncedFoldersRef.current.has(catId);
     
     return (
       <div
@@ -1037,7 +1043,7 @@ const OTTLeft = forwardRef(({
         )}
       </div>
     );
-  }, [activeCategories, selectedCategory, getCategoryCount, getCountLabel, handleCategoryClick, epgSyncingFolders, epgSyncedFolders]);
+  }, [activeCategories, selectedCategory, getCategoryCount, getCountLabel, handleCategoryClick]);
 
   // ========== VIRTUALIZED LIVE ROW (SQLite-first, Cercle 1) ==========
   const LiveRow = useCallback(({ index, style }) => {
