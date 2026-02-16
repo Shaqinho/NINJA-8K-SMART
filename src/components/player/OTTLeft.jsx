@@ -1043,7 +1043,7 @@ const OTTLeft = forwardRef(({
         )}
       </div>
     );
-  }, [activeCategories, selectedCategory, getCategoryCount, getCountLabel, handleCategoryClick]);
+  }, [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick]);
 
   // ========== VIRTUALIZED LIVE ROW (SQLite-first, Cercle 1) ==========
   const LiveRow = useCallback(({ index, style }) => {
