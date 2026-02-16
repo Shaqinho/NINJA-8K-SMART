@@ -552,14 +552,6 @@ const OTTLeft = forwardRef(({
     return 0;
   }, [activeTab, categoryCounts]);
 
-  // ========== COUNT LABEL ==========
-  const getCountLabel = useCallback((count) => {
-    if (activeTab === 'live') return `${count} channels`;
-    if (activeTab === 'movies') return `${count} movies`;
-    if (activeTab === 'series') return `${count} series`;
-    return `${count}`;
-  }, [activeTab]);
-
   // ========== AUTO-HIDE LOGIC ==========
   const startHideTimer = useCallback(() => {
     clearTimeout(hideTimerRef.current);
