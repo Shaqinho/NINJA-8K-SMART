@@ -1001,7 +1001,7 @@ const OTTLeft = forwardRef(({
       <div
         style={{
           ...style,
-          padding: '4px 16px',
+          padding: '2px 16px',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -1015,13 +1015,13 @@ const OTTLeft = forwardRef(({
         {systemIcon && (
           <span style={{ fontSize: '12px', flexShrink: 0 }}>{systemIcon}</span>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: '6px' }}>
           <TickerText style={{ fontSize: '11px', fontWeight: cat.isSystem ? 700 : 500, color: cat.isSystem ? '#a855f7' : '#fff' }}>
             {cat.category_name}
           </TickerText>
-          <div style={{ fontSize: '9px', color: '#666' }}>
-            {getCountLabel(count)}
-          </div>
+          <span style={{ fontSize: '9px', color: '#666', flexShrink: 0 }}>
+            ({count})
+          </span>
         </div>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2" style={{ flexShrink: 0 }}>
           <path d="M9 18l6-6-6-6"/>
@@ -1575,7 +1575,7 @@ const OTTLeft = forwardRef(({
               ref={listRef}
               height={listHeight}
               itemCount={activeCategories.length}
-              itemSize={40}
+              itemSize={25}
               width="100%"
               overscanCount={25}
             >
