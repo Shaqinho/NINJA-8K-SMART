@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { querySql } from '../../database/NinjaLocalDB';
 import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch, syncEmptyChannels } from '../../database/ProgramQueries';
@@ -23,7 +23,7 @@ import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch, sync
 // ============================================================================
 
 // ========== TICKER TEXT COMPONENT ==========
-const TickerText = ({ children, style = {} }) => {
+const TickerText = memo(({ children, style = {} }) => {
   const textRef = useRef(null);
   const containerRef = useRef(null);
   const [needsTicker, setNeedsTicker] = useState(false);
@@ -59,7 +59,375 @@ const TickerText = ({ children, style = {} }) => {
       </span>
     </div>
   );
-};
+});
+
+// ========== STABLE ROW COMPONENTS (mémoïsés pour éviter les resets de scroll) ==========
+
+// CategoryRow - Component externe pour stabilité du scroll
+const CategoryRowItem = memo(({ data, index, style }) => {
+  const { categories, selectedCategory, getCategoryCount, handleCategoryClick } = data;
+  const cat = categories[index];
+  if (!cat) return null;
+  
+  const isActive = selectedCategory?.category_id === cat.category_id;
+  const count = cat.isSystem ? (cat.count || 0) : getCategoryCount(cat.category_id);
+  
+  const systemIcon = cat.category_id === '__all__' ? (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+  ) : cat.category_id === '__new__' ? (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+  ) : cat.category_id === '__favorites__' ? (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+  ) : cat.category_id === '__recent__' ? (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+  ) : null;
+  
+  const catId = String(cat.category_id);
+  const isSyncing = data.epgSyncingFolders?.has(catId);
+  const isSynced = data.epgSyncedFolders?.has(catId);
+  
+  return (
+    <div
+      style={{
+        ...style,
+        padding: '1px 12px', // Réduit de 2px 16px à 1px 12px
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px', // Réduit de 10px à 4px
+        cursor: 'pointer',
+        background: isActive ? 'rgba(98, 37, 255, 0.25)' : 'transparent',
+        borderLeft: isActive ? '3px solid #6225ff' : '3px solid transparent',
+        position: 'relative',
+      }}
+      onClick={() => handleCategoryClick(cat)}
+    >
+      {systemIcon && (
+        <span style={{ fontSize: '12px', flexShrink: 0 }}>{systemIcon}</span>
+      )}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+        <TickerText style={{ fontSize: '11px', fontWeight: cat.isSystem ? 700 : 500, color: cat.isSystem ? '#a855f7' : '#fff' }}>
+          {cat.category_name}
+        </TickerText>
+        <span style={{ fontSize: '9px', color: '#666', flexShrink: 0 }}>
+          ({count})
+        </span>
+      </div>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2" style={{ flexShrink: 0 }}>
+        <path d="M9 18l6-6-6-6"/>
+      </svg>
+      {/* EPG sync progress bar per folder (2px) */}
+      {(isSyncing || isSynced) && !cat.isSystem && (
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          height: '2px', background: 'rgba(255,255,255,0.06)',
+        }}>
+          <div style={{
+            height: '100%', borderRadius: '0 1px 1px 0',
+            background: isSynced ? '#22c55e' : '#6225ff',
+            width: isSyncing ? '60%' : '100%',
+            transition: 'width 0.5s ease-out',
+            animation: isSyncing ? 'epgPulse 1.5s ease-in-out infinite' : 'none',
+          }} />
+        </div>
+      )}
+    </div>
+  );
+});
+
+// LiveRow - Component externe
+const LiveRowItem = memo(({ data, index, style }) => {
+  const { 
+    items, selectedChannel, handleItemClick, handleItemTouchStart, 
+    handleItemTouchMove, handleItemTouchEnd, favorites, epgData, 
+    sqliteEpg, shakingItemId, focusedStreamId 
+  } = data;
+  
+  const channel = items[index];
+  if (!channel) return null;
+  
+  const isActive = selectedChannel?.id === channel.id;
+  const channelId = channel.stream_id || channel.id;
+  const isFav = favorites[channelId];
+  
+  // Priority: network (xtream) > SQLite > channel prop
+  const sqlite = sqliteEpg[channelId] || sqliteEpg[String(channelId)];
+  const network = epgData[channelId] || epgData[String(channelId)];
+  const epgTitle = network?.epg_now || sqlite?.title || channel.epg_now || null;
+  const epgProgress = network?.progress || sqlite?.progress || 0;
+  
+  const isShaking = shakingItemId === channelId;
+  const isFocused = focusedStreamId === String(channelId);
+  
+  return (
+    <div
+      style={{
+        ...style,
+        padding: '2px 12px', // Réduit de 4px 16px à 2px 12px
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px', // Réduit de 8px à 6px
+        cursor: 'pointer',
+        background: isFocused ? 'rgba(98, 37, 255, 0.4)' : isActive ? 'rgba(98, 37, 255, 0.25)' : 'transparent',
+        borderLeft: (isActive || isFocused) ? '3px solid #6225ff' : '3px solid transparent',
+        animation: isShaking ? 'ottShake 0.3s ease-in-out infinite' : isFocused ? 'ottFocus 0.5s ease-in-out 3' : 'none',
+      }}
+      onClick={() => handleItemClick(channel)}
+      onTouchStart={(e) => handleItemTouchStart(channel, e)}
+      onTouchMove={handleItemTouchMove}
+      onTouchEnd={handleItemTouchEnd}
+      onMouseDown={(e) => handleItemTouchStart(channel, e)}
+      onMouseUp={handleItemTouchEnd}
+      onMouseLeave={handleItemTouchEnd}
+    >
+      <div style={{
+        width: '70px', // Réduit de 75px à 70px
+        height: '22px', // Réduit de 25px à 22px
+        borderRadius: '4px',
+        background: 'transparent',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        flexShrink: 0,
+        marginLeft: '-3px', // Ajusté de -5px à -3px
+      }}>
+        {channel.logo ? (
+          <img 
+            src={channel.logo} 
+            alt="" 
+            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        ) : (
+          <span style={{ fontSize: '8px', color: '#555' }}>TV</span>
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
+          {channel.name}
+        </TickerText>
+        {/* EPG under channel name (vertical layout) */}
+        {epgTitle && (
+          <TickerText style={{ fontSize: '8px', color: '#888', flex: 1, minWidth: 0 }}>
+            {epgTitle}
+          </TickerText>
+        )}
+        {/* Mini progress bar for live program */}
+        {epgTitle && epgProgress > 0 && (
+          <div style={{
+            height: '1.5px', borderRadius: '1px',
+            background: 'rgba(255,255,255,0.08)',
+            marginTop: '2px', width: '100%',
+          }}>
+            <div style={{
+              height: '100%', borderRadius: '1px',
+              background: '#6225ff',
+              width: `${Math.min(100, epgProgress)}%`,
+            }} />
+          </div>
+        )}
+      </div>
+      {channel.num && (
+        <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontWeight: 600, flexShrink: 0, fontFamily: 'monospace' }}>
+          {channel.num}
+        </span>
+      )}
+      {isFav && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b" stroke="none" style={{ flexShrink: 0 }}>
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+      )}
+      {isActive && (
+        <div style={{
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          background: '#6225ff',
+          boxShadow: '0 0 8px rgba(98, 37, 255, 0.5)',
+          flexShrink: 0,
+        }} />
+      )}
+    </div>
+  );
+});
+
+// MovieRow - Component externe
+const MovieRowItem = memo(({ data, index, style }) => {
+  const { items, handleItemClick } = data;
+  const movie = items[index];
+  if (!movie) return null;
+  
+  const year = movie.year || (movie.release_date ? movie.release_date.substring(0, 4) : '');
+  const rating = movie.rating || '';
+  const genre = movie.genre || movie.category_name || movie.category || '';
+  const subLine = [year, rating ? `★ ${rating}` : '', genre].filter(Boolean).join(' | ');
+  
+  return (
+    <div
+      style={{
+        ...style,
+        padding: '2px 12px', // Réduit
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px', // Réduit
+        cursor: 'pointer',
+        background: 'transparent',
+        borderLeft: '3px solid transparent',
+      }}
+      onClick={() => handleItemClick(movie)}
+    >
+      <div style={{ flex: 1, minWidth: 0, marginLeft: '3px' }}>
+        <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
+          {movie.name}
+        </TickerText>
+        {subLine && (
+          <TickerText style={{ fontSize: '8px', color: '#888' }}>
+            {subLine}
+          </TickerText>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// SeriesRow - Component externe
+const SeriesRowItem = memo(({ data, index, style }) => {
+  const { items, seriesSeasons, handleItemClick } = data;
+  const series = items[index];
+  if (!series) return null;
+  
+  const seriesId = series.series_id || series.id;
+  const year = series.release_date ? series.release_date.substring(0, 4) : '';
+  const rating = series.rating || '';
+  const seasonCount = seriesSeasons[seriesId];
+  const seasonLabel = seasonCount !== undefined ? `${seasonCount} Season${seasonCount !== 1 ? 's' : ''}` : '';
+  const subLine = [year, rating ? `★ ${rating}` : '', seasonLabel].filter(Boolean).join(' | ');
+  
+  return (
+    <div
+      style={{
+        ...style,
+        padding: '2px 12px', // Réduit
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px', // Réduit
+        cursor: 'pointer',
+        background: 'transparent',
+        borderLeft: '3px solid transparent',
+      }}
+      onClick={() => handleItemClick(series)}
+    >
+      <div style={{ flex: 1, minWidth: 0, marginLeft: '3px' }}>
+        <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
+          {series.name}
+        </TickerText>
+        {subLine && (
+          <TickerText style={{ fontSize: '8px', color: '#888' }}>
+            {subLine}
+          </TickerText>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ProgramRow - Component externe
+const ProgramRowItem = memo(({ data, index, style }) => {
+  const { items, handleProgramClick } = data;
+  const prog = items[index];
+  if (!prog) return null;
+  
+  const now = Math.floor(Date.now() / 1000);
+  const isLive = prog.start_time <= now && prog.end_time > now;
+  const isFuture = prog.start_time > now;
+  const minutesUntil = isFuture ? Math.round((prog.start_time - now) / 60) : 0;
+  
+  const startTime = prog.start_formatted ? prog.start_formatted.split(' ')[1]?.substring(0, 5) : '';
+  const endTime = prog.end_formatted ? prog.end_formatted.split(' ')[1]?.substring(0, 5) : '';
+  
+  return (
+    <div
+      style={{
+        ...style,
+        padding: '2px 10px', // Réduit
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px', // Réduit
+        cursor: 'pointer',
+        background: isLive ? 'rgba(98, 37, 255, 0.15)' : 'transparent',
+        borderLeft: isLive ? '3px solid #6225ff' : '3px solid transparent',
+      }}
+      onClick={() => handleProgramClick(prog)}
+    >
+      {/* Channel logo */}
+      <div style={{
+        width: '36px', // Réduit de 40px
+        height: '22px', // Réduit de 25px
+        borderRadius: '3px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        flexShrink: 0,
+      }}>
+        {prog.channel_logo ? (
+          <img src={prog.channel_logo} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+            onError={(e) => { e.target.style.display = 'none'; }} />
+        ) : (
+          <span style={{ fontSize: '7px', color: '#555' }}>TV</span>
+        )}
+      </div>
+      
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* LIVE badge or time */}
+          {isLive ? (
+            <span style={{
+              fontSize: '7px', fontWeight: 700, color: '#fff',
+              background: '#e53e3e', borderRadius: '2px',
+              padding: '1px 4px', flexShrink: 0,
+            }}>LIVE</span>
+          ) : isFuture ? (
+            <span style={{
+              fontSize: '7px', fontWeight: 600, color: '#a78bfa',
+              background: 'rgba(167,139,250,0.15)', borderRadius: '2px',
+              padding: '1px 4px', flexShrink: 0,
+            }}>{minutesUntil < 60 ? `${minutesUntil}min` : `${startTime}`}</span>
+          ) : null}
+          <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
+            {prog.title}
+          </TickerText>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '8px', color: '#888', flexShrink: 0 }}>
+            {prog.channel_name}
+          </span>
+          {startTime && endTime && (
+            <span style={{ fontSize: '7px', color: '#666' }}>
+              {startTime}–{endTime}
+            </span>
+          )}
+        </div>
+        {/* Progress bar for live programs */}
+        {isLive && prog.progress > 0 && (
+          <div style={{
+            height: '2px', borderRadius: '1px',
+            background: 'rgba(255,255,255,0.1)',
+            marginTop: '2px', width: '100%',
+          }}>
+            <div style={{
+              height: '100%', borderRadius: '1px',
+              background: '#6225ff',
+              width: `${prog.progress}%`,
+              transition: 'width 0.3s',
+            }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 
 const OTTLeft = forwardRef(({ 
@@ -968,366 +1336,48 @@ const OTTLeft = forwardRef(({
     }
   }, [onTabChange]);
 
-  // ========== VIRTUALIZED CATEGORY ROW ==========
-  const CategoryRow = useCallback(({ index, style }) => {
-    const cat = activeCategories[index];
-    if (!cat) return null;
-    const isActive = selectedCategory?.category_id === cat.category_id;
-    const count = cat.isSystem ? (cat.count || 0) : getCategoryCount(cat.category_id);
-    
-    const systemIcon = cat.category_id === '__all__' ? (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-    ) : cat.category_id === '__new__' ? (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-    ) : cat.category_id === '__favorites__' ? (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-    ) : cat.category_id === '__recent__' ? (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    ) : null;
-    
-    const catId = String(cat.category_id);
-    const isSyncing = epgSyncingFoldersRef.current.has(catId);
-    const isSynced = epgSyncedFoldersRef.current.has(catId);
-    
-    return (
-      <div
-        style={{
-          ...style,
-          padding: '2px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          cursor: 'pointer',
-          background: isActive ? 'rgba(98, 37, 255, 0.25)' : 'transparent',
-          borderLeft: isActive ? '3px solid #6225ff' : '3px solid transparent',
-          position: 'relative',
-        }}
-        onClick={() => handleCategoryClick(cat)}
-      >
-        {systemIcon && (
-          <span style={{ fontSize: '12px', flexShrink: 0 }}>{systemIcon}</span>
-        )}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-          <TickerText style={{ fontSize: '11px', fontWeight: cat.isSystem ? 700 : 500, color: cat.isSystem ? '#a855f7' : '#fff' }}>
-            {cat.category_name}
-          </TickerText>
-          <span style={{ fontSize: '9px', color: '#666', flexShrink: 0 }}>
-            ({count})
-          </span>
-        </div>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2" style={{ flexShrink: 0 }}>
-          <path d="M9 18l6-6-6-6"/>
-        </svg>
-        {/* EPG sync progress bar per folder (2px) */}
-        {(isSyncing || isSynced) && !cat.isSystem && (
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            height: '2px', background: 'rgba(255,255,255,0.06)',
-          }}>
-            <div style={{
-              height: '100%', borderRadius: '0 1px 1px 0',
-              background: isSynced ? '#22c55e' : '#6225ff',
-              width: isSyncing ? '60%' : '100%',
-              transition: 'width 0.5s ease-out',
-              animation: isSyncing ? 'epgPulse 1.5s ease-in-out infinite' : 'none',
-            }} />
-          </div>
-        )}
-      </div>
-    );
-  }, [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick]);
+  // ========== STABLE DATA FOR ROW COMPONENTS ==========
+  // Utiliser useMemo pour créer des objets data stables pour react-window
+  // Cela évite que les Row components ne soient recréés à chaque render
+  
+  const categoryRowData = useMemo(() => ({
+    categories: activeCategories,
+    selectedCategory,
+    getCategoryCount,
+    handleCategoryClick,
+    epgSyncingFolders,
+    epgSyncedFolders,
+  }), [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick, epgSyncingFolders, epgSyncedFolders]);
 
-  // ========== VIRTUALIZED LIVE ROW (SQLite-first, Cercle 1) ==========
-  const LiveRow = useCallback(({ index, style }) => {
-    const channel = filteredItems[index];
-    if (!channel) return null;
-    const isActive = selectedChannel?.id === channel.id;
-    const channelId = channel.stream_id || channel.id;
-    const isFav = favorites[channelId];
-    
-    // Priority: network (xtream) > SQLite > channel prop
-    const sqlite = sqliteEpg[channelId] || sqliteEpg[String(channelId)];
-    const network = epgData[channelId] || epgData[String(channelId)];
-    const epgTitle = network?.epg_now || sqlite?.title || channel.epg_now || null;
-    const epgProgress = network?.progress || sqlite?.progress || 0;
-    
-    const isShaking = shakingItemId === channelId;
-    const isFocused = focusedStreamId === String(channelId);
-    
-    return (
-      <div
-        style={{
-          ...style,
-          padding: '4px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          cursor: 'pointer',
-          background: isFocused ? 'rgba(98, 37, 255, 0.4)' : isActive ? 'rgba(98, 37, 255, 0.25)' : 'transparent',
-          borderLeft: (isActive || isFocused) ? '3px solid #6225ff' : '3px solid transparent',
-          animation: isShaking ? 'ottShake 0.3s ease-in-out infinite' : isFocused ? 'ottFocus 0.5s ease-in-out 3' : 'none',
-        }}
-        onClick={() => handleItemClick(channel)}
-        onTouchStart={(e) => handleItemTouchStart(channel, e)}
-        onTouchMove={handleItemTouchMove}
-        onTouchEnd={handleItemTouchEnd}
-        onMouseDown={(e) => handleItemTouchStart(channel, e)}
-        onMouseUp={handleItemTouchEnd}
-        onMouseLeave={handleItemTouchEnd}
-      >
-        <div style={{
-          width: '75px',
-          height: '25px',
-          borderRadius: '4px',
-          background: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          flexShrink: 0,
-          marginLeft: '-5px',
-        }}>
-          {channel.logo ? (
-            <img 
-              src={channel.logo} 
-              alt="" 
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          ) : (
-            <span style={{ fontSize: '8px', color: '#555' }}>TV</span>
-          )}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
-            {channel.name}
-          </TickerText>
-          {/* EPG under channel name (vertical layout) */}
-          {epgTitle && (
-            <TickerText style={{ fontSize: '8px', color: '#888', flex: 1, minWidth: 0 }}>
-              {epgTitle}
-            </TickerText>
-          )}
-          {/* Mini progress bar for live program */}
-          {epgTitle && epgProgress > 0 && (
-            <div style={{
-              height: '1.5px', borderRadius: '1px',
-              background: 'rgba(255,255,255,0.08)',
-              marginTop: '2px', width: '100%',
-            }}>
-              <div style={{
-                height: '100%', borderRadius: '1px',
-                background: '#6225ff',
-                width: `${Math.min(100, epgProgress)}%`,
-              }} />
-            </div>
-          )}
-        </div>
-        {channel.num && (
-          <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)', fontWeight: 600, flexShrink: 0, fontFamily: 'monospace' }}>
-            {channel.num}
-          </span>
-        )}
-        {isFav && (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b" stroke="none" style={{ flexShrink: 0 }}>
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-          </svg>
-        )}
-        {isActive && (
-          <div style={{
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            background: '#6225ff',
-            boxShadow: '0 0 8px rgba(98, 37, 255, 0.5)',
-            flexShrink: 0,
-          }} />
-        )}
-      </div>
-    );
-  }, [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId, focusedStreamId]);
+  const liveRowData = useMemo(() => ({
+    items: filteredItems,
+    selectedChannel,
+    handleItemClick,
+    handleItemTouchStart,
+    handleItemTouchMove,
+    handleItemTouchEnd,
+    favorites,
+    epgData,
+    sqliteEpg,
+    shakingItemId,
+    focusedStreamId,
+  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId, focusedStreamId]);
 
-  // ========== VIRTUALIZED MOVIE ROW ==========
-  const MovieRow = useCallback(({ index, style }) => {
-    const movie = filteredItems[index];
-    if (!movie) return null;
-    
-    const year = movie.year || (movie.release_date ? movie.release_date.substring(0, 4) : '');
-    const rating = movie.rating || '';
-    const genre = movie.genre || movie.category_name || movie.category || '';
-    const subLine = [year, rating ? `★ ${rating}` : '', genre].filter(Boolean).join(' | ');
-    
-    return (
-      <div
-        style={{
-          ...style,
-          padding: '4px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          cursor: 'pointer',
-          background: 'transparent',
-          borderLeft: '3px solid transparent',
-        }}
-        onClick={() => handleItemClick(movie)}
-      >
-        <div style={{ flex: 1, minWidth: 0, marginLeft: '5px' }}>
-          <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
-            {movie.name}
-          </TickerText>
-          {subLine && (
-            <TickerText style={{ fontSize: '8px', color: '#888' }}>
-              {subLine}
-            </TickerText>
-          )}
-        </div>
-      </div>
-    );
-  }, [filteredItems, handleItemClick]);
+  const movieRowData = useMemo(() => ({
+    items: filteredItems,
+    handleItemClick,
+  }), [filteredItems, handleItemClick]);
 
-  // ========== VIRTUALIZED SERIES ROW ==========
-  const SeriesRow = useCallback(({ index, style }) => {
-    const series = filteredItems[index];
-    if (!series) return null;
-    
-    const seriesId = series.series_id || series.id;
-    const year = series.release_date ? series.release_date.substring(0, 4) : '';
-    const rating = series.rating || '';
-    const seasonCount = seriesSeasons[seriesId];
-    const seasonLabel = seasonCount !== undefined ? `${seasonCount} Season${seasonCount !== 1 ? 's' : ''}` : '';
-    const subLine = [year, rating ? `★ ${rating}` : '', seasonLabel].filter(Boolean).join(' | ');
-    
-    return (
-      <div
-        style={{
-          ...style,
-          padding: '4px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          cursor: 'pointer',
-          background: 'transparent',
-          borderLeft: '3px solid transparent',
-        }}
-        onClick={() => handleItemClick(series)}
-      >
-        <div style={{ flex: 1, minWidth: 0, marginLeft: '5px' }}>
-          <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
-            {series.name}
-          </TickerText>
-          {subLine && (
-            <TickerText style={{ fontSize: '8px', color: '#888' }}>
-              {subLine}
-            </TickerText>
-          )}
-        </div>
-      </div>
-    );
-  }, [filteredItems, seriesSeasons, handleItemClick]);
+  const seriesRowData = useMemo(() => ({
+    items: filteredItems,
+    seriesSeasons,
+    handleItemClick,
+  }), [filteredItems, seriesSeasons, handleItemClick]);
 
-  // ========== VIRTUALIZED PROGRAM RESULT ROW ==========
-  const ProgramRow = useCallback(({ index, style }) => {
-    const prog = programResults[index];
-    if (!prog) return null;
-    
-    const now = Math.floor(Date.now() / 1000);
-    const isLive = prog.start_time <= now && prog.end_time > now;
-    const isFuture = prog.start_time > now;
-    const minutesUntil = isFuture ? Math.round((prog.start_time - now) / 60) : 0;
-    
-    const startTime = prog.start_formatted ? prog.start_formatted.split(' ')[1]?.substring(0, 5) : '';
-    const endTime = prog.end_formatted ? prog.end_formatted.split(' ')[1]?.substring(0, 5) : '';
-    
-    return (
-      <div
-        style={{
-          ...style,
-          padding: '4px 12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          cursor: 'pointer',
-          background: isLive ? 'rgba(98, 37, 255, 0.15)' : 'transparent',
-          borderLeft: isLive ? '3px solid #6225ff' : '3px solid transparent',
-        }}
-        onClick={() => handleProgramClick(prog)}
-      >
-        {/* Channel logo */}
-        <div style={{
-          width: '40px',
-          height: '25px',
-          borderRadius: '3px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          flexShrink: 0,
-        }}>
-          {prog.channel_logo ? (
-            <img src={prog.channel_logo} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-              onError={(e) => { e.target.style.display = 'none'; }} />
-          ) : (
-            <span style={{ fontSize: '7px', color: '#555' }}>TV</span>
-          )}
-        </div>
-        
-        {/* Content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {/* LIVE badge or time */}
-            {isLive ? (
-              <span style={{
-                fontSize: '7px', fontWeight: 700, color: '#fff',
-                background: '#e53e3e', borderRadius: '2px',
-                padding: '1px 4px', flexShrink: 0,
-              }}>LIVE</span>
-            ) : isFuture ? (
-              <span style={{
-                fontSize: '7px', fontWeight: 600, color: '#a78bfa',
-                background: 'rgba(167,139,250,0.15)', borderRadius: '2px',
-                padding: '1px 4px', flexShrink: 0,
-              }}>{minutesUntil < 60 ? `${minutesUntil}min` : `${startTime}`}</span>
-            ) : null}
-            <TickerText style={{ fontSize: '10px', fontWeight: 500, color: '#fff' }}>
-              {prog.title}
-            </TickerText>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '8px', color: '#888', flexShrink: 0 }}>
-              {prog.channel_name}
-            </span>
-            {startTime && endTime && (
-              <span style={{ fontSize: '7px', color: '#666' }}>
-                {startTime}–{endTime}
-              </span>
-            )}
-          </div>
-          {/* Progress bar for live programs */}
-          {isLive && prog.progress > 0 && (
-            <div style={{
-              height: '2px', borderRadius: '1px',
-              background: 'rgba(255,255,255,0.1)',
-              marginTop: '2px', width: '100%',
-            }}>
-              <div style={{
-                height: '100%', borderRadius: '1px',
-                background: '#6225ff',
-                width: `${prog.progress}%`,
-                transition: 'width 0.3s',
-              }} />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }, [programResults, handleProgramClick]);
-
-  // ========== CHOOSE ROW RENDERER ==========
-  const ItemRow = useMemo(() => {
-    if (activeTab === 'movies') return MovieRow;
-    if (activeTab === 'series') return SeriesRow;
-    return LiveRow;
-  }, [activeTab, MovieRow, SeriesRow, LiveRow]);
+  const programRowData = useMemo(() => ({
+    items: programResults,
+    handleProgramClick,
+  }), [programResults, handleProgramClick]);
 
   // ========== STYLES ==========
   const pillStyle = {
@@ -1567,32 +1617,35 @@ const OTTLeft = forwardRef(({
               ref={listRef}
               height={listHeight}
               itemCount={activeCategories.length}
-              itemSize={25}
+              itemSize={20} // Réduit de 25 à 20
               width="100%"
               overscanCount={25}
+              itemData={categoryRowData}
             >
-              {CategoryRow}
+              {CategoryRowItem}
             </List>
           ) : programResults.length > 0 ? (
             /* Program search results from SQLite */
             <List
               height={listHeight}
               itemCount={programResults.length}
-              itemSize={52}
+              itemSize={48} // Réduit de 52 à 48
               width="100%"
               overscanCount={10}
+              itemData={programRowData}
             >
-              {ProgramRow}
+              {ProgramRowItem}
             </List>
           ) : (
             <List
               height={listHeight}
               itemCount={filteredItems.length}
-              itemSize={40}
+              itemSize={36} // Réduit de 40 à 36
               width="100%"
               overscanCount={25}
+              itemData={activeTab === 'movies' ? movieRowData : activeTab === 'series' ? seriesRowData : liveRowData}
             >
-              {ItemRow}
+              {activeTab === 'movies' ? MovieRowItem : activeTab === 'series' ? SeriesRowItem : LiveRowItem}
             </List>
           )}
         </div>
