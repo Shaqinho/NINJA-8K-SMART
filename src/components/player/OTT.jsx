@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
-import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch, syncEmptyChannels } from '../../database/ProgramQueries';
+import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
 import OTTPlayer from './OTTPlayer';
 
 // ============================================================================
@@ -92,25 +92,14 @@ const FolderRowItem = memo(({ data, index, style }) => {
       </span>
       <span style={{
         fontSize: '9px', fontWeight: 600,
-        color: isActive ? '#fff' : CSS.textMuted,
-        background: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
-        padding: '2px 7px', borderRadius: '9px',
+        color: isActive ? '#fff' : isSynced ? '#22c55e' : isSyncing ? CSS.accent : CSS.textMuted,
+        background: isActive ? 'rgba(255,255,255,0.2)' : isSynced ? 'rgba(34,197,94,0.1)' : isSyncing ? 'rgba(98,37,255,0.15)' : 'rgba(255,255,255,0.05)',
+        padding: '2px 7px', borderRadius: 0,
         minWidth: '28px', textAlign: 'center', flexShrink: 0,
+        animation: isSyncing ? 'epgPulse 1.5s ease-in-out infinite' : 'none',
       }}>
         {count}
       </span>
-      {/* EPG sync indicator */}
-      {(isSyncing || isSynced) && !cat.isSystem && (
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px', background: 'rgba(255,255,255,0.06)' }}>
-          <div style={{
-            height: '100%', borderRadius: '0 1px 1px 0',
-            background: isSynced ? '#22c55e' : CSS.accent,
-            width: isSyncing ? '60%' : '100%',
-            transition: 'width 0.5s ease-out',
-            animation: isSyncing ? 'epgPulse 1.5s ease-in-out infinite' : 'none',
-          }} />
-        </div>
-      )}
     </div>
   );
 });
@@ -182,7 +171,7 @@ const ChannelRowItem = memo(({ data, index, style }) => {
         )}
         {epgTitle && epgProgress > 0 && (
           <div style={{ height: '1.5px', borderRadius: '1px', background: 'rgba(255,255,255,0.08)', marginTop: '2px', width: '100%' }}>
-            <div style={{ height: '100%', borderRadius: '1px', background: CSS.accent, width: `${Math.min(100, epgProgress)}%` }} />
+            <div style={{ height: '100%', borderRadius: '1px', background: isActive ? CSS.green : CSS.accent, width: `${Math.min(100, epgProgress)}%` }} />
           </div>
         )}
       </div>
@@ -574,18 +563,6 @@ const OTT = forwardRef(({
       if (id && seriesSeasons[id] === undefined) loadSeriesSeasons(id);
     });
   }, [activeTab, selectedCategory, filteredItems, xtreamService, seriesSeasons, loadSeriesSeasons]);
-
-  // ========== BACKGROUND SYNC EMPTY CHANNELS ==========
-  useEffect(() => {
-    if (!xtreamService || liveCategories.length === 0 || liveChannels.length === 0) return;
-    const timer = setTimeout(async () => {
-      try {
-        const result = await syncEmptyChannels(xtreamService, liveCategories);
-        if (result) console.log(`✅ Background sync: ${result.synced} channels synced`);
-      } catch (err) { console.error('❌ Background sync failed:', err); }
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [xtreamService, liveCategories, liveChannels]);
 
   // ========== PROGRAM SEARCH ==========
   useEffect(() => {
