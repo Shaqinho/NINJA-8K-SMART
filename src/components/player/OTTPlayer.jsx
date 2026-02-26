@@ -277,7 +277,7 @@ const OTTPlayer = memo(({
   if (!selectedChannel) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.4)', position: 'relative', minWidth: 0 }}>
-        <div style={{ flex: 1, background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ flex: 1, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ textAlign: 'center', color: CSS.textMuted }}>
             <div style={{ fontSize: '26px', fontWeight: 900, fontStyle: 'italic', letterSpacing: '-1px', marginBottom: '6px' }}>
               NINJA <span style={{ color: CSS.accent }}>8K</span>
@@ -479,7 +479,7 @@ const OTTPlayer = memo(({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.4)', position: 'relative', minWidth: 0 }}>
 
       {/* Video area */}
-      <div ref={playerRef} onClick={handleVideoAreaClick} style={{ flex: 1, background: 'transparent', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer' }}>
+      <div ref={playerRef} onClick={handleVideoAreaClick} style={{ flex: 1, background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer' }}>
         {/* libVLC renders natively behind WebView — this is the transparent overlay */}
         <div style={{ position: 'absolute', inset: 0, background: 'transparent' }} />
 
