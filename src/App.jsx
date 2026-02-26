@@ -3,7 +3,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { deletePlaylist } from './services/NinjaStorage';
 import { ServerForm } from './components/ServerForm';
-import OTT from './components/OTT';
+import OTT from './components/player/OTT';
 import { NinjaSplash } from './components/NinjaSplash';
 import GestureTutorial, { isTutorialDone } from './components/GestureTutorial';
 import { extractLangPrefix } from './database/NinjaLocalDB';

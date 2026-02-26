@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
-import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch, syncEmptyChannels } from '../database/ProgramQueries';
+import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch, syncEmptyChannels } from '../../database/ProgramQueries';
 import OTTPlayer from './OTTPlayer';
 
 // ============================================================================

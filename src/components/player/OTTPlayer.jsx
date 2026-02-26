@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { libVLC } from '../services/libVLC';
-import { getProgramsForChannel, insertProgramsBatch } from '../database/ProgramQueries';
-import ProbeService from '../services/ProbeService';
-import { getLangName } from '../services/ProbeService';
+import { libVLC } from '../../services/libVLC';
+import { getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
+import ProbeService from '../../services/ProbeService';
+import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
 // OTT PLAYER — Column 3: Player + EPG + VOD/Series detail
