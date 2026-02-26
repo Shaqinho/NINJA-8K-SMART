@@ -3,11 +3,9 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { deletePlaylist } from './services/NinjaStorage';
 import { ServerForm } from './components/ServerForm';
-import { Player } from './components/player';
+import OTT from './components/OTT';
 import { NinjaSplash } from './components/NinjaSplash';
 import GestureTutorial, { isTutorialDone } from './components/GestureTutorial';
-import ParticleThemes from './components/ParticleThemes';
-import { useGestures } from './hooks/useGestures';
 import { extractLangPrefix } from './database/NinjaLocalDB';
 import { insertProgramsBatch, cleanExpiredPrograms } from './database/ProgramQueries';
 import XMLTVRefreshService from './services/XMLTVRefreshService';
@@ -79,23 +77,6 @@ const AppContent = () => {
   const epgAbortRef = useRef(null);
   const epgIntervalRef = useRef(null);
 
-  // Player state
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [showVolumeGauge, setShowVolumeGauge] = useState(false);
-  const [ottSidebarOpen, setOttSidebarOpen] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState('live');
-
-  // Particle theme
-  const [particleTheme] = useState(() => {
-    return localStorage.getItem('ninja_particle_theme') || 'ultimate';
-  });
-
-  const autoPlayedRef = useRef(false);
-  const playerRef = useRef(null);
-  const volumeTimerRef = useRef(null);
-
   // ============================================================================
   // STATUSBAR FULLSCREEN
   // ============================================================================
@@ -163,14 +144,6 @@ const AppContent = () => {
       const langs = detectUserLangs(liveCategories);
       setUserLangs(langs);
       console.log('[App] User langs detected:', langs);
-    }
-
-    // Auto-play first live channel
-    if (live?.length > 0 && !autoPlayedRef.current) {
-      autoPlayedRef.current = true;
-      setSelectedItem(live[0]);
-      setIsPlaying(true);
-      console.log('[AutoPlay] Playing:', live[0].name);
     }
 
     // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
@@ -372,35 +345,6 @@ const AppContent = () => {
   // ============================================================================
   // GESTURES — attached to playerRef
   // ============================================================================
-  useGestures(playerRef, {
-    onVolumeChange: (vol) => {
-      setVolume(vol);
-      setShowVolumeGauge(true);
-      clearTimeout(volumeTimerRef.current);
-      volumeTimerRef.current = setTimeout(() => setShowVolumeGauge(false), 1500);
-    },
-    onOTTOpen: () => setOttSidebarOpen(true),
-    onOTTClose: () => setOttSidebarOpen(false),
-    onOTTToggle: () => setOttSidebarOpen(prev => !prev),
-    onFolderPrev: () => window.__ottFolderPrev?.(),
-    onFolderNext: () => window.__ottFolderNext?.(),
-    onGridZoomIn: () => window.__gridZoomIn?.(),
-    onGridZoomOut: () => window.__gridZoomOut?.(),
-    onSettings: () => window.__settingsToggle?.(),
-    onFavorites: () => window.__favoritesToggle?.(),
-    onTabSwitch: () => window.__tabSwitch?.(),
-    onBack: () => {
-      if (ottSidebarOpen) {
-        setOttSidebarOpen(false);
-      }
-    },
-    onNavigateUp: () => window.__navigateUp?.(),
-    onNavigateDown: () => window.__navigateDown?.(),
-    onNavigateLeft: () => window.__navigateLeft?.(),
-    onNavigateRight: () => window.__navigateRight?.(),
-    onSelect: () => window.__navigateSelect?.(),
-  });
-
   // ============================================================================
   // NAVIGATION — Splash decides first, then playlist presence
   // ============================================================================
@@ -458,17 +402,8 @@ const AppContent = () => {
     setUserLangs([]);
 
     setPlaylist(null);
-    deletePlaylist(); // Remove from NinjaStorage (async, fire & forget)
-    autoPlayedRef.current = false;
-    setSelectedItem(null);
-    setIsPlaying(false);
-    setOttSidebarOpen(false);
+    deletePlaylist();
     setCurrentPage('landing');
-  }, []);
-
-  const handleChannelChange = useCallback((channel) => {
-    setSelectedItem(channel);
-    setIsPlaying(true);
   }, []);
 
   // ============================================================================
@@ -504,76 +439,34 @@ const AppContent = () => {
   }
 
   // ============================================================================
-  // PLAYER — Fullscreen OTT mode
+  // OTT — Fullscreen 3-column interface
   // ============================================================================
   return (
-    <div ref={playerRef} className="fixed inset-0 overflow-hidden" style={{ background: 'transparent' }}>
-      {/* Particles Background */}
-      {particleTheme !== 'off' && (
-        <div className="fixed inset-0 pointer-events-none z-0">
-          <ParticleThemes containerRef={playerRef} theme={particleTheme} />
-        </div>
-      )}
-
-      {/* Volume Gauge */}
-      {showVolumeGauge && (
-        <div
-          className="fixed z-[10003] pointer-events-none"
-          style={{ right: '20px', top: '50%', transform: 'translateY(-50%)' }}
-        >
-          <div style={{
-            width: '36px',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-            padding: '12px 0', borderRadius: '18px',
-            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)',
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              {volume > 0 && <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
-              {volume > 0.5 && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
-            </svg>
-            <div style={{
-              width: '4px', height: '120px', borderRadius: '2px',
-              background: 'rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{
-                position: 'absolute', bottom: 0, width: '100%',
-                height: `${Math.round(volume * 100)}%`,
-                borderRadius: '2px', background: '#6225ff',
-                transition: 'height 0.1s ease-out',
-              }} />
-            </div>
-            <span style={{ color: '#fff', fontSize: '10px', fontWeight: 700 }}>
-              {Math.round(volume * 100)}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Player */}
-      <Player
-        channel={selectedItem}
-        isPlaying={isPlaying}
-        onTogglePlay={() => setIsPlaying(!isPlaying)}
-        onChannelChange={handleChannelChange}
-        isLive={sidebarTab === 'live'}
-        isSmartFullscreen={true}
-        volume={volume}
-        onVolumeChange={setVolume}
-        ottSidebarOpen={ottSidebarOpen}
-        onOttSidebarChange={setOttSidebarOpen}
-        onTabChange={setSidebarTab}
-        xtreamService={xtreamService}
-        onServers={handleLogout}
-        epgSyncProgress={epgSyncProgress}
-        epgSyncingFolders={epgSyncingFolders}
-        epgSyncedFolders={epgSyncedFolders}
-        userLangs={userLangs}
-        liveChannels={playlist?.data?.live || []}
-        vodItems={playlist?.data?.vod || []}
-        seriesItems={playlist?.data?.series || []}
-      />
-    </div>
+    <OTT
+      liveChannels={playlist?.data?.live || []}
+      vodItems={playlist?.data?.vod || []}
+      seriesItems={playlist?.data?.series || []}
+      liveCategories={playlist?.data?.liveCategories || []}
+      vodCategories={playlist?.data?.vodCategories || []}
+      seriesCategories={playlist?.data?.seriesCategories || []}
+      xtreamService={xtreamService}
+      epgSyncProgress={epgSyncProgress}
+      epgSyncingFolders={epgSyncingFolders}
+      epgSyncedFolders={epgSyncedFolders}
+      userLangs={userLangs}
+      onLogout={handleLogout}
+      onReload={() => {
+        // Re-fetch playlist from server
+        console.log('[OTT] Reload requested');
+      }}
+      onSettings={() => {
+        console.log('[OTT] Settings requested');
+      }}
+      onExit={() => {
+        // Close app (Capacitor)
+        try { window.navigator?.app?.exitApp?.(); } catch {}
+      }}
+    />
   );
 };
 
