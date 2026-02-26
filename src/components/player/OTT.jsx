@@ -31,6 +31,7 @@ const CSS = {
 };
 
 // ========== TICKER TEXT (overflow scroll) ==========
+// eslint-disable-next-line no-unused-vars
 const TickerText = memo(({ children, style = {} }) => {
   const textRef = useRef(null);
   const containerRef = useRef(null);

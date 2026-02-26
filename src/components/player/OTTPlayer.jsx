@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { libVLC } from './libVLC';
-import { getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
+import { insertProgramsBatch } from '../../database/ProgramQueries';
 import ProbeService from '../../services/ProbeService';
 import { getLangName } from '../../services/ProbeService';
 
@@ -270,7 +270,6 @@ const OTTPlayer = memo(({
 
   // ========== LIVE: EPG NOW data ==========
   const nowProgram = epgPrograms.find(p => p.is_currently_live === 1);
-  const nextPrograms = epgPrograms.filter(p => !p.is_currently_live);
   const channelId = selectedChannel ? (selectedChannel.stream_id || selectedChannel.id) : null;
   const isFav = channelId ? favorites[channelId] : false;
 
@@ -475,7 +474,6 @@ const OTTPlayer = memo(({
   }
 
   // ========== LIVE: PLAYER + EPG BAR ==========
-  const now = Math.floor(Date.now() / 1000);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.4)', position: 'relative', minWidth: 0 }}>
