@@ -171,7 +171,7 @@ const OTTPlayer = memo(({
     return () => {
       // Don't stop on cleanup — let it keep playing when switching UI
     };
-  }, [selectedChannel, isPlaying, getStreamUrl]);
+  }, [selectedChannel, isPlaying, getStreamUrl, updateNativePosition]);
 
   // ========== LOAD EPG FOR LIVE CHANNEL ==========
   useEffect(() => {
