@@ -70,8 +70,42 @@ const OTTPlayer = memo(({
   const [showControls, setShowControls] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const playerRef = useRef(null);
+  const videoAreaRef = useRef(null);
   const controlsTimerRef = useRef(null);
+
+  // ========== LIBVLC NATIVE POSITION ==========
+  const updateNativePosition = useCallback(() => {
+    if (!videoAreaRef.current) return;
+    const r = videoAreaRef.current.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      libVLC.setPosition(Math.round(r.top), Math.round(r.left), Math.round(r.width), Math.round(r.height));
+    }
+  }, []);
+
+  const setFullscreenPosition = useCallback(() => {
+    const w = window.innerWidth || screen.width;
+    const h = window.innerHeight || screen.height;
+    libVLC.setPosition(0, 0, w, h);
+  }, []);
+
+  useEffect(() => {
+    if (!videoAreaRef.current) return;
+    const timer = setTimeout(updateNativePosition, 150);
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        if (!isFullscreen) {
+          setTimeout(updateNativePosition, 50);
+          setTimeout(updateNativePosition, 150);
+        }
+      });
+      resizeObserver.observe(videoAreaRef.current);
+    }
+    return () => {
+      clearTimeout(timer);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [updateNativePosition, isFullscreen]);
 
   // ========== EPG STATE ==========
   const [epgPrograms, setEpgPrograms] = useState([]);
@@ -111,6 +145,8 @@ const OTTPlayer = memo(({
       try {
         await libVLC.play(url);
         console.log('[OTTPlayer] Playing:', selectedChannel.name);
+        setTimeout(updateNativePosition, 200);
+        setTimeout(updateNativePosition, 500);
       } catch (err) {
         console.error('[OTTPlayer] Play failed:', err);
       }
@@ -242,9 +278,18 @@ const OTTPlayer = memo(({
   }, [isPaused]);
 
   const handleFullscreen = useCallback(async () => {
-    await libVLC.setFullscreen(!isFullscreen);
-    setIsFullscreen(!isFullscreen);
-  }, [isFullscreen]);
+    if (isFullscreen) {
+      await libVLC.setFullscreen(false);
+      setIsFullscreen(false);
+      setTimeout(updateNativePosition, 100);
+      setTimeout(updateNativePosition, 200);
+      setTimeout(updateNativePosition, 400);
+    } else {
+      await libVLC.setFullscreen(true);
+      setIsFullscreen(true);
+      setFullscreenPosition();
+    }
+  }, [isFullscreen, updateNativePosition, setFullscreenPosition]);
 
   const handleVideoAreaClick = useCallback(() => {
     setShowControls(prev => !prev);
@@ -258,26 +303,80 @@ const OTTPlayer = memo(({
   const handlePlayVod = useCallback(() => {
     if (!selectedChannel || !xtreamService) return;
     const url = getStreamUrl(selectedChannel);
-    if (url) libVLC.play(url);
-  }, [selectedChannel, xtreamService, getStreamUrl]);
+    if (url) { libVLC.play(url); setTimeout(updateNativePosition, 200); }
+  }, [selectedChannel, xtreamService, getStreamUrl, updateNativePosition]);
 
   const handlePlayEpisode = useCallback((episode) => {
     if (!episode || !xtreamService) return;
     const ext = episode.container_extension || 'mp4';
     const url = `${xtreamService.server}/series/${xtreamService.username}/${xtreamService.password}/${episode.id}.${ext}`;
     libVLC.play(url);
-  }, [xtreamService]);
+    setTimeout(updateNativePosition, 200);
+  }, [xtreamService, updateNativePosition]);
 
   // ========== LIVE: EPG NOW data ==========
   const nowProgram = epgPrograms.find(p => p.is_currently_live === 1);
   const channelId = selectedChannel ? (selectedChannel.stream_id || selectedChannel.id) : null;
   const isFav = channelId ? favorites[channelId] : false;
 
+  // ========== FULLSCREEN OVERLAY ==========
+  if (isFullscreen) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'transparent' }}
+        onClick={handleVideoAreaClick}
+      >
+        {showControls && (
+          <div onClick={(e) => e.stopPropagation()} style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            background: 'linear-gradient(transparent, rgba(0,0,0,0.88) 40%)',
+            padding: '36px 18px 12px',
+            display: 'flex', flexDirection: 'column', gap: '6px',
+          }}>
+            {nowProgram && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '10px', color: CSS.textDim, fontVariantNumeric: 'tabular-nums' }}>
+                <span>{formatEpgTime(nowProgram.start_time)}</span>
+                <div style={{ flex: 1, height: '3px', background: 'rgba(255,255,255,0.12)', borderRadius: '2px', position: 'relative' }}>
+                  <div style={{ height: '100%', background: CSS.accent, borderRadius: '2px', width: `${nowProgram.progress}%`, boxShadow: '0 0 6px rgba(98,37,255,0.4)' }} />
+                </div>
+                <span>{formatEpgTime(nowProgram.end_time)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+              {selectedChannel?.logo && (
+                <img src={selectedChannel.logo} alt="" style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }} onError={(e) => { e.target.style.display = 'none'; }} />
+              )}
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{selectedChannel?.name}</span>
+              {nowProgram && <span style={{ fontSize: '10px', color: '#aaa' }}>{nowProgram.title}</span>}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <button onClick={() => {}} style={ctrlBtnStyle}>SUBS</button>
+                <button onClick={() => {}} style={ctrlBtnStyle}>AUDIO</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
+                <button onClick={handlePrevChannel} style={ctrlBtnStyle}>PREV</button>
+                <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>REW</button>
+                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '10px 20px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', fontSize: '11px' }}>
+                  {isPaused ? 'PLAY' : 'PAUSE'}
+                </button>
+                <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>FWD</button>
+                <button onClick={handleNextChannel} style={ctrlBtnStyle}>NEXT</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <button onClick={handleFullscreen} style={{ ...ctrlBtnStyle, color: '#fff', fontWeight: 700 }}>MINIMIZE</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ========== NO CHANNEL SELECTED — PLACEHOLDER ==========
   if (!selectedChannel) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.4)', position: 'relative', minWidth: 0 }}>
-        <div style={{ flex: 1, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ flex: 1, background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ textAlign: 'center', color: CSS.textMuted }}>
             <div style={{ fontSize: '26px', fontWeight: 900, fontStyle: 'italic', letterSpacing: '-1px', marginBottom: '6px' }}>
               NINJA <span style={{ color: CSS.accent }}>8K</span>
@@ -478,10 +577,8 @@ const OTTPlayer = memo(({
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.4)', position: 'relative', minWidth: 0 }}>
 
-      {/* Video area */}
-      <div ref={playerRef} onClick={handleVideoAreaClick} style={{ flex: 1, background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer' }}>
-        {/* libVLC renders natively behind WebView — this is the transparent overlay */}
-        <div style={{ position: 'absolute', inset: 0, background: 'transparent' }} />
+      {/* Video area — transparent so libVLC native renders behind */}
+      <div ref={videoAreaRef} onClick={handleVideoAreaClick} style={{ flex: 1, background: 'transparent', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer' }}>
 
         {/* Controls overlay */}
         {showControls && (
