@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
-import { PlaylistProvider, usePlaylistContext } from './context/PlaylistContext';
+import { deletePlaylist } from './services/NinjaStorage';
 import { ServerForm } from './components/ServerForm';
 import { Player } from './components/player';
 import { NinjaSplash } from './components/NinjaSplash';
 import GestureTutorial, { isTutorialDone } from './components/GestureTutorial';
 import ParticleThemes from './components/ParticleThemes';
-import { ninjaCentral, STORES } from './services/NinjaCentral';
 import { useGestures } from './hooks/useGestures';
 import { extractLangPrefix } from './database/NinjaLocalDB';
 import { insertProgramsBatch, cleanExpiredPrograms } from './database/ProgramQueries';
@@ -15,11 +14,12 @@ import XMLTVRefreshService from './services/XMLTVRefreshService';
 
 // ============================================================================
 // NINJA 8K — App Root
-// Flow: Tutorial → ServerForm → Player (fullscreen OTT)
-// No more Smart.jsx — Player handles everything with OTTLeft + OTTRight
+// Flow: Splash → ServerForm or Player (fullscreen OTT)
+// No NinjaCentral — Playlist stored via NinjaStorage (Capacitor Preferences)
+// SQLite reserved for EPG only (programs + channels mapping)
 //
 // EPG Background Sync runs here (access to xtreamService + categories)
-// Detects user language from first 10 live categories → syncs only those + VIP
+// Detects user language from first 30 live categories → syncs only those + VIP
 // ============================================================================
 
 // ============================================================================
@@ -63,15 +63,11 @@ const detectUserLangs = (liveCategories) => {
 };
 
 const AppContent = () => {
-  const { playlist, setPlaylist, clearPlaylist, isRestored } = usePlaylistContext();
+  const [playlist, setPlaylist] = useState(null);
   const [currentPage, setCurrentPage] = useState('splash');
   const [showTutorial, setShowTutorial] = useState(false);
   const [xtreamService, setXtreamService] = useState(null);
   const [preloadedCategories, setPreloadedCategories] = useState(null); // Categories from Splash
-
-  // NinjaCentral data (persisted)
-  const [liveData, setLiveData] = useState([]);
-  const [ninjaReady, setNinjaReady] = useState(false);
 
   // Detected user languages (for EPG sync + OTTLeft)
   const [userLangs, setUserLangs] = useState([]);
@@ -155,168 +151,57 @@ const AppContent = () => {
   }, []);
 
   // ============================================================================
-  // NINJA CENTRAL — Load persisted data on mount
+  // PLAYLIST DATA — Detect languages + upgrade logos when playlist arrives
   // ============================================================================
   useEffect(() => {
-    const loadFromNinja = async () => {
-      try {
-        await ninjaCentral.init();
-        const [live, vod, series, liveCats] = await Promise.all([
-          ninjaCentral.getAll(STORES.LIVE),
-          ninjaCentral.getAll(STORES.VOD),
-          ninjaCentral.getAll(STORES.SERIES),
-          ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
-        ]);
-        if (live.length > 0 || vod.length > 0 || series.length > 0) {
-          setLiveData(live);
-          console.log(`[NinjaCentral] Loaded: ${live.length} live, ${vod.length} vod, ${series.length} series`);
-
-          // Detect user languages from persisted categories
-          if (liveCats.length > 0) {
-            const langs = detectUserLangs(liveCats);
-            setUserLangs(langs);
-            console.log('[NinjaCentral] User langs detected:', langs);
-          }
-
-          // Auto-play first live channel from NinjaCentral (returning user)
-          if (live.length > 0 && !autoPlayedRef.current) {
-            autoPlayedRef.current = true;
-            setSelectedItem(live[0]);
-            setIsPlaying(true);
-            console.log('[AutoPlay] From NinjaCentral:', live[0].name);
-          }
-          
-          // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
-          if (live.length > 0) {
-            console.log('🎨 [LOGO UPGRADE] Starting upgrade for', live.length, 'channels...');
-            
-            try {
-              const premiumLogosRaw = localStorage.getItem('premiumLogos');
-              console.log('📦 [LOGO UPGRADE] localStorage data exists:', !!premiumLogosRaw);
-              
-              const premiumLogos = JSON.parse(premiumLogosRaw || '[]');
-              console.log('🔍 [LOGO UPGRADE] Parsed', premiumLogos.length, 'premium logos');
-              
-              let upgraded = 0;
-              
-              live.forEach(ch => {
-                const match = premiumLogos.find(logo => 
-                  logo.match_patterns.some(pattern => {
-                    const p = pattern.toLowerCase();
-                    const n = (ch.name || '').toLowerCase();
-                    return n === p || n.includes(p);
-                  })
-                );
-                if (match) {
-                  ch.logo = match.logo_url;
-                  ch.stream_icon = match.logo_url;
-                  upgraded++;
-                }
-              });
-              
-              console.log(`✅ [LOGO UPGRADE] Upgraded ${upgraded}/${live.length} channels with premium logos`);
-              
-              if (upgraded > 0) {
-                setLiveData([...live]); // Force re-render
-              }
-            } catch (err) {
-              console.error('❌ [LOGO UPGRADE] Failed:', err.message);
-            }
-          }
-        }
-        setNinjaReady(true);
-      } catch (err) {
-        console.error('[NinjaCentral] Load error:', err);
-        setNinjaReady(true);
-      }
-    };
-    loadFromNinja();
-  }, []);
-
-  // ============================================================================
-  // SAVE TO NINJA CENTRAL when playlist.data arrives
-  // ============================================================================
-  useEffect(() => {
-    if (!playlist?.data || !ninjaReady) return;
+    if (!playlist?.data) return;
     
-    const saveToNinja = async () => {
+    const { live, liveCategories } = playlist.data;
+
+    // Detect user languages from fresh categories
+    if (liveCategories?.length > 0) {
+      const langs = detectUserLangs(liveCategories);
+      setUserLangs(langs);
+      console.log('[App] User langs detected:', langs);
+    }
+
+    // Auto-play first live channel
+    if (live?.length > 0 && !autoPlayedRef.current) {
+      autoPlayedRef.current = true;
+      setSelectedItem(live[0]);
+      setIsPlaying(true);
+      console.log('[AutoPlay] Playing:', live[0].name);
+    }
+
+    // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
+    if (live?.length > 0) {
       try {
-        await ninjaCentral.init();
-        const { live, vod, series, liveCategories, vodCategories, seriesCategories } = playlist.data;
+        const premiumLogos = JSON.parse(localStorage.getItem('premiumLogos') || '[]');
+        let upgraded = 0;
         
-        if (live?.length > 0) {
-          await ninjaCentral.saveItems(STORES.LIVE, live);
-          await ninjaCentral.saveCategories(STORES.LIVE_CATEGORIES, liveCategories || []);
-          setLiveData(live);
-        }
-        if (vod?.length > 0) {
-          await ninjaCentral.saveItems(STORES.VOD, vod);
-          await ninjaCentral.saveCategories(STORES.VOD_CATEGORIES, vodCategories || []);
-        }
-        if (series?.length > 0) {
-          await ninjaCentral.saveItems(STORES.SERIES, series);
-          await ninjaCentral.saveCategories(STORES.SERIES_CATEGORIES, seriesCategories || []);
-        }
-        console.log('[NinjaCentral] Saved playlist.data');
-
-        // Detect user languages from fresh categories
-        if (liveCategories?.length > 0) {
-          const langs = detectUserLangs(liveCategories);
-          setUserLangs(langs);
-          console.log('[App] User langs detected:', langs);
-        }
-
-        // Auto-play first live channel
-        if (live?.length > 0 && !autoPlayedRef.current) {
-          autoPlayedRef.current = true;
-          setSelectedItem(live[0]);
-          setIsPlaying(true);
-          console.log('[AutoPlay] Playing:', live[0].name);
-        }
-        
-        // UPGRADE TO PREMIUM LOGOS (en RAM, ultra rapide)
-        if (live?.length > 0) {
-          console.log('🎨 [LOGO UPGRADE] Starting upgrade for', live.length, 'channels (playlist.data)...');
-          
-          try {
-            const premiumLogosRaw = localStorage.getItem('premiumLogos');
-            console.log('📦 [LOGO UPGRADE] localStorage data exists:', !!premiumLogosRaw);
-            
-            const premiumLogos = JSON.parse(premiumLogosRaw || '[]');
-            console.log('🔍 [LOGO UPGRADE] Parsed', premiumLogos.length, 'premium logos');
-            
-            let upgraded = 0;
-            
-            live.forEach(ch => {
-              const match = premiumLogos.find(logo => 
-                logo.match_patterns.some(pattern => {
-                  const p = pattern.toLowerCase();
-                  const n = (ch.name || '').toLowerCase();
-                  return n === p || n.includes(p);
-                })
-              );
-              if (match) {
-                ch.logo = match.logo_url;
-                ch.stream_icon = match.logo_url;
-                upgraded++;
-              }
-            });
-            
-            console.log(`✅ [LOGO UPGRADE] Upgraded ${upgraded}/${live.length} channels with premium logos`);
-            
-            if (upgraded > 0) {
-              setLiveData([...live]); // Force re-render
-            }
-          } catch (err) {
-            console.error('❌ [LOGO UPGRADE] Failed:', err.message);
+        live.forEach(ch => {
+          const match = premiumLogos.find(logo => 
+            logo.match_patterns.some(pattern => {
+              const p = pattern.toLowerCase();
+              const n = (ch.name || '').toLowerCase();
+              return n === p || n.includes(p);
+            })
+          );
+          if (match) {
+            ch.logo = match.logo_url;
+            ch.stream_icon = match.logo_url;
+            upgraded++;
           }
+        });
+        
+        if (upgraded > 0) {
+          console.log(`✅ [LOGO UPGRADE] Upgraded ${upgraded}/${live.length} channels`);
         }
       } catch (err) {
-        console.error('[NinjaCentral] Save error:', err);
+        console.error('❌ [LOGO UPGRADE] Failed:', err.message);
       }
-    };
-    saveToNinja();
-  }, [playlist?.data, ninjaReady]);
+    }
+  }, [playlist?.data]);
 
   // ============================================================================
   // XMLTV BACKGROUND REFRESH - Every 5 minutes
@@ -338,7 +223,7 @@ const AppContent = () => {
   // ============================================================================
   // EPG BACKGROUND SYNC — First 250 folders, server order, every 30 minutes
   //
-  // - Reads categories from NinjaCentral in server order
+  // - Reads categories from playlist.data (localStorage)
   // - Takes first 250 folders
   // - For each folder: fetch EPG for all channels → save to SQLite → next
   // - Progress: folder-level (e.g. 25/250 = 10%)
@@ -349,6 +234,15 @@ const AppContent = () => {
   const runEpgSync = useCallback(async (service) => {
     if (!service) return;
 
+    // Read channels and categories from playlist (localStorage) instead of NinjaCentral
+    const allChannels = playlist?.data?.live || [];
+    const liveCats = playlist?.data?.liveCategories || [];
+
+    if (allChannels.length === 0 || liveCats.length === 0) {
+      console.log('[EPG Sync] No channels or categories, skipping');
+      return;
+    }
+
     if (epgAbortRef.current) {
       epgAbortRef.current.abort();
     }
@@ -357,16 +251,6 @@ const AppContent = () => {
     const signal = abortController.signal;
 
     try {
-      await ninjaCentral.init();
-      const [allChannels, liveCats] = await Promise.all([
-        ninjaCentral.getAll(STORES.LIVE),
-        ninjaCentral.getAll(STORES.LIVE_CATEGORIES),
-      ]);
-
-      if (allChannels.length === 0 || liveCats.length === 0) {
-        console.log('[EPG Sync] No channels or categories, skipping');
-        return;
-      }
 
       const MAX_FOLDERS = 250;
       const targetCats = liveCats.slice(0, MAX_FOLDERS);
@@ -464,7 +348,7 @@ const AppContent = () => {
         setEpgSyncProgress(0);
       }
     }
-  }, []);
+  }, [playlist?.data]);
 
   // Start EPG sync when xtreamService is ready
   useEffect(() => {
@@ -518,23 +402,20 @@ const AppContent = () => {
   });
 
   // ============================================================================
-  // NAVIGATION
+  // NAVIGATION — Splash decides first, then playlist presence
   // ============================================================================
   useEffect(() => {
-    if (isRestored) {
-      if (!isTutorialDone()) {
-        setShowTutorial(true);
-        setCurrentPage('tutorial');
-      } else if (playlist) {
-        setCurrentPage('player');
-      } else if (ninjaReady && liveData.length > 0) {
-        // Data in NinjaCentral but no playlist in context — go to player
-        setCurrentPage('player');
-      } else {
-        setCurrentPage('landing');
-      }
+    if (currentPage === 'splash') return; // NinjaSplash decides alone
+
+    if (!isTutorialDone()) {
+      setShowTutorial(true);
+      setCurrentPage('tutorial');
+    } else if (playlist) {
+      setCurrentPage('player');
+    } else {
+      setCurrentPage('landing');
     }
-  }, [isRestored, playlist, ninjaReady, liveData.length]);
+  }, [playlist]);
 
   const handleTutorialComplete = () => {
     setShowTutorial(false);
@@ -543,14 +424,18 @@ const AppContent = () => {
 
   const handleSplashComplete = useCallback((nextPage, sessionData = null) => {
     if (sessionData) {
-      // Splash sent complete session data (service + categories)
+      // Splash sent session data (service + playlist from NinjaStorage)
       if (sessionData.service) setXtreamService(sessionData.service);
-      if (sessionData.categories) setPreloadedCategories(sessionData.categories);
-      console.log('✅ Session data loaded from Splash:', {
-        liveCats: sessionData.categories?.live?.length || 0,
-        vodCats: sessionData.categories?.vod?.length || 0,
-        seriesCats: sessionData.categories?.series?.length || 0
-      });
+      
+      if (sessionData.playlistData) {
+        // Wrap playlist data in the format expected by the rest of the app
+        setPlaylist({ data: sessionData.playlistData });
+        console.log('✅ Playlist restored from NinjaStorage:', {
+          live: sessionData.playlistData.live?.length || 0,
+          vod: sessionData.playlistData.vod?.length || 0,
+          series: sessionData.playlistData.series?.length || 0,
+        });
+      }
     }
     setCurrentPage(nextPage);
   }, []);
@@ -562,7 +447,7 @@ const AppContent = () => {
       console.log('✅ XtreamService stored from ServerForm');
     }
     setCurrentPage('player');
-  }, [setPlaylist]);
+  }, []);
 
   const handleLogout = useCallback(() => {
     // Stop EPG sync
@@ -572,13 +457,14 @@ const AppContent = () => {
     setEpgSyncingFolders(new Set());
     setUserLangs([]);
 
-    clearPlaylist();
+    setPlaylist(null);
+    deletePlaylist(); // Remove from NinjaStorage (async, fire & forget)
     autoPlayedRef.current = false;
     setSelectedItem(null);
     setIsPlaying(false);
     setOttSidebarOpen(false);
     setCurrentPage('landing');
-  }, [clearPlaylist]);
+  }, []);
 
   const handleChannelChange = useCallback((channel) => {
     setSelectedItem(channel);
@@ -693,9 +579,7 @@ const AppContent = () => {
 };
 
 const App = () => (
-  <PlaylistProvider>
-    <AppContent />
-  </PlaylistProvider>
+  <AppContent />
 );
 
 export default App;

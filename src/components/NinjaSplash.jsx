@@ -3,10 +3,19 @@ import { THEME } from '../constants/theme';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import ParticleThemes from './ParticleThemes';
 import { getLastActiveServer, openDatabase } from '../database/NinjaLocalDB';
+import { loadPlaylist } from '../services/NinjaStorage';
 import { XtreamService } from '../services/XtreamService';
 
 // ============================================================================
-// NINJA SPLASH - Auto-login + DB initialization
+// NINJA SPLASH - Auto-login + Playlist restore from NinjaStorage
+// 
+// Flow:
+// 1. Init SQLite (for EPG only)
+// 2. Check last active server (credentials in SQLite)
+// 3. Load playlist from NinjaStorage (Capacitor Preferences)
+// 4. If both exist → instant OTT (zero fetch)
+// 5. If server but no playlist → OTT with service only (will need fetch)
+// 6. If nothing → ServerForm
 // ============================================================================
 
 export const NinjaSplash = ({ onComplete }) => {
@@ -47,37 +56,35 @@ export const NinjaSplash = ({ onComplete }) => {
         await new Promise(r => setTimeout(r, 1500));
         
         if (lastServer) {
-          setStatus('Chargement de votre interface...');
-          
-          // Load categories in parallel (lightweight, instant OTT display)
-          const [liveCats, vodCats, seriesCats] = await Promise.all([
-            db.query('SELECT * FROM live_categories ORDER BY display_order'),
-            db.query('SELECT * FROM vod_categories ORDER BY display_order'),
-            db.query('SELECT * FROM series_categories ORDER BY display_order')
-          ]);
+          // 3. Load playlist from NinjaStorage (Capacitor Preferences)
+          setStatus('Chargement de la playlist...');
+          const playlistData = await loadPlaylist();
           
           const xtream = new XtreamService(lastServer.url, lastServer.username, lastServer.password);
           
-          // Prepare complete session data
+          // Prepare session data
           const sessionData = {
             service: xtream,
-            categories: {
-              live: liveCats || [],
-              vod: vodCats || [],
-              series: seriesCats || []
-            },
+            playlistData, // null if no playlist saved yet
             serverInfo: {
               name: lastServer.name,
               url: lastServer.url,
               username: lastServer.username,
-              password: lastServer.password
-            }
+              password: lastServer.password,
+            },
           };
           
-          // Complete with player + all data
+          if (playlistData) {
+            console.log('✅ [Splash] Playlist restored from NinjaStorage');
+            setStatus('Bienvenue !');
+          } else {
+            console.log('⚠️ [Splash] Server found but no playlist cached');
+            setStatus('Chargement...');
+          }
+          
           setTimeout(() => {
             onComplete('player', sessionData);
-          }, 500);
+          }, 400);
         } else {
           // No server found → go to login
           setStatus('Aucun serveur trouvé');

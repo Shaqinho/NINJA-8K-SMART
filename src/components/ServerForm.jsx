@@ -10,15 +10,9 @@ import { LoadingScreen } from './LoadingScreen';
 import ParticleThemes from './ParticleThemes';
 import { 
   insertChannels, 
-  insertLiveCategories,
-  insertVODCategories,
-  insertSeriesCategories,
-  insertVODItems,
-  insertSeriesItems,
-  insertVODItemsChunked,
-  insertSeriesItemsChunked,
   loadXMLTV 
 } from '../database/ProgramQueries';
+import { savePlaylist } from '../services/NinjaStorage';
 
 // ============================================================================
 // GLASS STYLES - Transparent pour voir les particules
@@ -286,25 +280,27 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
 
     setProgress({ step: 'Done!', percent: 100 });
 
-    // STORE IN SQLITE FOR SEARCH
+    // STORE PLAYLIST + CHANNELS FOR EPG
     try {
-      setProgress({ step: 'Indexing for search...', percent: 85 });
+      setProgress({ step: 'Saving playlist...', percent: 85 });
       
-      if (window.db) {
+      const playlistToSave = {
+        live: mappedLive,
+        vod: mappedVod,
+        series: mappedSeries,
+        liveCategories,
+        vodCategories,
+        seriesCategories,
+      };
+      
+      await savePlaylist(playlistToSave);
+      
+      if (window.db && mappedLive.length > 0) {
         await Promise.race([
-          Promise.all([
-            mappedLive.length > 0 && insertChannels(mappedLive),
-            liveCategories.length > 0 && insertLiveCategories(liveCategories),
-            mappedVod.length > 0 && insertVODItems(mappedVod),
-            mappedSeries.length > 0 && insertSeriesItems(mappedSeries),
-            vodCategories.length > 0 && insertVODCategories(vodCategories),
-            seriesCategories.length > 0 && insertSeriesCategories(seriesCategories)
-          ].filter(Boolean)),
+          insertChannels(mappedLive),
           new Promise(resolve => setTimeout(resolve, 8000))
         ]);
-        console.log("✅ Indexation terminée via instance partagée");
-      } else {
-        console.warn('⚠️ window.db not available, skipping indexation');
+        console.log("✅ Channels indexed for EPG mapping");
       }
       
       // XMLTV EPG LOADING - Récupérer le résultat du background load
@@ -362,7 +358,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
             try {
               console.log('💾 Starting background save...');
               
-              // Save server + categories first (for auto-login)
+              // Save server credentials (SQLite — for auto-login)
               const { saveServer } = await import('../database/NinjaLocalDB');
               await saveServer({ 
                 name: form.name || 'My Server', 
@@ -371,18 +367,11 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
                 password: form.password 
               });
               
-              await Promise.all([
-                insertLiveCategories(data.liveCategories),
-                insertVODCategories(data.vodCategories),
-                insertSeriesCategories(data.seriesCategories),
-                insertChannels(data.live),
-              ]);
+              // Save playlist to NinjaStorage (Capacitor Preferences)
+              await savePlaylist(data);
               
-              console.log('✅ Priority data saved (server + categories + channels)');
-              
-              // VOD/Series with chunking (sequential to avoid DB lock)
-              await insertVODItemsChunked(data.vod);
-              await insertSeriesItemsChunked(data.series);
+              // Save channels to SQLite (for EPG mapping only)
+              await insertChannels(data.live);
               
               console.log('✅ Background save complete');
               localStorage.setItem('ninja_save_status', 'complete');
@@ -440,17 +429,8 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
                   password: parsed.password 
                 });
                 
-                await Promise.all([
-                  insertLiveCategories(data.liveCategories),
-                  insertVODCategories(data.vodCategories),
-                  insertSeriesCategories(data.seriesCategories),
-                  insertChannels(data.live),
-                ]);
-                
-                console.log('✅ Priority data saved');
-                
-                await insertVODItemsChunked(data.vod);
-                await insertSeriesItemsChunked(data.series);
+                await savePlaylist(data);
+                await insertChannels(data.live);
                 
                 console.log('✅ Background save complete');
                 localStorage.setItem('ninja_save_status', 'complete');
@@ -513,17 +493,8 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
                   password: parsed.password 
                 });
                 
-                await Promise.all([
-                  insertLiveCategories(data.liveCategories),
-                  insertVODCategories(data.vodCategories),
-                  insertSeriesCategories(data.seriesCategories),
-                  insertChannels(data.live),
-                ]);
-                
-                console.log('✅ Priority data saved');
-                
-                await insertVODItemsChunked(data.vod);
-                await insertSeriesItemsChunked(data.series);
+                await savePlaylist(data);
+                await insertChannels(data.live);
                 
                 console.log('✅ Background save complete');
                 localStorage.setItem('ninja_save_status', 'complete');
