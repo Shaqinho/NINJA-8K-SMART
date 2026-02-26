@@ -98,8 +98,8 @@ const OTTPlayer = memo(({
   }, []);
 
   const setFullscreenPosition = useCallback(() => {
-    const w = window.innerWidth || screen.width;
-    const h = window.innerHeight || screen.height;
+    const w = window.innerWidth || window.screen.width;
+    const h = window.innerHeight || window.screen.height;
     libVLC.setPosition(0, 0, w, h);
   }, []);
 
