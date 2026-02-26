@@ -70,7 +70,7 @@ const FolderRowItem = memo(({ data, index, style }) => {
       style={{
         ...style,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 14px',
+        padding: '0 10px',
         cursor: 'pointer',
         borderLeft: isActive ? '3px solid transparent' : '3px solid transparent',
         background: isActive ? CSS.gradient : 'transparent',
@@ -83,7 +83,7 @@ const FolderRowItem = memo(({ data, index, style }) => {
       onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
     >
       <span style={{
-        fontSize: '12px', fontWeight: isActive ? 600 : 500,
+        fontSize: '10px', fontWeight: isActive ? 600 : 500,
         color: isActive ? '#fff' : CSS.textDim,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         flex: 1, marginRight: '8px',
@@ -91,7 +91,7 @@ const FolderRowItem = memo(({ data, index, style }) => {
         {cat.category_name}
       </span>
       <span style={{
-        fontSize: '10px', fontWeight: 600,
+        fontSize: '9px', fontWeight: 600,
         color: isActive ? '#fff' : CSS.textMuted,
         background: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
         padding: '2px 7px', borderRadius: '9px',
@@ -121,7 +121,9 @@ const ChannelRowItem = memo(({ data, index, style }) => {
   const channel = items[index];
   if (!channel) return null;
 
-  const isActive = selectedChannel?.id === channel.id || selectedChannel?.stream_id === channel.stream_id;
+  const selectedId = String(selectedChannel?.stream_id || selectedChannel?.id || '');
+  const currentId = String(channel.stream_id || channel.id || '');
+  const isActive = selectedId !== '' && selectedId === currentId;
   const channelId = channel.stream_id || channel.id;
   const isFav = favorites[channelId];
 
@@ -138,8 +140,8 @@ const ChannelRowItem = memo(({ data, index, style }) => {
     <div
       style={{
         ...style,
-        display: 'flex', alignItems: 'center', gap: '10px',
-        padding: '0 12px',
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '0 10px',
         cursor: 'pointer',
         borderBottom: '1px solid rgba(255,255,255,0.02)',
         background: isFocused ? 'rgba(98,37,255,0.4)' : isActive ? CSS.gradient : 'transparent',
@@ -157,11 +159,11 @@ const ChannelRowItem = memo(({ data, index, style }) => {
       onMouseEnter={(e) => { if (!isActive && !isFocused) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
     >
       {/* Number */}
-      <span style={{ fontSize: '11px', fontWeight: 600, color: isActive ? 'rgba(255,255,255,0.7)' : CSS.textMuted, minWidth: '24px', textAlign: 'right', flexShrink: 0 }}>
+      <span style={{ fontSize: '9px', fontWeight: 600, color: isActive ? 'rgba(255,255,255,0.7)' : CSS.textMuted, minWidth: '20px', textAlign: 'right', flexShrink: 0 }}>
         {channel.num || index + 1}
       </span>
       {/* Logo */}
-      <div style={{ width: '28px', height: '28px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+      <div style={{ width: '24px', height: '24px', borderRadius: '3px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
         {channel.logo ? (
           <img src={channel.logo} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; }} />
         ) : (
@@ -170,11 +172,11 @@ const ChannelRowItem = memo(({ data, index, style }) => {
       </div>
       {/* Name + EPG */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '12px', fontWeight: isActive ? 600 : 500, color: isActive ? '#fff' : 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: '10px', fontWeight: isActive ? 600 : 500, color: isActive ? '#fff' : 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {channel.name}
         </div>
         {epgTitle && (
-          <div style={{ fontSize: '9px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+          <div style={{ fontSize: '8px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
             {epgTitle}
           </div>
         )}
@@ -206,19 +208,19 @@ const MovieRowItem = memo(({ data, index, style }) => {
   const subLine = [year, rating ? `★ ${rating}` : '', genre].filter(Boolean).join(' | ');
 
   return (
-    <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '10px', padding: '0 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.12s' }}
+    <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.12s' }}
       onClick={() => onItemClick(movie)}
       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
     >
       {movie.logo || movie.cover ? (
-        <img src={movie.logo || movie.cover} alt="" style={{ width: '28px', height: '40px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0, background: 'rgba(255,255,255,0.04)' }} onError={(e) => { e.target.style.display = 'none'; }} />
+        <img src={movie.logo || movie.cover} alt="" style={{ width: '22px', height: '32px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0, background: 'rgba(255,255,255,0.04)' }} onError={(e) => { e.target.style.display = 'none'; }} />
       ) : (
-        <div style={{ width: '28px', height: '40px', background: 'rgba(255,255,255,0.04)', borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0 }}>🎬</div>
+        <div style={{ width: '22px', height: '32px', background: 'rgba(255,255,255,0.04)', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>🎬</div>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '12px', fontWeight: 500, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{movie.name}</div>
-        {subLine && <div style={{ fontSize: '9px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subLine}</div>}
+        <div style={{ fontSize: '10px', fontWeight: 500, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{movie.name}</div>
+        {subLine && <div style={{ fontSize: '8px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subLine}</div>}
       </div>
     </div>
   );
@@ -238,19 +240,19 @@ const SeriesRowItem = memo(({ data, index, style }) => {
   const subLine = [year, rating ? `★ ${rating}` : '', seasonLabel].filter(Boolean).join(' | ');
 
   return (
-    <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '10px', padding: '0 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.12s' }}
+    <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.12s' }}
       onClick={() => onItemClick(series)}
       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
     >
       {series.cover ? (
-        <img src={series.cover} alt="" style={{ width: '28px', height: '40px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0, background: 'rgba(255,255,255,0.04)' }} onError={(e) => { e.target.style.display = 'none'; }} />
+        <img src={series.cover} alt="" style={{ width: '22px', height: '32px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0, background: 'rgba(255,255,255,0.04)' }} onError={(e) => { e.target.style.display = 'none'; }} />
       ) : (
-        <div style={{ width: '28px', height: '40px', background: 'rgba(255,255,255,0.04)', borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0 }}>📺</div>
+        <div style={{ width: '22px', height: '32px', background: 'rgba(255,255,255,0.04)', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>📺</div>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '12px', fontWeight: 500, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{series.name}</div>
-        {subLine && <div style={{ fontSize: '9px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subLine}</div>}
+        <div style={{ fontSize: '10px', fontWeight: 500, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{series.name}</div>
+        {subLine && <div style={{ fontSize: '8px', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subLine}</div>}
       </div>
     </div>
   );
@@ -271,18 +273,18 @@ const ProgramRowItem = memo(({ data, index, style }) => {
   };
 
   return (
-    <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '8px', padding: '0 12px', cursor: 'pointer', background: isLive ? 'rgba(98,37,255,0.15)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.02)' }}
+    <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '6px', padding: '0 10px', cursor: 'pointer', background: isLive ? 'rgba(98,37,255,0.15)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.02)' }}
       onClick={() => onProgramClick(prog)}
     >
       {prog.channel_logo ? (
-        <img src={prog.channel_logo} alt="" style={{ width: '30px', height: '20px', objectFit: 'contain', borderRadius: '3px', flexShrink: 0, background: 'rgba(255,255,255,0.04)' }} onError={(e) => { e.target.style.display = 'none'; }} />
+        <img src={prog.channel_logo} alt="" style={{ width: '24px', height: '16px', objectFit: 'contain', borderRadius: '2px', flexShrink: 0, background: 'rgba(255,255,255,0.04)' }} onError={(e) => { e.target.style.display = 'none'; }} />
       ) : (
-        <div style={{ width: '30px', height: '20px', background: 'rgba(255,255,255,0.04)', borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', flexShrink: 0 }}>TV</div>
+        <div style={{ width: '24px', height: '16px', background: 'rgba(255,255,255,0.04)', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', flexShrink: 0 }}>TV</div>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {isLive && <span style={{ fontSize: '7px', fontWeight: 700, color: '#fff', background: '#e53e3e', borderRadius: '2px', padding: '1px 4px', flexShrink: 0 }}>LIVE</span>}
-          <span style={{ fontSize: '10px', fontWeight: 500, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prog.title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {isLive && <span style={{ fontSize: '6px', fontWeight: 700, color: '#fff', background: '#e53e3e', borderRadius: '2px', padding: '1px 3px', flexShrink: 0 }}>LIVE</span>}
+          <span style={{ fontSize: '9px', fontWeight: 500, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prog.title}</span>
         </div>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <span style={{ fontSize: '8px', color: '#888' }}>{prog.channel_name}</span>
@@ -329,8 +331,7 @@ const OTT = forwardRef(({
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // ========== DATA STATE (counts, category mapping) ==========
-  const [categoryCounts, setCategoryCounts] = useState({});
+  // ========== DATA STATE ==========
   const [seriesSeasons, setSeriesSeasons] = useState({});
 
   // ========== EPG STATE ==========
@@ -373,8 +374,8 @@ const OTT = forwardRef(({
     return [];
   }, [activeTab, liveChannels, vodItems, seriesItems]);
 
-  // ========== COMPUTE CATEGORY COUNTS ==========
-  useEffect(() => {
+  // ========== COMPUTE CATEGORY COUNTS (useMemo — no extra re-render) ==========
+  const categoryCounts = useMemo(() => {
     const counts = {};
     liveChannels.forEach(ch => {
       const catId = String(ch.categoryId || ch.category_id);
@@ -388,7 +389,7 @@ const OTT = forwardRef(({
       const catId = String(item.categoryId || item.category_id);
       counts[`series_${catId}`] = (counts[`series_${catId}`] || 0) + 1;
     });
-    setCategoryCounts(counts);
+    return counts;
   }, [liveChannels, vodItems, seriesItems]);
 
   // ========== SYSTEM FOLDERS ==========
@@ -869,8 +870,8 @@ const OTT = forwardRef(({
 
         {/* === COLUMN 1: FOLDERS === */}
         <div style={{
-          width: singleColMode ? 0 : '220px',
-          minWidth: singleColMode ? 0 : '180px',
+          width: singleColMode ? 0 : '180px',
+          minWidth: singleColMode ? 0 : '150px',
           borderRight: singleColMode ? 'none' : `1px solid ${CSS.divider}`,
           display: 'flex', flexDirection: 'column',
           background: 'rgba(8, 8, 14, 0.5)',
@@ -882,8 +883,8 @@ const OTT = forwardRef(({
             ref={folderListRef}
             height={listHeight}
             itemCount={activeCategories.length}
-            itemSize={38}
-            width={220}
+            itemSize={32}
+            width={180}
             overscanCount={25}
             itemData={folderRowData}
           >
@@ -893,8 +894,8 @@ const OTT = forwardRef(({
 
         {/* === COLUMN 2: CHANNELS / ITEMS === */}
         <div style={{
-          width: singleColMode ? '320px' : '280px',
-          minWidth: singleColMode ? '260px' : '220px',
+          width: singleColMode ? '280px' : '240px',
+          minWidth: singleColMode ? '220px' : '190px',
           borderRight: `1px solid ${CSS.divider}`,
           display: 'flex', flexDirection: 'column',
           background: 'rgba(8, 8, 14, 0.3)',
@@ -930,7 +931,7 @@ const OTT = forwardRef(({
           {/* Items list */}
           <div style={{ flex: 1, overflow: 'hidden' }}>
             {programResults.length > 0 ? (
-              <List height={listHeight - 50} itemCount={programResults.length} itemSize={48} width={singleColMode ? 320 : 280} overscanCount={10} itemData={programRowData}>
+              <List height={listHeight - 50} itemCount={programResults.length} itemSize={40} width={singleColMode ? 280 : 240} overscanCount={10} itemData={programRowData}>
                 {ProgramRowItem}
               </List>
             ) : filteredItems.length > 0 ? (
@@ -938,8 +939,8 @@ const OTT = forwardRef(({
                 ref={channelListRef}
                 height={listHeight - 50}
                 itemCount={filteredItems.length}
-                itemSize={activeTab === 'live' ? 52 : 54}
-                width={singleColMode ? 320 : 280}
+                itemSize={activeTab === 'live' ? 40 : 42}
+                width={singleColMode ? 280 : 240}
                 overscanCount={25}
                 itemData={activeTab === 'movies' ? movieRowData : activeTab === 'series' ? seriesRowData : channelRowData}
               >
