@@ -135,7 +135,6 @@ const OTTPlayer = memo(({
 
     xtreamService.getShortEPG(channelId, 4).then(data => {
       const listings = Array.isArray(data) ? data : [];
-      const now = Math.floor(Date.now() / 1000);
       const programs = listings.slice(0, 4).map(p => ({
         title: p.title || '',
         description: p.description || '',
@@ -166,7 +165,6 @@ const OTTPlayer = memo(({
     setLoadingDayEpg(true);
     try {
       const rawData = await xtreamService.getFullEPG(streamId);
-      const now = Math.floor(Date.now() / 1000);
       const listings = rawData?.epg_listings || [];
       const programs = listings.map(p => {
         const st = parseInt(p.start_timestamp) || 0;
