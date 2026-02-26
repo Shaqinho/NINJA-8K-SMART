@@ -38,6 +38,21 @@ const formatDuration = (secs) => {
   return `${m}min`;
 };
 
+// Decode Base64 with proper UTF-8 support (accents, special chars)
+const decodeBase64UTF8 = (str) => {
+  if (!str) return '';
+  try {
+    const binaryStr = atob(str);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return str;
+  }
+};
+
 // Tag pill
 const TagPill = ({ children, color = 'purple' }) => {
   const colors = {
@@ -209,8 +224,8 @@ const OTTPlayer = memo(({
         const en = parseInt(p.stop_timestamp) || 0;
         const isLive = (st <= now && en > now) ? 1 : 0;
         return {
-          title: p.title ? atob(p.title) : '',
-          description: p.description ? atob(p.description) : '',
+          title: decodeBase64UTF8(p.title),
+          description: decodeBase64UTF8(p.description),
           start: p.start || '', end: p.end || '',
           start_time: st, end_time: en,
           is_currently_live: isLive,
@@ -662,7 +677,11 @@ const OTTPlayer = memo(({
           <button onClick={() => onToggleFavorite?.(channelId)} style={epgActionStyle}>
             {isFav ? '★ FAVORITE' : 'FAVORITE'}
           </button>
-          {!showFullSchedule && (
+          {showFullSchedule ? (
+            <button onClick={() => setShowFullSchedule(false)} style={epgActionStyle}>
+              CLOSE GUIDE
+            </button>
+          ) : (
             <button onClick={loadFullDayEpg} disabled={loadingDayEpg} style={epgActionStyle}>
               {loadingDayEpg ? 'LOADING...' : 'EPG GUIDE'}
             </button>
