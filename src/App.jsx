@@ -67,7 +67,7 @@ const AppContent = () => {
   const [currentPage, setCurrentPage] = useState('splash');
   const [showTutorial, setShowTutorial] = useState(false);
   const [xtreamService, setXtreamService] = useState(null);
-  const [preloadedCategories, setPreloadedCategories] = useState(null); // Categories from Splash
+
 
   // Detected user languages (for EPG sync + OTTLeft)
   const [userLangs, setUserLangs] = useState([]);
@@ -415,7 +415,7 @@ const AppContent = () => {
     } else {
       setCurrentPage('landing');
     }
-  }, [playlist]);
+  }, [playlist, currentPage]);
 
   const handleTutorialComplete = () => {
     setShowTutorial(false);
@@ -569,7 +569,6 @@ const AppContent = () => {
         epgSyncingFolders={epgSyncingFolders}
         epgSyncedFolders={epgSyncedFolders}
         userLangs={userLangs}
-        preloadedCategories={preloadedCategories}
         liveChannels={playlist?.data?.live || []}
         vodItems={playlist?.data?.vod || []}
         seriesItems={playlist?.data?.series || []}
