@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { libVLC } from './libVLC';
-import ProbeService from '../../services/ProbeService';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -35,21 +34,6 @@ const formatDuration = (secs) => {
   const m = Math.floor((s % 3600) / 60);
   if (h > 0) return `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
   return `${m}min`;
-};
-
-// Decode Base64 with proper UTF-8 support (accents, special chars)
-const decodeBase64UTF8 = (str) => {
-  if (!str) return '';
-  try {
-    const binaryStr = atob(str);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
-    return new TextDecoder('utf-8').decode(bytes);
-  } catch {
-    return str;
-  }
 };
 
 // Tag pill
@@ -122,19 +106,20 @@ const OTTPlayer = memo(({
   }, [updateNativePosition, isFullscreen]);
 
   // ========== EPG STATE ==========
-  const [epgPrograms, setEpgPrograms] = useState([]);
   const [showFullSchedule, setShowFullSchedule] = useState(false);
-  const [loadingDayEpg, setLoadingDayEpg] = useState(false);
 
   // ========== VOD/SERIES DETAIL STATE ==========
-  const [detailData, setDetailData] = useState(null);
-  const [probeData, setProbeData] = useState(null);
-  const [probing, setProbing] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [posterOverlay, setPosterOverlay] = useState(false);
   const [showAllAudio, setShowAllAudio] = useState(false);
   const [showAllSubs, setShowAllSubs] = useState(false);
+
+  // ========== DEFAULTS (fetching removed — will be rebuilt) ==========
+  const epgPrograms = [];
+  const detailData = null;
+  const probeData = null;
+  const probing = false;
+  const loading = false;
 
   // ========== BUILD STREAM URL ==========
   const getStreamUrl = useCallback((item) => {
