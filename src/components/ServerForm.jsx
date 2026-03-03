@@ -9,7 +9,6 @@ import { Icons } from './Icons';
 import { LoadingScreen } from './LoadingScreen';
 import ParticleThemes from './ParticleThemes';
 import { 
-  insertChannels, 
   loadXMLTV 
 } from '../database/ProgramQueries';
 import { savePlaylist } from '../services/NinjaStorage';
@@ -295,14 +294,6 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
       
       await savePlaylist(playlistToSave);
       
-      if (window.db && mappedLive.length > 0) {
-        await Promise.race([
-          insertChannels(mappedLive),
-          new Promise(resolve => setTimeout(resolve, 8000))
-        ]);
-        console.log("✅ Channels indexed for EPG mapping");
-      }
-      
       // XMLTV EPG LOADING - Récupérer le résultat du background load
       if (mappedLive.length > 0 && xmltvPromise) {
         setProgress({ step: 'Loading XMLTV EPG...', percent: 90 });
@@ -370,9 +361,6 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
               // Save playlist to NinjaStorage (Capacitor Preferences)
               await savePlaylist(data);
               
-              // Save channels to SQLite (for EPG mapping only)
-              await insertChannels(data.live);
-              
               console.log('✅ Background save complete');
               localStorage.setItem('ninja_save_status', 'complete');
             } catch (err) {
@@ -430,7 +418,6 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
                 });
                 
                 await savePlaylist(data);
-                await insertChannels(data.live);
                 
                 console.log('✅ Background save complete');
                 localStorage.setItem('ninja_save_status', 'complete');
@@ -494,7 +481,6 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
                 });
                 
                 await savePlaylist(data);
-                await insertChannels(data.live);
                 
                 console.log('✅ Background save complete');
                 localStorage.setItem('ninja_save_status', 'complete');
