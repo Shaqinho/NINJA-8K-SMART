@@ -67,13 +67,13 @@ const AppContent = () => {
   const [xtreamService, setXtreamService] = useState(null);
 
 
-  // Detected user languages (for EPG sync + OTTLeft)
+  // Detected user languages
   const [userLangs, setUserLangs] = useState([]);
 
-  // EPG background sync state
-  const [epgSyncProgress, setEpgSyncProgress] = useState(0);
-  const [epgSyncingFolders, setEpgSyncingFolders] = useState(new Set());
-  const [epgSyncedFolders, setEpgSyncedFolders] = useState(new Set());
+  // EPG background sync — refs only (no re-render)
+  const epgSyncProgressRef = useRef(0);
+  const epgSyncingFoldersRef = useRef(new Set());
+  const epgSyncedFoldersRef = useRef(new Set());
   const epgAbortRef = useRef(null);
   const epgIntervalRef = useRef(null);
 
@@ -250,8 +250,8 @@ const AppContent = () => {
         console.warn('[EPG Sync] Cleanup skipped:', e);
       }
 
-      setEpgSyncedFolders(new Set());
-      setEpgSyncProgress(0);
+      epgSyncedFoldersRef.current = new Set();
+      epgSyncProgressRef.current = 0;
 
       const BATCH_SIZE = 20;
       let foldersProcessed = 0;
@@ -262,7 +262,7 @@ const AppContent = () => {
         const catChannels = categoryMap[catId] || [];
         const streamIds = catChannels.map(ch => ch.id || ch.stream_id).filter(Boolean);
 
-        setEpgSyncingFolders(prev => new Set([...prev, catId]));
+        epgSyncingFoldersRef.current.add(catId);
 
         for (let i = 0; i < streamIds.length; i += BATCH_SIZE) {
           if (signal.aborted) break;
@@ -295,30 +295,25 @@ const AppContent = () => {
           }
         }
 
-        setEpgSyncingFolders(prev => {
-          const next = new Set(prev);
-          next.delete(catId);
-          return next;
-        });
-        setEpgSyncedFolders(prev => new Set([...prev, catId]));
+        epgSyncingFoldersRef.current.delete(catId);
+        epgSyncedFoldersRef.current.add(catId);
 
         foldersProcessed++;
-        const progress = Math.round((foldersProcessed / totalFolders) * 100);
-        setEpgSyncProgress(progress);
+        epgSyncProgressRef.current = Math.round((foldersProcessed / totalFolders) * 100);
       }
 
       if (!signal.aborted) {
-        setEpgSyncProgress(100);
+        epgSyncProgressRef.current = 100;
         console.log(`[EPG Sync] Complete: ${foldersProcessed}/${totalFolders} folders`);
 
         setTimeout(() => {
-          if (!signal.aborted) setEpgSyncProgress(0);
+          if (!signal.aborted) epgSyncProgressRef.current = 0;
         }, 5000);
       }
     } catch (err) {
       if (!signal.aborted) {
         console.error('[EPG Sync] Failed:', err);
-        setEpgSyncProgress(0);
+        epgSyncProgressRef.current = 0;
       }
     }
   }, [playlist?.data]);
@@ -394,13 +389,11 @@ const AppContent = () => {
   }, []);
 
   const handleLogout = useCallback(() => {
-    // Stop EPG sync
     if (epgAbortRef.current) epgAbortRef.current.abort();
     clearInterval(epgIntervalRef.current);
-    setEpgSyncProgress(0);
-    setEpgSyncingFolders(new Set());
+    epgSyncProgressRef.current = 0;
+    epgSyncingFoldersRef.current = new Set();
     setUserLangs([]);
-
     setPlaylist(null);
     deletePlaylist();
     setCurrentPage('landing');
@@ -450,9 +443,6 @@ const AppContent = () => {
       vodCategories={playlist?.data?.vodCategories || []}
       seriesCategories={playlist?.data?.seriesCategories || []}
       xtreamService={xtreamService}
-      epgSyncProgress={epgSyncProgress}
-      epgSyncingFolders={epgSyncingFolders}
-      epgSyncedFolders={epgSyncedFolders}
       userLangs={userLangs}
       onLogout={handleLogout}
       onReload={() => {

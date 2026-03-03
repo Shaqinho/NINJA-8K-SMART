@@ -54,15 +54,12 @@ const TickerText = memo(({ children, style = {} }) => {
 
 // ========== FOLDER ROW (Column 1) ==========
 const FolderRowItem = memo(({ data, index, style }) => {
-  const { categories, selectedCategory, getCategoryCount, onCategoryClick, epgSyncingFolders, epgSyncedFolders } = data;
+  const { categories, selectedCategory, getCategoryCount, onCategoryClick } = data;
   const cat = categories[index];
   if (!cat) return null;
 
   const isActive = selectedCategory?.category_id === cat.category_id;
   const count = cat.isSystem ? (cat.count || 0) : getCategoryCount(cat.category_id);
-  const catId = String(cat.category_id);
-  const isSyncing = epgSyncingFolders?.has(catId);
-  const isSynced = epgSyncedFolders?.has(catId);
 
   return (
     <div
@@ -91,11 +88,10 @@ const FolderRowItem = memo(({ data, index, style }) => {
       </span>
       <span style={{
         fontSize: '9px', fontWeight: 600,
-        color: isActive ? '#fff' : isSynced ? '#22c55e' : isSyncing ? CSS.accent : CSS.textMuted,
-        background: isActive ? 'rgba(255,255,255,0.2)' : isSynced ? 'rgba(34,197,94,0.1)' : isSyncing ? 'rgba(98,37,255,0.15)' : 'rgba(255,255,255,0.05)',
+        color: isActive ? '#fff' : CSS.textMuted,
+        background: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
         padding: '2px 7px', borderRadius: 0,
         minWidth: '28px', textAlign: 'center', flexShrink: 0,
-        animation: isSyncing ? 'epgPulse 1.5s ease-in-out infinite' : 'none',
       }}>
         {count}
       </span>
@@ -292,10 +288,6 @@ const OTT = forwardRef(({
   seriesCategories = [],
   // Services
   xtreamService,
-  // EPG sync (from App.jsx)
-  epgSyncProgress = 0,
-  epgSyncingFolders = new Set(),
-  epgSyncedFolders = new Set(),
   userLangs = [],
   // Callbacks
   onLogout,
@@ -631,9 +623,7 @@ const OTT = forwardRef(({
     selectedCategory,
     getCategoryCount,
     onCategoryClick: handleCategoryClick,
-    epgSyncingFolders,
-    epgSyncedFolders,
-  }), [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick, epgSyncingFolders, epgSyncedFolders]);
+  }), [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick]);
 
   const channelRowData = useMemo(() => ({
     items: filteredItems,
@@ -747,7 +737,7 @@ const OTT = forwardRef(({
             ref={folderListRef}
             height={listHeight}
             itemCount={activeCategories.length}
-            itemSize={28}
+            itemSize={20}
             width={180}
             overscanCount={25}
             itemData={folderRowData}
