@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
-import { searchProgramsByTitle } from '../../database/ProgramQueries';
 import OTTPlayer from './OTTPlayer';
 
 // ============================================================================
@@ -342,7 +341,6 @@ const OTT = forwardRef(({
   const itemTapTimerRef = useRef(null);
   const itemTouchStartPos = useRef({ x: 0, y: 0 });
   const focusTimerRef = useRef(null);
-  const programSearchTimerRef = useRef(null);
 
   // ========== REFS ==========
   const folderListRef = useRef(null);
@@ -465,23 +463,7 @@ const OTT = forwardRef(({
 
 
 
-  // ========== PROGRAM SEARCH ==========
-  useEffect(() => {
-    if (activeTab !== 'live' || !selectedCategory || selectedCategory.category_id === '__all__') {
-      if (programResults.length > 0) setProgramResults([]);
-      return;
-    }
-    const q = searchQuery.trim();
-    if (q.length < 2) { if (programResults.length > 0) setProgramResults([]); return; }
-    clearTimeout(programSearchTimerRef.current);
-    programSearchTimerRef.current = setTimeout(async () => {
-      try {
-        const results = await searchProgramsByTitle(q, [], true, true, 50);
-        setProgramResults(results);
-      } catch { setProgramResults([]); }
-    }, 300);
-    return () => clearTimeout(programSearchTimerRef.current);
-  }, [searchQuery, activeTab, selectedCategory]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ========== PROGRAM SEARCH (disabled — no background processing) ==========
 
   // ========== HANDLERS ==========
   const handleCategoryClick = useCallback((category) => {
