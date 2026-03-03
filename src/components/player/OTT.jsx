@@ -327,6 +327,12 @@ const OTT = forwardRef(({
     try { return JSON.parse(localStorage.getItem('ninja_recent') || '[]'); } catch { return []; }
   });
 
+  // Stable refs — so row data doesn't re-render the whole List on fav/recent change
+  const favoritesRef = useRef(favorites);
+  useEffect(() => { favoritesRef.current = favorites; }, [favorites]);
+  const recentIdsRef = useRef(recentIds);
+  useEffect(() => { recentIdsRef.current = recentIds; }, [recentIds]);
+
   // ========== GESTURE STATE ==========
   const [shakingItemId, setShakingItemId] = useState(null);
   const [focusedStreamId, setFocusedStreamId] = useState(null);
@@ -399,13 +405,19 @@ const OTT = forwardRef(({
     return 0;
   }, [activeTab, categoryCounts]);
 
+  // ========== SORTED ALL (memoized separately to avoid re-sort on every render) ==========
+  const sortedAllItems = useMemo(() => {
+    return [...activeItems].sort((a, b) => (Number(b.added) || 0) - (Number(a.added) || 0));
+  }, [activeItems]);
+
   // ========== FILTERED ITEMS ==========
+  // Only depends on category/search/activeItems — NOT favorites/recentIds for normal folders
   const filteredItems = useMemo(() => {
     if (!selectedCategory) return [];
 
     let items;
     if (selectedCategory.category_id === '__all__') {
-      items = [...activeItems].sort((a, b) => (Number(b.added) || 0) - (Number(a.added) || 0));
+      items = sortedAllItems;
     } else if (selectedCategory.category_id === '__favorites__') {
       items = activeItems.filter(item => favorites[item.stream_id || item.id || item.series_id]);
     } else if (selectedCategory.category_id === '__recent__') {
@@ -425,7 +437,7 @@ const OTT = forwardRef(({
     }
 
     return items;
-  }, [selectedCategory, activeItems, searchQuery, favorites, recentIds]);
+  }, [selectedCategory, activeItems, sortedAllItems, searchQuery, favorites, recentIds]);
 
   // ========== FAVORITES ==========
   const toggleFavorite = useCallback((itemId) => {
@@ -456,11 +468,11 @@ const OTT = forwardRef(({
   // ========== PROGRAM SEARCH ==========
   useEffect(() => {
     if (activeTab !== 'live' || !selectedCategory || selectedCategory.category_id === '__all__') {
-      setProgramResults([]);
+      if (programResults.length > 0) setProgramResults([]);
       return;
     }
     const q = searchQuery.trim();
-    if (q.length < 2) { setProgramResults([]); return; }
+    if (q.length < 2) { if (programResults.length > 0) setProgramResults([]); return; }
     clearTimeout(programSearchTimerRef.current);
     programSearchTimerRef.current = setTimeout(async () => {
       try {
@@ -469,7 +481,7 @@ const OTT = forwardRef(({
       } catch { setProgramResults([]); }
     }, 300);
     return () => clearTimeout(programSearchTimerRef.current);
-  }, [searchQuery, activeTab, selectedCategory]);
+  }, [searchQuery, activeTab, selectedCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ========== HANDLERS ==========
   const handleCategoryClick = useCallback((category) => {
@@ -648,17 +660,23 @@ const OTT = forwardRef(({
     onItemTouchStart: handleItemTouchStart,
     onItemTouchMove: handleItemTouchMove,
     onItemTouchEnd: handleItemTouchEnd,
-    favorites,
+    favorites: favoritesRef.current,
     shakingItemId,
     focusedStreamId,
-  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, shakingItemId, focusedStreamId]);
+  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, shakingItemId, focusedStreamId]);
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
   const seriesRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
   const programRowData = useMemo(() => ({ items: programResults, onProgramClick: handleProgramClick }), [programResults, handleProgramClick]);
 
-  // ========== DIMENSIONS ==========
-  const listHeight = typeof window !== 'undefined' ? window.innerHeight - CSS.barH : 600;
+  // ========== DIMENSIONS (stable — only updates on resize) ==========
+  const [listHeight, setListHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight - CSS.barH : 600);
+
+  useEffect(() => {
+    const onResize = () => setListHeight(window.innerHeight - CSS.barH);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // ========== RENDER ==========
   return (
