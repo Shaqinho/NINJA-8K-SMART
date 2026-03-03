@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { libVLC } from './libVLC';
-import { insertProgramsBatch } from '../../database/ProgramQueries';
 import ProbeService from '../../services/ProbeService';
 import { getLangName } from '../../services/ProbeService';
 
@@ -174,105 +173,13 @@ const OTTPlayer = memo(({
   }, [selectedChannel, isPlaying, getStreamUrl, updateNativePosition]);
 
   // ========== LOAD EPG FOR LIVE CHANNEL ==========
-  useEffect(() => {
-    if (activeTab !== 'live' || !selectedChannel || !xtreamService) {
-      setEpgPrograms([]);
-      setShowFullSchedule(false);
-      return;
-    }
-
-    const channelId = selectedChannel.stream_id || selectedChannel.id;
-    if (!channelId) return;
-
-    xtreamService.getShortEPG(channelId, 4).then(data => {
-      const listings = Array.isArray(data) ? data : [];
-      const now = Math.floor(Date.now() / 1000);
-      const programs = listings.slice(0, 4).map(p => ({
-        title: p.title || '',
-        description: p.description || '',
-        start: p.start || '',
-        end: p.end || '',
-        start_time: p.startTimestamp || 0,
-        end_time: p.stopTimestamp || 0,
-        is_currently_live: (p.startTimestamp <= now && p.stopTimestamp > now) ? 1 : 0,
-        progress: (p.startTimestamp <= now && p.stopTimestamp > now && p.stopTimestamp > p.startTimestamp)
-          ? Math.min(100, Math.round(((now - p.startTimestamp) / (p.stopTimestamp - p.startTimestamp)) * 100)) : 0,
-      }));
-      setEpgPrograms(programs);
-
-      // Save to DB
-      if (programs.length > 0) {
-        const epgForInsert = {};
-        epgForInsert[channelId] = programs.map(p => ({ title: p.title, start: p.start, end: p.end, startTimestamp: p.start_time, stopTimestamp: p.end_time, description: p.description }));
-        insertProgramsBatch(epgForInsert).catch(() => {});
-      }
-    }).catch(() => setEpgPrograms([]));
-  }, [selectedChannel, activeTab, xtreamService]);
+  // (background fetching removed — will be rebuilt)
 
   // ========== LOAD FULL DAY EPG ==========
-  const loadFullDayEpg = useCallback(async () => {
-    if (!selectedChannel || !xtreamService) return;
-    const streamId = selectedChannel.stream_id || selectedChannel.id;
-    if (!streamId) return;
-    setLoadingDayEpg(true);
-    try {
-      const rawData = await xtreamService.getFullEPG(streamId);
-      const now = Math.floor(Date.now() / 1000);
-      const listings = rawData?.epg_listings || [];
-      const programs = listings.map(p => {
-        const st = parseInt(p.start_timestamp) || 0;
-        const en = parseInt(p.stop_timestamp) || 0;
-        const isLive = (st <= now && en > now) ? 1 : 0;
-        return {
-          title: decodeBase64UTF8(p.title),
-          description: decodeBase64UTF8(p.description),
-          start: p.start || '', end: p.end || '',
-          start_time: st, end_time: en,
-          is_currently_live: isLive,
-          progress: isLive && en > st ? Math.min(100, Math.round(((now - st) / (en - st)) * 100)) : 0,
-        };
-      });
-      setEpgPrograms(programs);
-      if (programs.length > 0) {
-        const epgForInsert = {};
-        epgForInsert[streamId] = programs.map(p => ({ title: p.title, start: p.start, end: p.end, startTimestamp: p.start_time, stopTimestamp: p.end_time, description: p.description }));
-        insertProgramsBatch(epgForInsert).catch(() => {});
-      }
-    } catch (err) { console.warn('Full EPG failed:', err); }
-    finally { setLoadingDayEpg(false); setShowFullSchedule(true); }
-  }, [selectedChannel, xtreamService]);
+  // (background fetching removed — will be rebuilt)
 
   // ========== LOAD VOD/SERIES DETAIL ==========
-  useEffect(() => {
-    if (activeTab === 'live' || !selectedChannel || !xtreamService) {
-      setDetailData(null); setProbeData(null);
-      return;
-    }
-
-    const streamId = selectedChannel.stream_id || selectedChannel.id;
-    setDetailData(null); setProbeData(null); setSelectedSeason(1);
-    setLoading(true); setProbing(true);
-
-    (async () => {
-      try {
-        if (activeTab === 'movies') {
-          const credentials = { server: xtreamService.server, username: xtreamService.username, password: xtreamService.password };
-          const [details, probeResult] = await Promise.all([
-            xtreamService.getVodInfo(streamId),
-            ProbeService.probeTracks(credentials, selectedChannel, 'vod'),
-          ]);
-          setDetailData(details);
-          if (probeResult.success) {
-            setProbeData({ audioTracks: probeResult.audioTracks, subtitleTracks: probeResult.subtitleTracks, video: probeResult.technical });
-          }
-        } else if (activeTab === 'series') {
-          const info = await xtreamService.getSeriesInfo(streamId);
-          setDetailData(info);
-        }
-      } catch (e) { console.error('Detail fetch failed:', e); }
-      finally { setLoading(false); setProbing(false); }
-    })();
-  }, [selectedChannel, activeTab, xtreamService]);
+  // (background fetching removed — will be rebuilt)
 
   // ========== CONTROLS ==========
   const handlePrevChannel = useCallback(() => {
@@ -682,8 +589,8 @@ const OTTPlayer = memo(({
               CLOSE GUIDE
             </button>
           ) : (
-            <button onClick={loadFullDayEpg} disabled={loadingDayEpg} style={epgActionStyle}>
-              {loadingDayEpg ? 'LOADING...' : 'EPG GUIDE'}
+            <button onClick={() => {}} disabled style={epgActionStyle}>
+              EPG GUIDE
             </button>
           )}
         </div>

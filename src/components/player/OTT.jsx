@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
-import { searchProgramsByTitle, getProgramsForChannel, insertProgramsBatch } from '../../database/ProgramQueries';
+import { searchProgramsByTitle } from '../../database/ProgramQueries';
 import OTTPlayer from './OTTPlayer';
 
 // ============================================================================
@@ -106,7 +106,7 @@ const FolderRowItem = memo(({ data, index, style }) => {
 
 // ========== CHANNEL ROW (Column 2 — Live) ==========
 const ChannelRowItem = memo(({ data, index, style }) => {
-  const { items, selectedChannel, onItemClick, onItemTouchStart, onItemTouchMove, onItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId, focusedStreamId } = data;
+  const { items, selectedChannel, onItemClick, onItemTouchStart, onItemTouchMove, onItemTouchEnd, favorites, shakingItemId, focusedStreamId } = data;
   const channel = items[index];
   if (!channel) return null;
 
@@ -116,11 +116,9 @@ const ChannelRowItem = memo(({ data, index, style }) => {
   const channelId = channel.stream_id || channel.id;
   const isFav = favorites[channelId];
 
-  // EPG: network > SQLite > channel prop
-  const sqlite = sqliteEpg[channelId] || sqliteEpg[String(channelId)];
-  const network = epgData[channelId] || epgData[String(channelId)];
-  const epgTitle = network?.epg_now || sqlite?.title || channel.epg_now || null;
-  const epgProgress = network?.progress || sqlite?.progress || 0;
+  // EPG: channel prop only (no background fetch)
+  const epgTitle = channel.epg_now || null;
+  const epgProgress = 0;
 
   const isShaking = shakingItemId === channelId;
   const isFocused = focusedStreamId === String(channelId);
@@ -217,16 +215,13 @@ const MovieRowItem = memo(({ data, index, style }) => {
 
 // ========== SERIES ROW (Column 2 — Series) ==========
 const SeriesRowItem = memo(({ data, index, style }) => {
-  const { items, seriesSeasons, onItemClick } = data;
+  const { items, onItemClick } = data;
   const series = items[index];
   if (!series) return null;
 
-  const seriesId = series.series_id || series.id;
   const year = series.release_date ? series.release_date.substring(0, 4) : '';
   const rating = series.rating || '';
-  const seasonCount = seriesSeasons[seriesId];
-  const seasonLabel = seasonCount !== undefined ? `${seasonCount} Season${seasonCount !== 1 ? 's' : ''}` : '';
-  const subLine = [year, rating ? `★ ${rating}` : '', seasonLabel].filter(Boolean).join(' | ');
+  const subLine = [year, rating ? `★ ${rating}` : ''].filter(Boolean).join(' | ');
 
   return (
     <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.12s' }}
@@ -320,15 +315,9 @@ const OTT = forwardRef(({
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // ========== DATA STATE ==========
-  const [seriesSeasons, setSeriesSeasons] = useState({});
 
-  // ========== EPG STATE ==========
-  const [epgData, setEpgData] = useState({});
-  const [sqliteEpg, setSqliteEpg] = useState({});
-  const circle1FetchingRef = useRef(new Set());
-  const circle1ErrorCacheRef = useRef(new Map());
-  const epgLoadedCategoriesRef = useRef(new Set());
+
+
 
   // ========== FAVORITES & RECENT (localStorage) ==========
   const [favorites, setFavorites] = useState(() => {
@@ -430,13 +419,13 @@ const OTT = forwardRef(({
       const q = searchQuery.toLowerCase().trim();
       items = items.filter(item => {
         const name = (item.name || '').toLowerCase();
-        const epg = (epgData[item.stream_id || item.id]?.epg_now || item.epg_now || '').toLowerCase();
+        const epg = (item.epg_now || '').toLowerCase();
         return name.includes(q) || epg.includes(q);
       });
     }
 
     return items;
-  }, [selectedCategory, activeItems, searchQuery, favorites, recentIds, epgData]);
+  }, [selectedCategory, activeItems, searchQuery, favorites, recentIds]);
 
   // ========== FAVORITES ==========
   const toggleFavorite = useCallback((itemId) => {
@@ -458,111 +447,11 @@ const OTT = forwardRef(({
     });
   }, []);
 
-  // ========== EPG: SQLite read for visible channels ==========
-  const loadSqliteEpgForItems = useCallback(async (items) => {
-    if (!items?.length || activeTab !== 'live') return;
-    const ERROR_TTL = 60000;
-    const newEpg = {};
-    const needsFetch = [];
 
-    for (const item of items) {
-      const streamId = item.stream_id || item.id;
-      if (!streamId) continue;
-      try {
-        const programs = await getProgramsForChannel(streamId, true);
-        if (programs.length > 0) {
-          const current = programs.find(p => p.is_currently_live) || programs[0];
-          newEpg[streamId] = { title: current.title, progress: current.progress || 0, start_time: current.start_time, end_time: current.end_time };
-        } else {
-          const errorTs = circle1ErrorCacheRef.current.get(streamId);
-          const isCoolingDown = errorTs && (Date.now() - errorTs < ERROR_TTL);
-          const isFetching = circle1FetchingRef.current.has(streamId);
-          if (!isCoolingDown && !isFetching) needsFetch.push(streamId);
-        }
-      } catch { /* skip */ }
-    }
 
-    if (Object.keys(newEpg).length > 0) setSqliteEpg(prev => ({ ...prev, ...newEpg }));
 
-    // On-demand fetch for missing
-    if (needsFetch.length > 0 && xtreamService) {
-      needsFetch.forEach(id => circle1FetchingRef.current.add(id));
-      (async () => {
-        try {
-          const epgResults = await xtreamService.getShortEPGBatch(needsFetch, 2, 20);
-          const epgForInsert = {};
-          Object.entries(epgResults).forEach(([sid, data]) => {
-            if (data.epg_now) {
-              epgForInsert[sid] = [{ title: data.epg_now, start: data.epg_start || '', end: data.epg_end || '', startTimestamp: data.epg_start_timestamp || null, stopTimestamp: data.epg_end_timestamp || null, description: data.epg_description || '' }];
-            }
-          });
-          if (Object.keys(epgForInsert).length > 0) {
-            await insertProgramsBatch(epgForInsert);
-            const updatedEpg = {};
-            for (const sid of Object.keys(epgForInsert)) {
-              try {
-                const progs = await getProgramsForChannel(parseInt(sid), true);
-                if (progs.length > 0) {
-                  const cur = progs.find(p => p.is_currently_live) || progs[0];
-                  updatedEpg[sid] = { title: cur.title, progress: cur.progress || 0 };
-                }
-              } catch { /* skip */ }
-            }
-            if (Object.keys(updatedEpg).length > 0) setSqliteEpg(prev => ({ ...prev, ...updatedEpg }));
-          }
-        } catch {
-          needsFetch.forEach(id => circle1ErrorCacheRef.current.set(id, Date.now()));
-        } finally {
-          needsFetch.forEach(id => circle1FetchingRef.current.delete(id));
-        }
-      })();
-    }
-  }, [activeTab, xtreamService]);
 
-  const loadEpgForCategory = useCallback(async (categoryId, items) => {
-    if (!xtreamService || activeTab !== 'live') return;
-    if (epgLoadedCategoriesRef.current.has(categoryId)) return;
-    if (items.length === 0) return;
-    epgLoadedCategoriesRef.current.add(categoryId);
-    try {
-      const streamIds = items.map(item => item.stream_id || item.id).filter(Boolean);
-      if (streamIds.length === 0) return;
-      const epgResults = await xtreamService.getShortEPGBatch(streamIds, 1, 50);
-      setEpgData(prev => ({ ...prev, ...epgResults }));
-    } catch (err) { console.warn('EPG batch load error:', err); }
-  }, [xtreamService, activeTab]);
 
-  // Trigger EPG when entering a category
-  useEffect(() => {
-    if (activeTab === 'live' && selectedCategory && filteredItems.length > 0) {
-      loadEpgForCategory(selectedCategory.category_id, filteredItems);
-    }
-  }, [activeTab, selectedCategory, filteredItems, loadEpgForCategory]);
-
-  // SQLite EPG read for visible items
-  useEffect(() => {
-    if (activeTab !== 'live' || !selectedCategory || !filteredItems.length) return;
-    const timer = setTimeout(() => { loadSqliteEpgForItems(filteredItems.slice(0, 50)); }, 200);
-    return () => clearTimeout(timer);
-  }, [filteredItems, activeTab, selectedCategory, loadSqliteEpgForItems]);
-
-  // ========== LAZY-LOAD SERIES SEASONS ==========
-  const loadSeriesSeasons = useCallback(async (seriesId) => {
-    if (seriesSeasons[seriesId] !== undefined || !xtreamService) return;
-    try {
-      const info = await xtreamService.getSeriesInfo(seriesId);
-      const seasonCount = info?.episodes ? Object.keys(info.episodes).length : 0;
-      setSeriesSeasons(prev => ({ ...prev, [seriesId]: seasonCount }));
-    } catch { setSeriesSeasons(prev => ({ ...prev, [seriesId]: 0 })); }
-  }, [seriesSeasons, xtreamService]);
-
-  useEffect(() => {
-    if (activeTab !== 'series' || !selectedCategory || !xtreamService) return;
-    filteredItems.forEach(item => {
-      const id = item.series_id || item.id;
-      if (id && seriesSeasons[id] === undefined) loadSeriesSeasons(id);
-    });
-  }, [activeTab, selectedCategory, filteredItems, xtreamService, seriesSeasons, loadSeriesSeasons]);
 
   // ========== PROGRAM SEARCH ==========
   useEffect(() => {
@@ -760,14 +649,12 @@ const OTT = forwardRef(({
     onItemTouchMove: handleItemTouchMove,
     onItemTouchEnd: handleItemTouchEnd,
     favorites,
-    epgData,
-    sqliteEpg,
     shakingItemId,
     focusedStreamId,
-  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, epgData, sqliteEpg, shakingItemId, focusedStreamId]);
+  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, favorites, shakingItemId, focusedStreamId]);
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
-  const seriesRowData = useMemo(() => ({ items: filteredItems, seriesSeasons, onItemClick: handleItemClick }), [filteredItems, seriesSeasons, handleItemClick]);
+  const seriesRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
   const programRowData = useMemo(() => ({ items: programResults, onProgramClick: handleProgramClick }), [programResults, handleProgramClick]);
 
   // ========== DIMENSIONS ==========
