@@ -65,28 +65,27 @@ const FolderRowItem = memo(({ data, index, style }) => {
     <div
       style={{
         ...style,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', gap: '8px',
         padding: '0 10px',
         cursor: 'pointer',
+        borderBottom: '1px solid rgba(255,255,255,0.02)',
         background: isActive ? CSS.gradient : 'transparent',
-        position: 'relative',
+        transition: 'background 0.12s ease',
       }}
       onClick={() => onCategoryClick(cat)}
     >
       <span style={{
         fontSize: '10px', fontWeight: isActive ? 600 : 500,
-        color: isActive ? '#fff' : CSS.textDim,
+        color: isActive ? '#fff' : 'rgba(255,255,255,0.7)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        flex: 1, marginRight: '8px',
+        flex: 1, minWidth: 0,
       }}>
         {cat.category_name}
       </span>
       <span style={{
         fontSize: '9px', fontWeight: 600,
-        color: isActive ? '#fff' : CSS.textMuted,
-        background: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
-        padding: '2px 7px', borderRadius: 0,
-        minWidth: '28px', textAlign: 'center', flexShrink: 0,
+        color: isActive ? 'rgba(255,255,255,0.7)' : CSS.textMuted,
+        flexShrink: 0,
       }}>
         {count}
       </span>
@@ -732,7 +731,7 @@ const OTT = forwardRef(({
             ref={folderListRef}
             height={listHeight}
             itemCount={activeCategories.length}
-            itemSize={25}
+            itemSize={40}
             width={180}
             overscanCount={25}
             itemData={folderRowData}
