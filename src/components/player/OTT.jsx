@@ -55,12 +55,15 @@ const TickerText = memo(({ children, style = {} }) => {
 
 // ========== FOLDER ROW (Column 1) ==========
 const FolderRowItem = memo(({ data, index, style }) => {
-  const { categories, selectedCategory, getCategoryCount, onCategoryClick } = data;
+  const { categories, selectedCategory, getCategoryCount, onCategoryClick, epgMode, epgSelectedFolders, epgSyncedFolders, onToggleEpgFolder } = data;
   const cat = categories[index];
   if (!cat) return null;
 
   const isActive = selectedCategory?.category_id === cat.category_id;
   const count = cat.isSystem ? (cat.count || 0) : getCategoryCount(cat.category_id);
+  const catId = String(cat.category_id);
+  const isSynced = epgSyncedFolders?.has(catId);
+  const isEpgSelected = epgSelectedFolders?.has(catId);
 
   return (
     <div
@@ -70,13 +73,24 @@ const FolderRowItem = memo(({ data, index, style }) => {
         padding: '0 10px',
         cursor: 'pointer',
         borderBottom: '1px solid rgba(255,255,255,0.02)',
-        background: isActive ? CSS.gradient : 'transparent',
+        background: isActive ? CSS.gradient : isEpgSelected ? 'rgba(98,37,255,0.15)' : 'transparent',
       }}
-      onClick={() => onCategoryClick(cat)}
+      onClick={() => epgMode && !cat.isSystem ? onToggleEpgFolder(catId) : onCategoryClick(cat)}
     >
+      {epgMode && !cat.isSystem && (
+        <span style={{
+          width: '14px', height: '14px', borderRadius: '2px',
+          border: isEpgSelected ? '2px solid #6225ff' : '2px solid rgba(255,255,255,0.2)',
+          background: isEpgSelected ? '#6225ff' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, fontSize: '9px', color: '#fff',
+        }}>
+          {isEpgSelected ? '✓' : ''}
+        </span>
+      )}
       <span style={{
         fontSize: '10px', fontWeight: isActive ? 600 : 500,
-        color: isActive ? '#fff' : 'rgba(255,255,255,0.7)',
+        color: isActive ? '#fff' : isSynced ? '#22c55e' : 'rgba(255,255,255,0.7)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         flex: 1, minWidth: 0,
       }}>
@@ -84,7 +98,7 @@ const FolderRowItem = memo(({ data, index, style }) => {
       </span>
       <span style={{
         fontSize: '9px', fontWeight: 600,
-        color: isActive ? 'rgba(255,255,255,0.7)' : CSS.textMuted,
+        color: isActive ? 'rgba(255,255,255,0.7)' : isSynced ? '#22c55e' : CSS.textMuted,
         flexShrink: 0,
       }}>
         {count}
@@ -330,10 +344,14 @@ const OTT = forwardRef(({
   const focusTimerRef = useRef(null);
   const programSearchTimerRef = useRef(null);
 
-  // ========== EPG CACHE (useRef — no re-render) ==========
+  // ========== EPG MANUAL SCAN ==========
   const epgCacheRef = useRef({});
-  const epgLoadingRef = useRef(null); // category_id en cours de chargement
-  const [epgTick, setEpgTick] = useState(0); // incrémenté une fois après chargement EPG d'un dossier
+  const [epgMode, setEpgMode] = useState(false);
+  const [epgSelectedFolders, setEpgSelectedFolders] = useState(new Set());
+  const [epgProgress, setEpgProgress] = useState(0);
+  const [epgScanning, setEpgScanning] = useState(false);
+  const [epgSyncedFolders, setEpgSyncedFolders] = useState(new Set());
+  const [epgTick, setEpgTick] = useState(0);
 
   // ========== REFS ==========
   const folderListRef = useRef(null);
@@ -457,59 +475,56 @@ const OTT = forwardRef(({
 
 
 
-  // ========== EPG BATCH LOAD (per folder, useRef — no re-render) ==========
-  useEffect(() => {
-    if (activeTab !== 'live' || !selectedCategory || !filteredItems.length) return;
-    
-    const catId = String(selectedCategory.category_id);
-    if (epgLoadingRef.current === catId) return; // déjà en cours
-    epgLoadingRef.current = catId;
+  // ========== EPG MANUAL SCAN HANDLER ==========
+  const handleEpgScan = useCallback(async () => {
+    if (epgScanning || epgSelectedFolders.size === 0) return;
+    setEpgScanning(true);
+    setEpgProgress(0);
 
-    const loadEpg = async () => {
-      console.log(`[EPG Cache] Loading EPG for folder "${selectedCategory.category_name}" (${filteredItems.length} channels)...`);
-      try {
-        const newCache = {};
-        const now = Math.floor(Date.now() / 1000);
-        let found = 0;
-        let empty = 0;
-        
-        for (const item of filteredItems) {
-          const streamId = item.stream_id || item.id;
-          if (!streamId) continue;
-          
-          try {
-            const programs = await getProgramsForChannel(streamId, true);
-            if (programs.length > 0) {
-              const current = programs.find(p => p.start_time <= now && p.end_time > now);
-              if (current) {
-                newCache[streamId] = {
-                  title: current.title,
-                  progress: current.progress || 0,
-                };
-                found++;
-              } else {
-                empty++;
-              }
-            } else {
-              empty++;
+    const folderIds = [...epgSelectedFolders];
+    const total = folderIds.length;
+    let processed = 0;
+
+    for (const catId of folderIds) {
+      // Get channels for this folder
+      const folderChannels = liveChannels.filter(ch => String(ch.categoryId || ch.category_id) === String(catId));
+      const newCache = {};
+      const now = Math.floor(Date.now() / 1000);
+
+      for (const ch of folderChannels) {
+        const streamId = ch.stream_id || ch.id;
+        if (!streamId) continue;
+        try {
+          const programs = await getProgramsForChannel(parseInt(streamId), true);
+          if (programs.length > 0) {
+            const current = programs.find(p => p.start_time <= now && p.end_time > now);
+            if (current) {
+              newCache[streamId] = { title: current.title, progress: current.progress || 0 };
             }
-          } catch { empty++; }
-        }
-        
-        console.log(`[EPG Cache] Done: ${found} with EPG, ${empty} empty, total cache: ${Object.keys(epgCacheRef.current).length + found}`);
-        
-        epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
-        if (found > 0) {
-          setEpgTick(t => t + 1);
-          console.log(`[EPG Cache] Tick → re-render triggered`);
-        }
-      } catch (err) {
-        console.warn('[EPG Cache] Load failed:', err);
+          }
+        } catch { /* skip */ }
       }
-    };
 
-    loadEpg();
-  }, [activeTab, selectedCategory, filteredItems]);
+      epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
+      setEpgSyncedFolders(prev => new Set([...prev, catId]));
+      processed++;
+      setEpgProgress(Math.round((processed / total) * 100));
+    }
+
+    setEpgTick(t => t + 1);
+    setEpgScanning(false);
+    setEpgMode(false);
+    setEpgSelectedFolders(new Set());
+  }, [epgScanning, epgSelectedFolders, liveChannels]);
+
+  const toggleEpgFolder = useCallback((catId) => {
+    setEpgSelectedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(catId)) next.delete(catId);
+      else next.add(catId);
+      return next;
+    });
+  }, []);
 
   // ========== PROGRAM SEARCH ==========
   useEffect(() => {
@@ -695,7 +710,11 @@ const OTT = forwardRef(({
     selectedCategory,
     getCategoryCount,
     onCategoryClick: handleCategoryClick,
-  }), [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick]);
+    epgMode,
+    epgSelectedFolders,
+    epgSyncedFolders,
+    onToggleEpgFolder: toggleEpgFolder,
+  }), [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick, epgMode, epgSelectedFolders, epgSyncedFolders, toggleEpgFolder]);
 
   const channelRowData = useMemo(() => ({
     items: filteredItems,
@@ -726,7 +745,7 @@ const OTT = forwardRef(({
 
   // ========== RENDER ==========
   return (
-    <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: CSS.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit', -apple-system, sans-serif" }}>
+    <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'transparent', display: 'flex', flexDirection: 'column', fontFamily: "'Outfit', -apple-system, sans-serif" }}>
 
       {/* ========== NAVBAR ========== */}
       <nav style={{ display: 'flex', alignItems: 'stretch', height: CSS.barH, background: 'rgba(8, 8, 14, 0.92)', borderBottom: `1px solid ${CSS.divider}`, zIndex: 100, flexShrink: 0 }}>
@@ -764,8 +783,26 @@ const OTT = forwardRef(({
         </div>
 
         {/* Right buttons */}
+        <button onClick={() => {
+          if (epgScanning) return;
+          if (epgMode && epgSelectedFolders.size > 0) { handleEpgScan(); }
+          else { setEpgMode(!epgMode); if (epgMode) setEpgSelectedFolders(new Set()); }
+        }} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 20px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+          background: epgMode ? 'rgba(98,37,255,0.2)' : 'transparent',
+          color: epgMode ? '#a78bfa' : CSS.textDim,
+          fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
+          letterSpacing: '0.8px', textTransform: 'uppercase',
+          cursor: epgScanning ? 'wait' : 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', userSelect: 'none',
+          position: 'relative', overflow: 'hidden',
+        }}>
+          {epgScanning && (
+            <div style={{ position: 'absolute', left: 0, bottom: 0, height: '3px', background: '#22c55e', width: `${epgProgress}%`, transition: 'width 0.3s ease' }} />
+          )}
+          {epgMode ? (epgScanning ? `EPG ${epgProgress}%` : `SCAN (${epgSelectedFolders.size})`) : 'EPG NOW'}
+        </button>
         {[
-          { label: singleColMode ? 'TOOLBOX [1]' : 'TOOLBOX', action: () => setSingleColMode(!singleColMode) },
           { label: 'PLAYLIST', action: onLogout },
           { label: 'RELOAD', action: onReload },
           { label: 'SETTINGS', action: onSettings },
