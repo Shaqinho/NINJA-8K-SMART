@@ -466,9 +466,12 @@ const OTT = forwardRef(({
     epgLoadingRef.current = catId;
 
     const loadEpg = async () => {
+      console.log(`[EPG Cache] Loading EPG for folder "${selectedCategory.category_name}" (${filteredItems.length} channels)...`);
       try {
         const newCache = {};
         const now = Math.floor(Date.now() / 1000);
+        let found = 0;
+        let empty = 0;
         
         for (const item of filteredItems) {
           const streamId = item.stream_id || item.id;
@@ -483,14 +486,22 @@ const OTT = forwardRef(({
                   title: current.title,
                   progress: current.progress || 0,
                 };
+                found++;
+              } else {
+                empty++;
               }
+            } else {
+              empty++;
             }
-          } catch { /* skip */ }
+          } catch { empty++; }
         }
         
+        console.log(`[EPG Cache] Done: ${found} with EPG, ${empty} empty, total cache: ${Object.keys(epgCacheRef.current).length + found}`);
+        
         epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
-        if (Object.keys(newCache).length > 0) {
-          setEpgTick(t => t + 1); // un seul re-render pour afficher l'EPG
+        if (found > 0) {
+          setEpgTick(t => t + 1);
+          console.log(`[EPG Cache] Tick → re-render triggered`);
         }
       } catch (err) {
         console.warn('[EPG Cache] Load failed:', err);
