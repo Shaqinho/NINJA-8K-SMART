@@ -485,23 +485,37 @@ const OTT = forwardRef(({
     let processed = 0;
 
     for (const catId of folderIds) {
-      // Get channels for this folder
       const folderChannels = liveChannels.filter(ch => String(ch.categoryId || ch.category_id) === String(catId));
+      const streamIds = folderChannels.map(ch => ch.stream_id || ch.id).filter(Boolean);
       const newCache = {};
-      const now = Math.floor(Date.now() / 1000);
 
-      for (const ch of folderChannels) {
-        const streamId = ch.stream_id || ch.id;
-        if (!streamId) continue;
+      if (streamIds.length > 0 && xtreamService) {
+        // PRIORITÉ 1 : fetch API serveur (données fraîches)
         try {
-          const programs = await getProgramsForChannel(parseInt(streamId), true);
-          if (programs.length > 0) {
-            const current = programs.find(p => p.start_time <= now && p.end_time > now);
-            if (current) {
-              newCache[streamId] = { title: current.title, progress: current.progress || 0 };
+          const epgResults = await xtreamService.getShortEPGBatch(streamIds, 1, 20);
+          Object.entries(epgResults).forEach(([streamId, data]) => {
+            if (data.epg_now) {
+              newCache[streamId] = { title: data.epg_now, progress: data.progress || 0 };
             }
-          }
-        } catch { /* skip */ }
+          });
+        } catch (err) {
+          console.warn(`[EPG Scan] API failed for folder ${catId}, trying SQL...`);
+        }
+
+        // PRIORITÉ 2 : fallback SQL pour les chaînes sans résultat API
+        const now = Math.floor(Date.now() / 1000);
+        for (const sid of streamIds) {
+          if (newCache[sid]) continue; // déjà trouvé via API
+          try {
+            const programs = await getProgramsForChannel(parseInt(sid), true);
+            if (programs.length > 0) {
+              const current = programs.find(p => p.start_time <= now && p.end_time > now);
+              if (current) {
+                newCache[sid] = { title: current.title, progress: current.progress || 0 };
+              }
+            }
+          } catch { /* skip */ }
+        }
       }
 
       epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
@@ -514,7 +528,7 @@ const OTT = forwardRef(({
     setEpgScanning(false);
     setEpgMode(false);
     setEpgSelectedFolders(new Set());
-  }, [epgScanning, epgSelectedFolders, liveChannels]);
+  }, [epgScanning, epgSelectedFolders, liveChannels, xtreamService]);
 
   const toggleEpgFolder = useCallback((catId) => {
     setEpgSelectedFolders(prev => {
