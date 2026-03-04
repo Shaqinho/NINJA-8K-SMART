@@ -55,15 +55,12 @@ const TickerText = memo(({ children, style = {} }) => {
 
 // ========== FOLDER ROW (Column 1) ==========
 const FolderRowItem = memo(({ data, index, style }) => {
-  const { categories, selectedCategory, getCategoryCount, onCategoryClick, epgSyncState } = data;
+  const { categories, selectedCategory, getCategoryCount, onCategoryClick } = data;
   const cat = categories[index];
   if (!cat) return null;
 
   const isActive = selectedCategory?.category_id === cat.category_id;
   const count = cat.isSystem ? (cat.count || 0) : getCategoryCount(cat.category_id);
-  const catId = String(cat.category_id);
-  const isSyncing = epgSyncState?.syncingFolder === catId;
-  const isSynced = epgSyncState?.syncedFolders?.has(catId);
 
   return (
     <div
@@ -74,32 +71,21 @@ const FolderRowItem = memo(({ data, index, style }) => {
         cursor: 'pointer',
         borderBottom: '1px solid rgba(255,255,255,0.02)',
         background: isActive ? CSS.gradient : 'transparent',
-        position: 'relative',
-        overflow: 'hidden',
       }}
       onClick={() => onCategoryClick(cat)}
     >
-      {/* Jauge de progression EPG sync */}
-      {isSyncing && (
-        <div style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0,
-          width: '100%',
-          background: 'rgba(98, 37, 255, 0.12)',
-          animation: 'epgPulse 1.5s ease-in-out infinite',
-        }} />
-      )}
       <span style={{
         fontSize: '10px', fontWeight: isActive ? 600 : 500,
-        color: isActive ? '#fff' : isSynced ? '#22c55e' : 'rgba(255,255,255,0.7)',
+        color: isActive ? '#fff' : 'rgba(255,255,255,0.7)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        flex: 1, minWidth: 0, position: 'relative', zIndex: 1,
+        flex: 1, minWidth: 0,
       }}>
         {cat.category_name}
       </span>
       <span style={{
         fontSize: '9px', fontWeight: 600,
-        color: isActive ? 'rgba(255,255,255,0.7)' : isSynced ? '#22c55e' : CSS.textMuted,
-        flexShrink: 0, position: 'relative', zIndex: 1,
+        color: isActive ? 'rgba(255,255,255,0.7)' : CSS.textMuted,
+        flexShrink: 0,
       }}>
         {count}
       </span>
@@ -344,25 +330,10 @@ const OTT = forwardRef(({
   const focusTimerRef = useRef(null);
   const programSearchTimerRef = useRef(null);
 
-  // ========== EPG SYNC STATE (polling window.__epgSync from App.jsx) ==========
-  const [epgSyncState, setEpgSyncState] = useState({ progress: 0, syncingFolder: null, syncedFolders: new Set(), total: 0 });
+  // ========== EPG CACHE (useRef — no re-render) ==========
   const epgCacheRef = useRef({});
-  const epgLoadedFoldersRef = useRef(new Set());
-
-  useEffect(() => {
-    const poll = setInterval(() => {
-      const sync = window.__epgSync;
-      if (sync) {
-        setEpgSyncState(prev => {
-          if (prev.progress !== sync.progress || prev.syncingFolder !== sync.syncingFolder) {
-            return { ...sync };
-          }
-          return prev;
-        });
-      }
-    }, 2000);
-    return () => clearInterval(poll);
-  }, []);
+  const epgLoadingRef = useRef(null); // category_id en cours de chargement
+  const [epgTick, setEpgTick] = useState(0); // incrémenté une fois après chargement EPG d'un dossier
 
   // ========== REFS ==========
   const folderListRef = useRef(null);
@@ -486,49 +457,59 @@ const OTT = forwardRef(({
 
 
 
-  // ========== EPG READ FROM SQL (when folder is synced) ==========
+  // ========== EPG BATCH LOAD (per folder, useRef — no re-render) ==========
   useEffect(() => {
     if (activeTab !== 'live' || !selectedCategory || !filteredItems.length) return;
     
     const catId = String(selectedCategory.category_id);
-    if (catId.startsWith('__')) return; // system folders — skip
-    
-    // Check if this folder was synced
-    if (!epgSyncState.syncedFolders?.has(catId)) return;
-    // Already loaded?
-    if (epgLoadedFoldersRef.current.has(catId)) return;
-    epgLoadedFoldersRef.current.add(catId);
+    if (epgLoadingRef.current === catId) return; // déjà en cours
+    epgLoadingRef.current = catId;
 
     const loadEpg = async () => {
+      console.log(`[EPG Cache] Loading EPG for folder "${selectedCategory.category_name}" (${filteredItems.length} channels)...`);
       try {
         const newCache = {};
         const now = Math.floor(Date.now() / 1000);
+        let found = 0;
+        let empty = 0;
         
         for (const item of filteredItems) {
           const streamId = item.stream_id || item.id;
           if (!streamId) continue;
+          
           try {
-            const programs = await getProgramsForChannel(parseInt(streamId), true);
+            const programs = await getProgramsForChannel(streamId, true);
             if (programs.length > 0) {
               const current = programs.find(p => p.start_time <= now && p.end_time > now);
               if (current) {
-                newCache[streamId] = { title: current.title, progress: current.progress || 0 };
+                newCache[streamId] = {
+                  title: current.title,
+                  progress: current.progress || 0,
+                };
+                found++;
+              } else {
+                empty++;
               }
+            } else {
+              empty++;
             }
-          } catch { /* skip */ }
+          } catch { empty++; }
         }
         
-        if (Object.keys(newCache).length > 0) {
-          epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
-          setEpgSyncState(prev => ({ ...prev })); // force re-render
+        console.log(`[EPG Cache] Done: ${found} with EPG, ${empty} empty, total cache: ${Object.keys(epgCacheRef.current).length + found}`);
+        
+        epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
+        if (found > 0) {
+          setEpgTick(t => t + 1);
+          console.log(`[EPG Cache] Tick → re-render triggered`);
         }
       } catch (err) {
-        console.warn('[EPG Read] Failed:', err);
+        console.warn('[EPG Cache] Load failed:', err);
       }
     };
 
     loadEpg();
-  }, [activeTab, selectedCategory, filteredItems, epgSyncState.syncedFolders]);
+  }, [activeTab, selectedCategory, filteredItems]);
 
   // ========== PROGRAM SEARCH ==========
   useEffect(() => {
@@ -714,8 +695,7 @@ const OTT = forwardRef(({
     selectedCategory,
     getCategoryCount,
     onCategoryClick: handleCategoryClick,
-    epgSyncState,
-  }), [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick, epgSyncState]);
+  }), [activeCategories, selectedCategory, getCategoryCount, handleCategoryClick]);
 
   const channelRowData = useMemo(() => ({
     items: filteredItems,
@@ -729,7 +709,7 @@ const OTT = forwardRef(({
     focusedStreamId,
     epgCache: epgCacheRef.current,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, shakingItemId, focusedStreamId, epgSyncState]);
+  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, shakingItemId, focusedStreamId, epgTick]);
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
   const seriesRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
@@ -746,7 +726,7 @@ const OTT = forwardRef(({
 
   // ========== RENDER ==========
   return (
-    <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'transparent', display: 'flex', flexDirection: 'column', fontFamily: "'Outfit', -apple-system, sans-serif" }}>
+    <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: CSS.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit', -apple-system, sans-serif" }}>
 
       {/* ========== NAVBAR ========== */}
       <nav style={{ display: 'flex', alignItems: 'stretch', height: CSS.barH, background: 'rgba(8, 8, 14, 0.92)', borderBottom: `1px solid ${CSS.divider}`, zIndex: 100, flexShrink: 0 }}>
