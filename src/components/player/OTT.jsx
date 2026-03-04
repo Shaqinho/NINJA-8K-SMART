@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
+import { searchProgramsByTitle, getProgramsForChannel } from '../../database/ProgramQueries';
 import OTTPlayer from './OTTPlayer';
 
 // ============================================================================
@@ -94,7 +95,7 @@ const FolderRowItem = memo(({ data, index, style }) => {
 
 // ========== CHANNEL ROW (Column 2 — Live) ==========
 const ChannelRowItem = memo(({ data, index, style }) => {
-  const { items, selectedChannel, onItemClick, onItemTouchStart, onItemTouchMove, onItemTouchEnd, favorites, shakingItemId, focusedStreamId } = data;
+  const { items, selectedChannel, onItemClick, onItemTouchStart, onItemTouchMove, onItemTouchEnd, favorites, shakingItemId, focusedStreamId, epgCache } = data;
   const channel = items[index];
   if (!channel) return null;
 
@@ -104,9 +105,10 @@ const ChannelRowItem = memo(({ data, index, style }) => {
   const channelId = channel.stream_id || channel.id;
   const isFav = favorites[channelId];
 
-  // EPG: channel prop only (no background fetch)
-  const epgTitle = channel.epg_now || null;
-  const epgProgress = 0;
+  // EPG: d'abord le cache ref, puis channel prop
+  const cached = epgCache?.[channelId];
+  const epgTitle = cached?.title || channel.epg_now || null;
+  const epgProgress = cached?.progress || 0;
 
   const isShaking = shakingItemId === channelId;
   const isFocused = focusedStreamId === String(channelId);
@@ -326,6 +328,11 @@ const OTT = forwardRef(({
   const itemTapTimerRef = useRef(null);
   const itemTouchStartPos = useRef({ x: 0, y: 0 });
   const focusTimerRef = useRef(null);
+  const programSearchTimerRef = useRef(null);
+
+  // ========== EPG CACHE (useRef — no re-render) ==========
+  const epgCacheRef = useRef({});
+  const epgLoadingRef = useRef(null); // category_id en cours de chargement
 
   // ========== REFS ==========
   const folderListRef = useRef(null);
@@ -415,7 +422,8 @@ const OTT = forwardRef(({
       items = items.filter(item => {
         const name = (item.name || '').toLowerCase();
         const epg = (item.epg_now || '').toLowerCase();
-        return name.includes(q) || epg.includes(q);
+        const cachedEpg = (epgCacheRef.current[item.stream_id || item.id]?.title || '').toLowerCase();
+        return name.includes(q) || epg.includes(q) || cachedEpg.includes(q);
       });
     }
 
@@ -448,7 +456,63 @@ const OTT = forwardRef(({
 
 
 
-  // ========== PROGRAM SEARCH (disabled — no background processing) ==========
+  // ========== EPG BATCH LOAD (per folder, useRef — no re-render) ==========
+  useEffect(() => {
+    if (activeTab !== 'live' || !selectedCategory || !filteredItems.length) return;
+    
+    const catId = String(selectedCategory.category_id);
+    if (epgLoadingRef.current === catId) return; // déjà en cours
+    epgLoadingRef.current = catId;
+
+    const loadEpg = async () => {
+      try {
+        const newCache = {};
+        const now = Math.floor(Date.now() / 1000);
+        
+        for (const item of filteredItems) {
+          const streamId = item.stream_id || item.id;
+          if (!streamId) continue;
+          
+          try {
+            const programs = await getProgramsForChannel(streamId, true);
+            if (programs.length > 0) {
+              const current = programs.find(p => p.start_time <= now && p.end_time > now);
+              if (current) {
+                newCache[streamId] = {
+                  title: current.title,
+                  progress: current.progress || 0,
+                };
+              }
+            }
+          } catch { /* skip */ }
+        }
+        
+        epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
+      } catch (err) {
+        console.warn('[EPG Cache] Load failed:', err);
+      }
+    };
+
+    loadEpg();
+  }, [activeTab, selectedCategory, filteredItems]);
+
+  // ========== PROGRAM SEARCH ==========
+  useEffect(() => {
+    if (activeTab !== 'live' || !selectedCategory || selectedCategory.category_id === '__all__') {
+      if (programResults.length > 0) setProgramResults([]);
+      return;
+    }
+    const q = searchQuery.trim();
+    if (q.length < 2) { if (programResults.length > 0) setProgramResults([]); return; }
+    clearTimeout(programSearchTimerRef.current);
+    programSearchTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await searchProgramsByTitle(q, [], true, true, 50);
+        setProgramResults(results);
+      } catch { setProgramResults([]); }
+    }, 300);
+    return () => clearTimeout(programSearchTimerRef.current);
+  }, [searchQuery, activeTab, selectedCategory]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ========== HANDLERS ==========
   const handleCategoryClick = useCallback((category) => {
@@ -628,6 +692,7 @@ const OTT = forwardRef(({
     favorites: favoritesRef.current,
     shakingItemId,
     focusedStreamId,
+    epgCache: epgCacheRef.current,
   }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, shakingItemId, focusedStreamId]);
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
