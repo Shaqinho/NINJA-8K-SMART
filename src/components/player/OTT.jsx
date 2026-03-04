@@ -70,7 +70,6 @@ const FolderRowItem = memo(({ data, index, style }) => {
         cursor: 'pointer',
         borderBottom: '1px solid rgba(255,255,255,0.02)',
         background: isActive ? CSS.gradient : 'transparent',
-        transition: 'background 0.12s ease',
       }}
       onClick={() => onCategoryClick(cat)}
     >
@@ -733,7 +732,7 @@ const OTT = forwardRef(({
             itemCount={activeCategories.length}
             itemSize={40}
             width={180}
-            overscanCount={25}
+            overscanCount={5}
             itemData={folderRowData}
           >
             {FolderRowItem}
