@@ -138,7 +138,7 @@ const ChannelRowItem = memo(({ data, index, style }) => {
         {channel.num || index + 1}
       </span>
       {/* Logo */}
-      <div style={{ width: '24px', height: '24px', borderRadius: '3px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+      <div style={{ width: '26px', height: '26px', borderRadius: '3px', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
         {channel.logo ? (
           <img src={channel.logo} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; }} />
         ) : (
