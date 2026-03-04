@@ -9,7 +9,13 @@ import { Icons } from './Icons';
 import { LoadingScreen } from './LoadingScreen';
 import ParticleThemes from './ParticleThemes';
 import { 
-  loadXMLTV 
+  loadXMLTV,
+  insertChannels,
+  insertLiveCategories,
+  insertVODCategories,
+  insertSeriesCategories,
+  insertVODItemsChunked,
+  insertSeriesItemsChunked,
 } from '../database/ProgramQueries';
 import { savePlaylist } from '../services/NinjaStorage';
 
@@ -279,22 +285,37 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
 
     setProgress({ step: 'Done!', percent: 100 });
 
-    // STORE PLAYLIST + CHANNELS FOR EPG
+    // STORE DATA IN SQL (fast, no SharedPreferences bottleneck)
     try {
-      setProgress({ step: 'Saving playlist...', percent: 85 });
+      setProgress({ step: 'Saving to database...', percent: 85 });
       
-      const playlistToSave = {
+      // Catégories (petites données)
+      if (liveCategories.length > 0) await insertLiveCategories(liveCategories);
+      if (vodCategories.length > 0) await insertVODCategories(vodCategories);
+      if (seriesCategories.length > 0) await insertSeriesCategories(seriesCategories);
+      
+      // Chaînes live
+      if (mappedLive.length > 0) await insertChannels(mappedLive);
+      
+      // Films en SQL (chunked pour ne pas bloquer)
+      setProgress({ step: 'Saving movies...', percent: 87 });
+      if (mappedVod.length > 0) await insertVODItemsChunked(mappedVod);
+      
+      // Séries en SQL (chunked)
+      setProgress({ step: 'Saving series...', percent: 89 });
+      if (mappedSeries.length > 0) await insertSeriesItemsChunked(mappedSeries);
+      
+      // Sauvegarder uniquement les métadonnées légères en Preferences (pour le reload rapide)
+      await savePlaylist({
         live: mappedLive,
-        vod: mappedVod,
-        series: mappedSeries,
         liveCategories,
+        vod: [],       // films en SQL, pas en Preferences
         vodCategories,
+        series: [],    // séries en SQL, pas en Preferences
         seriesCategories,
-      };
+      });
       
-      await savePlaylist(playlistToSave);
-      
-      // XMLTV EPG LOADING - Récupérer le résultat du background load
+      // XMLTV EPG LOADING
       if (mappedLive.length > 0 && xmltvPromise) {
         setProgress({ step: 'Loading XMLTV EPG...', percent: 90 });
         
@@ -307,8 +328,10 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
         }
       }
     } catch (dbErr) {
-      console.warn('⚠️ SQLite indexing failed (search may not work):', dbErr);
+      console.warn('⚠️ Database save failed:', dbErr);
     }
+
+    setProgress({ step: 'Done!', percent: 100 });
     
     return {
       live: mappedLive,
@@ -358,8 +381,8 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
                 password: form.password 
               });
               
-              // Save playlist to NinjaStorage (Capacitor Preferences)
-              await savePlaylist(data);
+              // Save playlist to NinjaStorage (lightweight — films/séries en SQL)
+              await savePlaylist({ ...data, vod: [], series: [] });
               
               console.log('✅ Background save complete');
               localStorage.setItem('ninja_save_status', 'complete');
@@ -417,7 +440,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
                   password: parsed.password 
                 });
                 
-                await savePlaylist(data);
+                await savePlaylist({ ...data, vod: [], series: [] });
                 
                 console.log('✅ Background save complete');
                 localStorage.setItem('ninja_save_status', 'complete');
@@ -480,7 +503,7 @@ export const ServerForm = ({ onNavigateToPlayer }) => {
                   password: parsed.password 
                 });
                 
-                await savePlaylist(data);
+                await savePlaylist({ ...data, vod: [], series: [] });
                 
                 console.log('✅ Background save complete');
                 localStorage.setItem('ninja_save_status', 'complete');
