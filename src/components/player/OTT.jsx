@@ -529,7 +529,6 @@ const OTT = forwardRef(({
 
     loadEpg();
   }, [activeTab, selectedCategory, filteredItems, epgSyncState.syncedFolders]);
-  }, [activeTab, selectedCategory, filteredItems]);
 
   // ========== PROGRAM SEARCH ==========
   useEffect(() => {
