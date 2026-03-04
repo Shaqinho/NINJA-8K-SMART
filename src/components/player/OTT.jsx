@@ -68,15 +68,10 @@ const FolderRowItem = memo(({ data, index, style }) => {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 10px',
         cursor: 'pointer',
-        borderLeft: isActive ? '3px solid transparent' : '3px solid transparent',
         background: isActive ? CSS.gradient : 'transparent',
-        boxShadow: isActive ? '0 0 14px rgba(98,37,255,0.2)' : 'none',
-        transition: 'all 0.12s ease',
         position: 'relative',
       }}
       onClick={() => onCategoryClick(cat)}
-      onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
-      onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
     >
       <span style={{
         fontSize: '10px', fontWeight: isActive ? 600 : 500,
@@ -737,7 +732,7 @@ const OTT = forwardRef(({
             ref={folderListRef}
             height={listHeight}
             itemCount={activeCategories.length}
-            itemSize={20}
+            itemSize={25}
             width={180}
             overscanCount={25}
             itemData={folderRowData}
