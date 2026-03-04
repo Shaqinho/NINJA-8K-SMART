@@ -462,23 +462,23 @@ const OTT = forwardRef(({
     if (activeTab !== 'live' || !selectedCategory || !filteredItems.length) return;
     
     const catId = String(selectedCategory.category_id);
-    if (epgLoadingRef.current === catId) return; // déjà en cours
-    epgLoadingRef.current = catId;
+    const cacheKey = `${catId}_${filteredItems.length}`;
+    if (epgLoadingRef.current === cacheKey) return;
+    epgLoadingRef.current = cacheKey;
 
     const loadEpg = async () => {
-      console.log(`[EPG Cache] Loading EPG for folder "${selectedCategory.category_name}" (${filteredItems.length} channels)...`);
+      console.log(`[EPG Cache] Loading EPG for "${selectedCategory.category_name}" (${filteredItems.length} channels)...`);
       try {
         const newCache = {};
         const now = Math.floor(Date.now() / 1000);
         let found = 0;
-        let empty = 0;
         
         for (const item of filteredItems) {
           const streamId = item.stream_id || item.id;
           if (!streamId) continue;
           
           try {
-            const programs = await getProgramsForChannel(streamId, true);
+            const programs = await getProgramsForChannel(parseInt(streamId), true);
             if (programs.length > 0) {
               const current = programs.find(p => p.start_time <= now && p.end_time > now);
               if (current) {
@@ -487,21 +487,16 @@ const OTT = forwardRef(({
                   progress: current.progress || 0,
                 };
                 found++;
-              } else {
-                empty++;
               }
-            } else {
-              empty++;
             }
-          } catch { empty++; }
+          } catch { /* skip */ }
         }
         
-        console.log(`[EPG Cache] Done: ${found} with EPG, ${empty} empty, total cache: ${Object.keys(epgCacheRef.current).length + found}`);
+        console.log(`[EPG Cache] Done: ${found} with EPG out of ${filteredItems.length}`);
         
         epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
         if (found > 0) {
           setEpgTick(t => t + 1);
-          console.log(`[EPG Cache] Tick → re-render triggered`);
         }
       } catch (err) {
         console.warn('[EPG Cache] Load failed:', err);
