@@ -252,6 +252,7 @@ const AppContent = () => {
 
       epgSyncedFoldersRef.current = new Set();
       epgSyncProgressRef.current = 0;
+      window.__epgSync = { progress: 0, syncingFolder: null, syncedFolders: new Set(), total: totalFolders };
 
       const BATCH_SIZE = 20;
       let foldersProcessed = 0;
@@ -263,6 +264,7 @@ const AppContent = () => {
         const streamIds = catChannels.map(ch => ch.id || ch.stream_id).filter(Boolean);
 
         epgSyncingFoldersRef.current.add(catId);
+        window.__epgSync = { ...window.__epgSync, syncingFolder: catId, progress: epgSyncProgressRef.current };
 
         for (let i = 0; i < streamIds.length; i += BATCH_SIZE) {
           if (signal.aborted) break;
@@ -300,6 +302,7 @@ const AppContent = () => {
 
         foldersProcessed++;
         epgSyncProgressRef.current = Math.round((foldersProcessed / totalFolders) * 100);
+        window.__epgSync = { progress: epgSyncProgressRef.current, syncingFolder: null, syncedFolders: new Set(epgSyncedFoldersRef.current), total: totalFolders };
       }
 
       if (!signal.aborted) {
