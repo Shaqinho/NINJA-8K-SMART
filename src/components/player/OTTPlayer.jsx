@@ -136,7 +136,11 @@ const OTTPlayer = memo(({
 
   // ========== PLAY CHANNEL VIA LIBVLC ==========
   useEffect(() => {
-    if (!selectedChannel || !isPlaying) return;
+    if (!selectedChannel || !isPlaying) {
+      // Stop la vidéo quand isPlaying passe à false (tab switch)
+      if (!isPlaying) { try { libVLC.stop(); } catch {} }
+      return;
+    }
     const url = getStreamUrl(selectedChannel);
     if (!url) return;
 
@@ -152,9 +156,7 @@ const OTTPlayer = memo(({
     };
     play();
 
-    return () => {
-      // Don't stop on cleanup — let it keep playing when switching UI
-    };
+    return () => {};
   }, [selectedChannel, isPlaying, getStreamUrl, updateNativePosition]);
 
   // ========== LOAD EPG FOR LIVE CHANNEL ==========
@@ -236,41 +238,41 @@ const OTTPlayer = memo(({
           <div onClick={(e) => e.stopPropagation()} style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             background: 'linear-gradient(transparent, rgba(0,0,0,0.88) 40%)',
-            padding: '36px 18px 12px',
-            display: 'flex', flexDirection: 'column', gap: '6px',
+            padding: '20px 12px 8px',
+            display: 'flex', flexDirection: 'column', gap: '4px',
           }}>
             {nowProgram && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '10px', color: CSS.textDim, fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '9px', color: CSS.textDim, fontVariantNumeric: 'tabular-nums', padding: '0 4px' }}>
                 <span>{formatEpgTime(nowProgram.start_time)}</span>
-                <div style={{ flex: 1, height: '3px', background: 'rgba(255,255,255,0.12)', borderRadius: '2px', position: 'relative' }}>
-                  <div style={{ height: '100%', background: CSS.accent, borderRadius: '2px', width: `${nowProgram.progress}%`, boxShadow: '0 0 6px rgba(98,37,255,0.4)' }} />
+                <div style={{ flex: 1, height: '2px', background: 'rgba(255,255,255,0.12)', borderRadius: '1px' }}>
+                  <div style={{ height: '100%', background: CSS.accent, borderRadius: '1px', width: `${nowProgram.progress}%` }} />
                 </div>
                 <span>{formatEpgTime(nowProgram.end_time)}</span>
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', padding: '0 4px' }}>
               {selectedChannel?.logo && (
-                <img src={selectedChannel.logo} alt="" style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                <img src={selectedChannel.logo} alt="" style={{ width: '22px', height: '22px', objectFit: 'contain', borderRadius: '3px' }} onError={(e) => { e.target.style.display = 'none'; }} />
               )}
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{selectedChannel?.name}</span>
-              {nowProgram && <span style={{ fontSize: '10px', color: '#aaa' }}>{nowProgram.title}</span>}
+              <span style={{ fontSize: '11px', fontWeight: 600, color: '#fff' }}>{selectedChannel?.name}</span>
+              {nowProgram && <span style={{ fontSize: '9px', color: '#aaa' }}>{nowProgram.title}</span>}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <button onClick={() => {}} style={ctrlBtnStyle}>SUBS</button>
-                <button onClick={() => {}} style={ctrlBtnStyle}>AUDIO</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <button onClick={() => {}} style={ctrlBtnStyle}>SUB</button>
+                <button onClick={() => {}} style={ctrlBtnStyle}>AUD</button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
-                <button onClick={handlePrevChannel} style={ctrlBtnStyle}>PREV</button>
-                <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>REW</button>
-                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '10px 20px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', fontSize: '11px' }}>
-                  {isPaused ? 'PLAY' : 'PAUSE'}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <button onClick={handlePrevChannel} style={ctrlBtnStyle}>◀◀</button>
+                <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>-15</button>
+                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '4px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                  {isPaused ? '▶' : '❚❚'}
                 </button>
-                <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>FWD</button>
-                <button onClick={handleNextChannel} style={ctrlBtnStyle}>NEXT</button>
+                <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>+15</button>
+                <button onClick={handleNextChannel} style={ctrlBtnStyle}>▶▶</button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <button onClick={handleFullscreen} style={{ ...ctrlBtnStyle, color: '#fff', fontWeight: 700 }}>MINIMIZE</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <button onClick={handleFullscreen} style={{ ...ctrlBtnStyle, color: '#fff', fontWeight: 700 }}>✕</button>
               </div>
             </div>
           </div>
@@ -320,7 +322,7 @@ const OTTPlayer = memo(({
     const seasonCover = currentSeasonInfo?.cover || currentSeasonInfo?.cover_big || poster;
 
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', background: 'rgba(0,0,0,0.4)', minWidth: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', minWidth: 0 }}>
         {/* Title row */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -489,36 +491,35 @@ const OTTPlayer = memo(({
 
         {/* Controls overlay */}
         {showControls && (
-          <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.88) 40%)', padding: '36px 18px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.88) 40%)', padding: '20px 8px 6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {/* Timeline */}
             {nowProgram && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '10px', color: CSS.textDim, fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '8px', color: CSS.textDim, fontVariantNumeric: 'tabular-nums', padding: '0 4px' }}>
                 <span>{formatEpgTime(nowProgram.start_time)}</span>
-                <div style={{ flex: 1, height: '3px', background: 'rgba(255,255,255,0.12)', borderRadius: '2px', position: 'relative', cursor: 'pointer' }}>
-                  <div style={{ height: '100%', background: CSS.accent, borderRadius: '2px', width: `${nowProgram.progress}%`, boxShadow: '0 0 6px rgba(98,37,255,0.4)' }} />
-                  <div style={{ position: 'absolute', top: '50%', left: `${nowProgram.progress}%`, transform: 'translate(-50%, -50%)', width: '10px', height: '10px', background: '#fff', borderRadius: '50%', boxShadow: '0 0 4px rgba(0,0,0,0.5)' }} />
+                <div style={{ flex: 1, height: '2px', background: 'rgba(255,255,255,0.12)', borderRadius: '1px', position: 'relative' }}>
+                  <div style={{ height: '100%', background: CSS.accent, borderRadius: '1px', width: `${nowProgram.progress}%` }} />
                 </div>
                 <span>{formatEpgTime(nowProgram.end_time)}</span>
               </div>
             )}
 
-            {/* Controls row */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <button onClick={() => {}} style={ctrlBtnStyle}>SUBS</button>
-                <button onClick={() => {}} style={ctrlBtnStyle}>AUDIO</button>
+            {/* Controls row — compact */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <button onClick={() => {}} style={ctrlBtnStyle}>SUB</button>
+                <button onClick={() => {}} style={ctrlBtnStyle}>AUD</button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
-                <button onClick={handlePrevChannel} style={ctrlBtnStyle}>PREV</button>
-                <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>REW</button>
-                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '10px 20px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', fontSize: '11px' }}>
-                  {isPaused ? 'PLAY' : 'PAUSE'}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <button onClick={handlePrevChannel} style={ctrlBtnStyle}>◀◀</button>
+                <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>-15</button>
+                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '4px 10px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                  {isPaused ? '▶' : '❚❚'}
                 </button>
-                <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>FWD</button>
-                <button onClick={handleNextChannel} style={ctrlBtnStyle}>NEXT</button>
+                <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>+15</button>
+                <button onClick={handleNextChannel} style={ctrlBtnStyle}>▶▶</button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <button onClick={handleFullscreen} style={ctrlBtnStyle}>FULLSCREEN</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <button onClick={handleFullscreen} style={ctrlBtnStyle}>⛶</button>
               </div>
             </div>
           </div>
@@ -587,11 +588,11 @@ const OTTPlayer = memo(({
 // ========== BUTTON STYLES ==========
 const ctrlBtnStyle = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  padding: '8px 12px', border: 'none', borderRadius: 0,
+  padding: '4px 6px', border: 'none', borderRadius: 0,
   background: 'transparent', color: 'rgba(255,255,255,0.6)',
-  fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 600,
-  letterSpacing: '0.5px', textTransform: 'uppercase',
-  cursor: 'pointer', transition: 'all 0.15s',
+  fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 600,
+  letterSpacing: '0.3px', textTransform: 'uppercase',
+  cursor: 'pointer',
 };
 
 const epgActionStyle = {
