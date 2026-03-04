@@ -333,6 +333,7 @@ const OTT = forwardRef(({
   // ========== EPG CACHE (useRef — no re-render) ==========
   const epgCacheRef = useRef({});
   const epgLoadingRef = useRef(null); // category_id en cours de chargement
+  const [epgTick, setEpgTick] = useState(0); // incrémenté une fois après chargement EPG d'un dossier
 
   // ========== REFS ==========
   const folderListRef = useRef(null);
@@ -488,6 +489,9 @@ const OTT = forwardRef(({
         }
         
         epgCacheRef.current = { ...epgCacheRef.current, ...newCache };
+        if (Object.keys(newCache).length > 0) {
+          setEpgTick(t => t + 1); // un seul re-render pour afficher l'EPG
+        }
       } catch (err) {
         console.warn('[EPG Cache] Load failed:', err);
       }
@@ -693,7 +697,7 @@ const OTT = forwardRef(({
     shakingItemId,
     focusedStreamId,
     epgCache: epgCacheRef.current,
-  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, shakingItemId, focusedStreamId]);
+  }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, shakingItemId, focusedStreamId, epgTick]);
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
   const seriesRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
