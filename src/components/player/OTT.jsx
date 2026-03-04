@@ -697,6 +697,7 @@ const OTT = forwardRef(({
     shakingItemId,
     focusedStreamId,
     epgCache: epgCacheRef.current,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [filteredItems, selectedChannel, handleItemClick, handleItemTouchStart, handleItemTouchMove, handleItemTouchEnd, shakingItemId, focusedStreamId, epgTick]);
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
