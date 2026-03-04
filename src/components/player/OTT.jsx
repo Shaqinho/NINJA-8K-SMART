@@ -309,7 +309,6 @@ const OTT = forwardRef(({
   const [activeTab, setActiveTab] = useState('live');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
-  const [singleColMode, setSingleColMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
@@ -835,13 +834,13 @@ const OTT = forwardRef(({
 
         {/* === COLUMN 1: FOLDERS === */}
         <div style={{
-          width: singleColMode ? 0 : '180px',
-          minWidth: singleColMode ? 0 : '150px',
-          borderRight: singleColMode ? 'none' : `1px solid ${CSS.divider}`,
+          width: '180px',
+          minWidth: '150px',
+          borderRight: `1px solid ${CSS.divider}`,
           display: 'flex', flexDirection: 'column',
           background: 'rgba(8, 8, 14, 0.5)',
-          overflow: singleColMode ? 'hidden' : 'hidden',
-          opacity: singleColMode ? 0 : 1,
+          overflow: 'hidden',
+          opacity: 1,
           transition: 'width 0.25s ease, min-width 0.25s ease, opacity 0.2s ease',
         }}>
           <List
@@ -859,8 +858,8 @@ const OTT = forwardRef(({
 
         {/* === COLUMN 2: CHANNELS / ITEMS === */}
         <div style={{
-          width: singleColMode ? '280px' : '240px',
-          minWidth: singleColMode ? '220px' : '190px',
+          width: '240px',
+          minWidth: '190px',
           borderRight: `1px solid ${CSS.divider}`,
           display: 'flex', flexDirection: 'column',
           background: 'rgba(8, 8, 14, 0.3)',
@@ -896,7 +895,7 @@ const OTT = forwardRef(({
           {/* Items list */}
           <div style={{ flex: 1, overflow: 'hidden' }}>
             {programResults.length > 0 ? (
-              <List height={listHeight - 50} itemCount={programResults.length} itemSize={40} width={singleColMode ? 280 : 240} overscanCount={10} itemData={programRowData}>
+              <List height={listHeight - 50} itemCount={programResults.length} itemSize={40} width={240} overscanCount={10} itemData={programRowData}>
                 {ProgramRowItem}
               </List>
             ) : filteredItems.length > 0 ? (
@@ -905,7 +904,7 @@ const OTT = forwardRef(({
                 height={listHeight - 50}
                 itemCount={filteredItems.length}
                 itemSize={activeTab === 'live' ? 40 : 42}
-                width={singleColMode ? 280 : 240}
+                width={240}
                 overscanCount={25}
                 itemData={activeTab === 'movies' ? movieRowData : activeTab === 'series' ? seriesRowData : channelRowData}
               >
