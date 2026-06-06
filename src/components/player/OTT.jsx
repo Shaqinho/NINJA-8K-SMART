@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, u
 import { FixedSizeList as List } from 'react-window';
 import { searchProgramsByTitle, getProgramsForChannel } from '../../database/ProgramQueries';
 import OTTPlayer from './OTTPlayer';
+import OTTSettings from './OTTSettings';
 
 // ============================================================================
 // OTT — Full-screen 3-column OTT interface (TiviMate style)
@@ -309,6 +310,7 @@ const OTT = forwardRef(({
   const [activeTab, setActiveTab] = useState('live');
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
   const [viewMode, setViewMode] = useState('list');
+  const [showSettings, setShowSettings] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -832,9 +834,7 @@ const OTT = forwardRef(({
           </button>
         )}
         {[
-          { label: 'PLAYLIST', action: onLogout },
-          { label: 'RELOAD', action: onReload },
-          { label: 'SETTINGS', action: onSettings },
+          { label: 'SETTINGS', action: () => setShowSettings(true) },
         ].map((btn, i) => (
           <button key={i} onClick={btn.action} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1019,6 +1019,13 @@ const OTT = forwardRef(({
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.12); }
       `}</style>
+
+      <OTTSettings
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        onReload={onReload}
+        onLogout={onLogout}
+      />
     </div>
   );
 });
