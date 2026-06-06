@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { libVLC } from './libVLC';
+import ProbeService from '../../services/ProbeService';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -115,12 +116,14 @@ const OTTPlayer = memo(({
   const [showAllAudio, setShowAllAudio] = useState(false);
   const [showAllSubs, setShowAllSubs] = useState(false);
 
-  // ========== DEFAULTS (fetching removed — will be rebuilt) ==========
+  // ========== DEFAULTS ==========
   const epgPrograms = [];
-  const detailData = null;
-  const probeData = null;
-  const probing = false;
-  const loading = false;
+
+  // ========== VOD/SERIES DETAIL STATE ==========
+  const [detailData, setDetailData] = useState(null);
+  const [probeData, setProbeData] = useState(null);
+  const [probing, setProbing] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // ========== BUILD STREAM URL ==========
   const getStreamUrl = useCallback((item) => {
@@ -167,7 +170,34 @@ const OTTPlayer = memo(({
   // (background fetching removed — will be rebuilt)
 
   // ========== LOAD VOD/SERIES DETAIL ==========
-  // (background fetching removed — will be rebuilt)
+  useEffect(() => {
+    if (activeTab === 'live' || !selectedChannel || !xtreamService) {
+      setDetailData(null); setProbeData(null);
+      return;
+    }
+    const streamId = selectedChannel.stream_id || selectedChannel.id;
+    setDetailData(null); setProbeData(null); setSelectedSeason(1);
+    setLoading(true); setProbing(true);
+    (async () => {
+      try {
+        if (activeTab === 'movies') {
+          const credentials = { server: xtreamService.server, username: xtreamService.username, password: xtreamService.password };
+          const [details, probeResult] = await Promise.all([
+            xtreamService.getVodInfo(streamId),
+            ProbeService.probeTracks(credentials, selectedChannel, 'vod'),
+          ]);
+          setDetailData(details);
+          if (probeResult.success) {
+            setProbeData({ audioTracks: probeResult.audioTracks, subtitleTracks: probeResult.subtitleTracks, video: probeResult.technical });
+          }
+        } else if (activeTab === 'series') {
+          const info = await xtreamService.getSeriesInfo(streamId);
+          setDetailData(info);
+        }
+      } catch (e) { console.error('Detail fetch failed:', e); }
+      finally { setLoading(false); setProbing(false); }
+    })();
+  }, [selectedChannel, activeTab, xtreamService]);
 
   // ========== CONTROLS ==========
   const handlePrevChannel = useCallback(() => {
