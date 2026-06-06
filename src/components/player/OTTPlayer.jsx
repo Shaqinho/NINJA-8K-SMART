@@ -490,7 +490,7 @@ const OTTPlayer = memo(({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'transparent', position: 'relative', minWidth: 0 }}>
 
       {/* Video area — transparent so libVLC native renders behind */}
-      <div ref={videoAreaRef} onClick={handleVideoAreaClick} style={{ flex: 1, background: 'transparent', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer' }}>
+      <div ref={videoAreaRef} onClick={handleFullscreen} style={{ flex: 1, background: 'transparent', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer' }}>
 
         {/* Controls overlay */}
         {showControls && (
