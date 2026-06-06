@@ -325,7 +325,7 @@ const OTTPlayer = memo(({
     const seasonCover = currentSeasonInfo?.cover || currentSeasonInfo?.cover_big || poster;
 
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', minWidth: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', background: '#0a0a0f', minWidth: 0 }}>
         {/* Title row */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>

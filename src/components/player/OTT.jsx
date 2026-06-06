@@ -308,6 +308,7 @@ const OTT = forwardRef(({
   // ========== CORE STATE ==========
   const [activeTab, setActiveTab] = useState('live');
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
+  const [viewMode, setViewMode] = useState('list');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -788,7 +789,7 @@ const OTT = forwardRef(({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.stopPropagation()}
-            placeholder="Search channels, movies, series..."
+            placeholder={activeTab === 'movies' ? 'Search movies...' : activeTab === 'series' ? 'Search series...' : 'Search channels...'}
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: CSS.text, fontFamily: 'inherit', fontSize: '12px', fontWeight: 400, letterSpacing: '0.3px', minWidth: 0 }}
           />
           {searchQuery && (
@@ -797,6 +798,7 @@ const OTT = forwardRef(({
         </div>
 
         {/* Right buttons */}
+        {activeTab === 'live' && (
         <button onClick={() => {
           if (epgScanning) return;
           if (epgMode && epgSelectedFolders.size > 0) { handleEpgScan(); }
@@ -816,6 +818,19 @@ const OTT = forwardRef(({
           )}
           {epgMode ? (epgScanning ? `EPG ${epgProgress}%` : `SCAN (${epgSelectedFolders.size})`) : 'EPG NOW'}
         </button>
+        )}
+        {(activeTab === 'movies' || activeTab === 'series') && (
+          <button onClick={() => setViewMode(v => (v === 'grid' ? 'list' : 'grid'))} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 20px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+            background: 'transparent', color: CSS.textDim,
+            fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
+            letterSpacing: '0.8px', textTransform: 'uppercase',
+            cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', userSelect: 'none',
+          }}>
+            {viewMode === 'grid' ? 'LIST' : 'GRID'}
+          </button>
+        )}
         {[
           { label: 'PLAYLIST', action: onLogout },
           { label: 'RELOAD', action: onReload },
