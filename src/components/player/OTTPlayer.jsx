@@ -215,16 +215,25 @@ const OTTPlayer = memo(({
   const handlePlayVod = useCallback(() => {
     if (!selectedChannel || !xtreamService) return;
     const url = getStreamUrl(selectedChannel);
-    if (url) { libVLC.play(url); setTimeout(updateNativePosition, 200); }
-  }, [selectedChannel, xtreamService, getStreamUrl, updateNativePosition]);
+    if (url) {
+      libVLC.play(url);
+      libVLC.setFullscreen(true);
+      setIsFullscreen(true);
+      onFullscreenChange?.(true);
+      setFullscreenPosition();
+    }
+  }, [selectedChannel, xtreamService, getStreamUrl, setFullscreenPosition, onFullscreenChange]);
 
   const handlePlayEpisode = useCallback((episode) => {
     if (!episode || !xtreamService) return;
     const ext = episode.container_extension || 'mp4';
     const url = `${xtreamService.server}/series/${xtreamService.username}/${xtreamService.password}/${episode.id}.${ext}`;
     libVLC.play(url);
-    setTimeout(updateNativePosition, 200);
-  }, [xtreamService, updateNativePosition]);
+    libVLC.setFullscreen(true);
+    setIsFullscreen(true);
+    onFullscreenChange?.(true);
+    setFullscreenPosition();
+  }, [xtreamService, setFullscreenPosition, onFullscreenChange]);
 
   // ========== LIVE: EPG NOW data ==========
   const nowProgram = epgPrograms.find(p => p.is_currently_live === 1);
