@@ -284,8 +284,8 @@ const OTTPlayer = memo(({
   // ========== NO CHANNEL SELECTED — PLACEHOLDER ==========
   if (!selectedChannel) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'transparent', position: 'relative', minWidth: 0 }}>
-        <div style={{ flex: 1, background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#000', position: 'relative', minWidth: 0 }}>
+        <div style={{ flex: 1, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ textAlign: 'center', color: CSS.textMuted }}>
             <div style={{ fontSize: '26px', fontWeight: 900, fontStyle: 'italic', letterSpacing: '-1px', marginBottom: '6px' }}>
               NINJA <span style={{ color: CSS.accent }}>8K</span>
