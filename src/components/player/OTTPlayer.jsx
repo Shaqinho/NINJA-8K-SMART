@@ -62,6 +62,7 @@ const OTTPlayer = memo(({
   liveChannels = [],
   filteredItems = [],
   onChannelChange,
+  onFullscreenChange,
 }) => {
 
   // ========== PLAYER STATE ==========
@@ -190,15 +191,17 @@ const OTTPlayer = memo(({
     if (isFullscreen) {
       await libVLC.setFullscreen(false);
       setIsFullscreen(false);
+      onFullscreenChange?.(false);
       setTimeout(updateNativePosition, 100);
       setTimeout(updateNativePosition, 200);
       setTimeout(updateNativePosition, 400);
     } else {
       await libVLC.setFullscreen(true);
       setIsFullscreen(true);
+      onFullscreenChange?.(true);
       setFullscreenPosition();
     }
-  }, [isFullscreen, updateNativePosition, setFullscreenPosition]);
+  }, [isFullscreen, updateNativePosition, setFullscreenPosition, onFullscreenChange]);
 
   const handleVideoAreaClick = useCallback(() => {
     setShowControls(prev => !prev);

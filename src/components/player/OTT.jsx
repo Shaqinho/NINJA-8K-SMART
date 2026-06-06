@@ -307,6 +307,7 @@ const OTT = forwardRef(({
 
   // ========== CORE STATE ==========
   const [activeTab, setActiveTab] = useState('live');
+  const [playerFullscreen, setPlayerFullscreen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -761,7 +762,7 @@ const OTT = forwardRef(({
     <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'transparent', display: 'flex', flexDirection: 'column', fontFamily: "'Outfit', -apple-system, sans-serif" }}>
 
       {/* ========== NAVBAR ========== */}
-      <nav style={{ display: 'flex', alignItems: 'stretch', height: CSS.barH, background: 'rgba(8, 8, 14, 0.92)', borderBottom: `1px solid ${CSS.divider}`, zIndex: 100, flexShrink: 0 }}>
+      <nav style={{ display: playerFullscreen ? 'none' : 'flex', alignItems: 'stretch', height: CSS.barH, background: 'rgba(8, 8, 14, 0.92)', borderBottom: `1px solid ${CSS.divider}`, zIndex: 100, flexShrink: 0 }}>
         {/* Tabs */}
         {['live', 'movies', 'series'].map(tab => (
           <button key={tab} onClick={() => handleTabSwitch(tab)} style={{
@@ -851,7 +852,7 @@ const OTT = forwardRef(({
           width: '180px',
           minWidth: '150px',
           borderRight: `1px solid ${CSS.divider}`,
-          display: 'flex', flexDirection: 'column',
+          display: playerFullscreen ? 'none' : 'flex', flexDirection: 'column',
           background: 'rgba(8, 8, 14, 0.92)',
           overflow: 'hidden',
           opacity: 1,
@@ -875,7 +876,7 @@ const OTT = forwardRef(({
           width: '240px',
           minWidth: '190px',
           borderRight: `1px solid ${CSS.divider}`,
-          display: 'flex', flexDirection: 'column',
+          display: playerFullscreen ? 'none' : 'flex', flexDirection: 'column',
           background: 'rgba(8, 8, 14, 0.92)',
           overflow: 'hidden',
           transition: 'width 0.25s ease',
@@ -947,6 +948,7 @@ const OTT = forwardRef(({
             setSelectedChannel(channel);
             setIsPlaying(true);
           }}
+          onFullscreenChange={setPlayerFullscreen}
         />
       </div>
 
