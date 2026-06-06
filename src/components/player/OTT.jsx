@@ -852,7 +852,7 @@ const OTT = forwardRef(({
           minWidth: '150px',
           borderRight: `1px solid ${CSS.divider}`,
           display: 'flex', flexDirection: 'column',
-          background: 'rgba(8, 8, 14, 0.5)',
+          background: 'rgba(8, 8, 14, 0.92)',
           overflow: 'hidden',
           opacity: 1,
           transition: 'width 0.25s ease, min-width 0.25s ease, opacity 0.2s ease',
@@ -876,7 +876,7 @@ const OTT = forwardRef(({
           minWidth: '190px',
           borderRight: `1px solid ${CSS.divider}`,
           display: 'flex', flexDirection: 'column',
-          background: 'rgba(8, 8, 14, 0.3)',
+          background: 'rgba(8, 8, 14, 0.92)',
           overflow: 'hidden',
           transition: 'width 0.25s ease',
         }}>
