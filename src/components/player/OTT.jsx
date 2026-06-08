@@ -33,27 +33,6 @@ const CSS = {
 
 // ========== TICKER TEXT (overflow scroll) ==========
 // eslint-disable-next-line no-unused-vars
-const TickerText = memo(({ children, style = {} }) => {
-  const textRef = useRef(null);
-  const containerRef = useRef(null);
-  const [needsTicker, setNeedsTicker] = useState(false);
-
-  useEffect(() => {
-    if (textRef.current && containerRef.current) {
-      setNeedsTicker(textRef.current.scrollWidth > containerRef.current.clientWidth);
-    }
-  }, [children]);
-
-  return (
-    <div ref={containerRef} style={{ ...style, overflow: 'hidden', whiteSpace: 'nowrap', position: 'relative' }}>
-      <span ref={textRef} style={{ display: 'inline-block', ...(needsTicker ? { animation: 'ottTicker 8s linear infinite', paddingRight: '40px' } : {}) }}>
-        {children}
-        {needsTicker && <span style={{ paddingLeft: '40px' }}>{children}</span>}
-      </span>
-    </div>
-  );
-});
-
 // ========== FOLDER ROW (Column 1) ==========
 const FolderRowItem = memo(({ data, index, style }) => {
   const { categories, selectedCategory, getCategoryCount, onCategoryClick, epgMode, epgSelectedFolders, epgSyncedFolders, onToggleEpgFolder } = data;
@@ -353,7 +332,6 @@ const OTT = forwardRef(({
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -604,7 +582,6 @@ const OTT = forwardRef(({
   const handleCategoryClick = useCallback((category) => {
     setSelectedCategory(category);
     setSearchQuery('');
-    setSearchOpen(false);
   }, []);
 
   const handleItemClick = useCallback((item) => {
@@ -681,7 +658,6 @@ const OTT = forwardRef(({
     setSelectedCategory(null);
     setSelectedChannel(null);
     setSearchQuery('');
-    setSearchOpen(false);
     setProgramResults([]);
     setIsPlaying(false);
   }, []);
@@ -698,7 +674,6 @@ const OTT = forwardRef(({
     if (nextIndex !== currentIndex) {
       setSelectedCategory(cats[nextIndex]);
       setSearchQuery('');
-      setSearchOpen(false);
     }
   }, [selectedCategory, activeCategories]);
 
