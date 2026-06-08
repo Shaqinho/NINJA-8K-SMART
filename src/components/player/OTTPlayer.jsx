@@ -389,7 +389,7 @@ const OTTPlayer = memo(({
         <div style={{ display: 'flex', gap: '16px', padding: '0 20px 15px', flexShrink: 0 }}>
           {(activeTab === 'series' ? seasonCover : poster) && (
             <img src={activeTab === 'series' ? seasonCover : poster} alt="" onClick={() => setPosterOverlay(true)}
-              style={{ width: '140px', height: '210px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, cursor: 'pointer' }} />
+              style={{ width: '20%', maxWidth: '20%', aspectRatio: '2 / 3', height: 'auto', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, cursor: 'pointer' }} />
           )}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {plot && <div style={{ fontSize: '11px', color: '#aaa', lineHeight: '1.5' }}>{plot.substring(0, 300)}{plot.length > 300 ? '...' : ''}</div>}

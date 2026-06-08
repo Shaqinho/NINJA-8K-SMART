@@ -341,6 +341,11 @@ const OTT = forwardRef(({
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
   const [viewMode, setViewMode] = useState('grid');
   const [showSettings, setShowSettings] = useState(false);
+  const [col1Hidden, setCol1Hidden] = useState(false);
+  const [gridSize, setGridSize] = useState(1);
+  const [gridAreaWidth, setGridAreaWidth] = useState(0);
+  const [gridAreaHeight, setGridAreaHeight] = useState(0);
+  const gridAreaRef = useRef(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -779,13 +784,21 @@ const OTT = forwardRef(({
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
   const seriesRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
-  const posterGridData = useMemo(() => ({
+  const isPosterGrid = (activeTab === 'movies' || activeTab === 'series') && viewMode === 'grid';
+  const gridBrowse = isPosterGrid && !selectedChannel;
+  const gridDetail = isPosterGrid && !!selectedChannel;
+  const GRID_COLS = [4, 5, 6];
+  const GRID_ROWS = [2, 3, 4];
+  const gridCols = GRID_COLS[gridSize];
+  const gridRows = GRID_ROWS[gridSize];
+  const gridColW = gridAreaWidth ? Math.floor(gridAreaWidth / gridCols) : 124;
+  const gridRowH = gridAreaHeight ? Math.floor(gridAreaHeight / gridRows) : 196;
+  const posterGridData = {
     items: filteredItems,
     onItemClick: handleItemClick,
-    columnCount: 3,
+    columnCount: gridCols,
     selectedId: selectedChannel ? (selectedChannel.stream_id || selectedChannel.id) : null,
-  }), [filteredItems, handleItemClick, selectedChannel]);
-  const isPosterGrid = (activeTab === 'movies' || activeTab === 'series') && viewMode === 'grid';
+  };
   const programRowData = useMemo(() => ({ items: programResults, onProgramClick: handleProgramClick }), [programResults, handleProgramClick]);
 
   // ========== DIMENSIONS (stable — only updates on resize) ==========
@@ -796,6 +809,17 @@ const OTT = forwardRef(({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    const el = gridAreaRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect;
+      if (r) { setGridAreaWidth(Math.round(r.width)); setGridAreaHeight(Math.round(r.height)); }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [gridBrowse]);
 
   // ========== RENDER ==========
   return (
@@ -870,6 +894,32 @@ const OTT = forwardRef(({
             {viewMode === 'grid' ? 'LIST' : 'GRID'}
           </button>
         )}
+        {isPosterGrid && (
+          <>
+            <button onClick={() => setCol1Hidden(h => !h)} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 16px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+              background: 'transparent', color: CSS.textDim,
+              fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
+              letterSpacing: '0.8px', textTransform: 'uppercase',
+              cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', userSelect: 'none',
+            }}>{col1Hidden ? 'SHOW' : 'HIDE'}</button>
+            <button onClick={() => setGridSize(s => Math.max(0, s - 1))} disabled={gridSize === 0} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 14px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+              background: 'transparent', color: gridSize === 0 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
+              fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
+              cursor: gridSize === 0 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
+            }}>−</button>
+            <button onClick={() => setGridSize(s => Math.min(2, s + 1))} disabled={gridSize === 2} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 14px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+              background: 'transparent', color: gridSize === 2 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
+              fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
+              cursor: gridSize === 2 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
+            }}>+</button>
+          </>
+        )}
         {[
           { label: 'SETTINGS', action: () => setShowSettings(true) },
         ].map((btn, i) => (
@@ -904,7 +954,7 @@ const OTT = forwardRef(({
           width: '180px',
           minWidth: '150px',
           borderRight: `1px solid ${CSS.divider}`,
-          display: playerFullscreen ? 'none' : 'flex', flexDirection: 'column',
+          display: (playerFullscreen || col1Hidden) ? 'none' : 'flex', flexDirection: 'column',
           background: 'rgba(8, 8, 14, 0.92)',
           overflow: 'hidden',
           opacity: 1,
@@ -923,11 +973,13 @@ const OTT = forwardRef(({
           </List>
         </div>
 
-        {/* === COLUMN 2: CHANNELS / ITEMS === */}
+        {/* === COLUMN 2: ITEMS / POSTER GRID === */}
+        {!gridDetail && (
         <div style={{
-          width: isPosterGrid ? '392px' : '240px',
-          minWidth: '190px',
-          borderRight: `1px solid ${CSS.divider}`,
+          width: gridBrowse ? 'auto' : '240px',
+          flex: gridBrowse ? 1 : 'none',
+          minWidth: gridBrowse ? 0 : '190px',
+          borderRight: gridBrowse ? 'none' : `1px solid ${CSS.divider}`,
           display: playerFullscreen ? 'none' : 'flex', flexDirection: 'column',
           background: 'rgba(8, 8, 14, 0.92)',
           overflow: 'hidden',
@@ -960,7 +1012,7 @@ const OTT = forwardRef(({
           )}
 
           {/* Items list */}
-          <div style={{ flex: 1, overflow: 'hidden' }}>
+          <div ref={gridAreaRef} style={{ flex: 1, overflow: 'hidden' }}>
             {programResults.length > 0 ? (
               <List height={listHeight - 50} itemCount={programResults.length} itemSize={40} width={240} overscanCount={10} itemData={programRowData}>
                 {ProgramRowItem}
@@ -968,12 +1020,12 @@ const OTT = forwardRef(({
             ) : filteredItems.length > 0 ? (
               isPosterGrid ? (
               <Grid
-                columnCount={3}
-                columnWidth={124}
-                rowCount={Math.ceil(filteredItems.length / 3)}
-                rowHeight={196}
-                height={listHeight - 50}
-                width={384}
+                columnCount={gridCols}
+                columnWidth={gridColW}
+                rowCount={Math.ceil(filteredItems.length / gridCols)}
+                rowHeight={gridRowH}
+                height={gridAreaHeight || (listHeight - 50)}
+                width={gridAreaWidth || 384}
                 overscanRowCount={4}
                 itemData={posterGridData}
               >
@@ -999,8 +1051,10 @@ const OTT = forwardRef(({
             )}
           </div>
         </div>
+        )}
 
-        {/* === COLUMN 3: PLAYER + EPG === */}
+        {/* === COLUMN 3: PLAYER + EPG (caché pendant le browse grille) === */}
+        {!gridBrowse && (
         <OTTPlayer
           selectedChannel={selectedChannel}
           isPlaying={isPlaying}
@@ -1017,6 +1071,16 @@ const OTT = forwardRef(({
           }}
           onFullscreenChange={setPlayerFullscreen}
         />
+        )}
+
+        {gridDetail && (
+          <button onClick={() => setSelectedChannel(null)} style={{
+            position: 'fixed', top: CSS.barH + 10, left: 12, zIndex: 200,
+            background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px',
+            color: '#fff', fontSize: '12px', fontWeight: 700, padding: '8px 14px', cursor: 'pointer',
+            letterSpacing: '0.5px',
+          }}>← RETOUR</button>
+        )}
       </div>
 
       {/* ========== EXIT POPUP ========== */}
