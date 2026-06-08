@@ -353,6 +353,7 @@ const OTT = forwardRef(({
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
