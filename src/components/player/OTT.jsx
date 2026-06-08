@@ -229,7 +229,7 @@ const SeriesRowItem = memo(({ data, index, style }) => {
 // ========== PROGRAM ROW (Search results) ==========
 // ========== POSTER CELL (Column 2 — Movies/Series grid) ==========
 const PosterCell = memo(({ columnIndex, rowIndex, style, data }) => {
-  const { items, onItemClick, columnCount, selectedId, kind } = data;
+  const { items, onItemClick, columnCount, selectedId, kind, animated } = data;
   const index = rowIndex * columnCount + columnIndex;
   const item = items[index];
   if (!item) return <div style={style} />;
@@ -247,7 +247,7 @@ const PosterCell = memo(({ columnIndex, rowIndex, style, data }) => {
       }}>
         <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', overflow: 'hidden', display: isLogo ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', padding: isLogo ? '10px' : 0 }}>
           {poster ? (
-            <img src={poster} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: isLogo ? 'contain' : 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
+            <img src={poster} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: isLogo ? 'contain' : 'cover', ...(animated && !isLogo ? { animation: `ottPanY 7s ease-in-out ${(index % 7) * 0.5}s infinite` } : {}) }} onError={(e) => { e.target.style.display = 'none'; }} />
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>{isLogo ? '📺' : '🎬'}</div>
           )}
@@ -767,12 +767,12 @@ const OTT = forwardRef(({
   const gridBrowse = isGridView && !selectedChannel;
   const gridDetail = isGridView && !!selectedChannel;
   const gridKind = activeTab === 'live' ? 'logo' : 'poster';
-  const GRID_COLS = [4, 5, 6];
-  const GRID_ROWS = [2, 3, 4];
+  const GRID_COLS = [4, 5, 6, 5];
+  const GRID_ROWS = [2, 3, 4, 3];
   const gridCols = GRID_COLS[gridSize];
   const gridRows = GRID_ROWS[gridSize];
   const gridColW = gridAreaWidth ? Math.floor(gridAreaWidth / gridCols) : 124;
-  const gridRowH = gridKind === 'poster'
+  const gridRowH = (gridKind === 'poster' && gridSize !== 3)
     ? Math.round(gridColW * 1.5) + 40
     : (gridAreaHeight ? Math.floor(gridAreaHeight / gridRows) : 196);
   const posterGridData = {
@@ -781,6 +781,7 @@ const OTT = forwardRef(({
     columnCount: gridCols,
     selectedId: selectedChannel ? (selectedChannel.stream_id || selectedChannel.id) : null,
     kind: gridKind,
+    animated: gridKind === 'poster' && gridSize === 3,
   };
   const programRowData = useMemo(() => ({ items: programResults, onProgramClick: handleProgramClick }), [programResults, handleProgramClick]);
 
@@ -807,6 +808,7 @@ const OTT = forwardRef(({
   // ========== RENDER ==========
   return (
     <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'transparent', display: 'flex', flexDirection: 'column', fontFamily: "'Outfit', -apple-system, sans-serif" }}>
+      <style>{`@keyframes ottPanY{0%,10%{object-position:center 0%}50%{object-position:center 100%}90%,100%{object-position:center 0%}}`}</style>
 
       {/* ========== NAVBAR ========== */}
       <nav style={{ display: (playerFullscreen || navbarHidden) ? 'none' : 'flex', alignItems: 'stretch', height: CSS.barH, background: 'rgba(8, 8, 14, 0.92)', borderBottom: `1px solid ${CSS.divider}`, zIndex: 100, flexShrink: 0 }}>
@@ -871,12 +873,12 @@ const OTT = forwardRef(({
               fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
               cursor: gridSize === 0 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
             }}>−</button>
-            <button onClick={() => setGridSize(s => Math.min(2, s + 1))} disabled={gridSize === 2} style={{
+            <button onClick={() => setGridSize(s => Math.min(3, s + 1))} disabled={gridSize === 3} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: '0 14px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
-              background: 'transparent', color: gridSize === 2 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
+              background: 'transparent', color: gridSize === 3 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
               fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
-              cursor: gridSize === 2 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
+              cursor: gridSize === 3 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
             }}>+</button>
           </>
         )}
@@ -937,12 +939,12 @@ const OTT = forwardRef(({
 
       {navbarHidden && !playerFullscreen && (
         <button onClick={() => setNavbarHidden(false)} aria-label="show navbar" style={{
-          position: 'fixed', top: '8px', right: '8px', zIndex: 300,
-          width: '30px', height: '30px', borderRadius: '7px',
-          background: 'rgba(15,15,23,0.85)', border: '0.5px solid rgba(255,255,255,0.15)',
+          position: 'fixed', top: '15px', right: '20px', zIndex: 300,
+          width: '36px', height: '36px', borderRadius: '50%',
+          background: 'rgba(15,15,23,0.85)', border: '1px solid rgba(255,255,255,0.15)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
         }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9a8ad6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a8ad6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
       )}
 
