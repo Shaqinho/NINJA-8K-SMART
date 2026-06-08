@@ -767,14 +767,26 @@ const OTT = forwardRef(({
   const gridBrowse = isGridView && !selectedChannel;
   const gridDetail = isGridView && !!selectedChannel;
   const gridKind = activeTab === 'live' ? 'logo' : 'poster';
-  const GRID_COLS = [4, 5, 6, 5];
-  const GRID_ROWS = [2, 3, 4, 3];
-  const gridCols = GRID_COLS[gridSize];
-  const gridRows = GRID_ROWS[gridSize];
-  const gridColW = gridAreaWidth ? Math.floor(gridAreaWidth / gridCols) : 124;
-  const gridRowH = (gridKind === 'poster' && gridSize !== 3)
-    ? Math.round(gridColW * 1.5) + 40
-    : (gridAreaHeight ? Math.floor(gridAreaHeight / gridRows) : 196);
+  const GRID_COLS = [4, 5, 6, 5];      // logo + cran animé (3)
+  const GRID_ROWS = [2, 3, 4, 3];      // logo + cran animé (3)
+  const POSTER_ROWS = [2, 3, 4];       // fit-to-screen: rangées qui remplissent la hauteur (crans 0-2)
+  const GRID_LABEL_H = 30;
+  const gridAreaW = gridAreaWidth || 384;
+  const gridAreaH = gridAreaHeight || 600;
+  let gridCols, gridColW, gridRowH;
+  if (gridKind === 'poster' && gridSize <= 2) {
+    // Fit-to-screen: N rangées pleines + colonnes auto-ajustées, posters 2:3
+    const rowsFit = POSTER_ROWS[gridSize];
+    gridRowH = Math.floor(gridAreaH / rowsFit);
+    const posterW = Math.max(80, Math.round((gridRowH - GRID_LABEL_H) * 2 / 3));
+    gridCols = Math.max(1, Math.floor(gridAreaW / posterW));
+    gridColW = Math.floor(gridAreaW / gridCols);
+  } else {
+    // Logos LIVE + cran animé (paysage) : remplissage de la zone
+    gridCols = GRID_COLS[gridSize];
+    gridColW = Math.floor(gridAreaW / gridCols);
+    gridRowH = Math.floor(gridAreaH / GRID_ROWS[gridSize]);
+  }
   const posterGridData = {
     items: filteredItems,
     onItemClick: handleItemClick,

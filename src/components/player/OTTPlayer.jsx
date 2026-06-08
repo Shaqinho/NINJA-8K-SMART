@@ -245,7 +245,9 @@ const OTTPlayer = memo(({
   // ========== PLAY VOD/SERIES ==========
   const handlePlayVod = useCallback(() => {
     if (!selectedChannel || !xtreamService) return;
-    const url = getStreamUrl(selectedChannel);
+    const streamId = selectedChannel.stream_id || selectedChannel.id;
+    const ext = detailData?.movie_data?.container_extension || selectedChannel.container_extension || 'mp4';
+    const url = `${xtreamService.server}/movie/${xtreamService.username}/${xtreamService.password}/${streamId}.${ext}`;
     if (url) {
       libVLC.play(url);
       libVLC.setFullscreen(true);
@@ -253,7 +255,7 @@ const OTTPlayer = memo(({
       onFullscreenChange?.(true);
       setFullscreenPosition();
     }
-  }, [selectedChannel, xtreamService, getStreamUrl, setFullscreenPosition, onFullscreenChange]);
+  }, [selectedChannel, xtreamService, detailData, setFullscreenPosition, onFullscreenChange]);
 
   const handlePlayEpisode = useCallback((episode) => {
     if (!episode || !xtreamService) return;
@@ -369,11 +371,12 @@ const OTTPlayer = memo(({
         {/* Title row */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '15px 52px 10px 20px', flexShrink: 0, gap: '12px' }}>
           {onBack && (
-            <button onClick={onBack} style={{
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px',
-              color: '#fff', fontSize: '12px', fontWeight: 700, padding: '8px 14px', cursor: 'pointer',
-              letterSpacing: '0.5px', flexShrink: 0, whiteSpace: 'nowrap',
-            }}>← BACK</button>
+            <button onClick={onBack} aria-label="close" style={{
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%',
+              color: '#fff', fontSize: '18px', fontWeight: 700, width: '36px', height: '36px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', flexShrink: 0, lineHeight: 1,
+            }}>✕</button>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
