@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, memo } from 'react';
-import { FixedSizeList as List } from 'react-window';
+import { FixedSizeList as List, FixedSizeGrid as Grid } from 'react-window';
 import { searchProgramsByTitle, getProgramsForChannel } from '../../database/ProgramQueries';
 import OTTPlayer from './OTTPlayer';
 import OTTSettings from './OTTSettings';
@@ -248,6 +248,36 @@ const SeriesRowItem = memo(({ data, index, style }) => {
 });
 
 // ========== PROGRAM ROW (Search results) ==========
+// ========== POSTER CELL (Column 2 — Movies/Series grid) ==========
+const PosterCell = memo(({ columnIndex, rowIndex, style, data }) => {
+  const { items, onItemClick, columnCount, selectedId } = data;
+  const index = rowIndex * columnCount + columnIndex;
+  const item = items[index];
+  if (!item) return <div style={style} />;
+  const poster = item.cover || item.logo || item.movie_image;
+  const id = item.stream_id || item.id;
+  const selected = selectedId != null && id === selectedId;
+  return (
+    <div style={{ ...style, padding: '6px' }}>
+      <div onClick={() => onItemClick(item)} style={{
+        height: '100%', display: 'flex', flexDirection: 'column', cursor: 'pointer',
+        borderRadius: '6px', overflow: 'hidden',
+        border: selected ? '2px solid #6225ff' : '2px solid transparent',
+        background: 'rgba(255,255,255,0.03)',
+      }}>
+        <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', overflow: 'hidden' }}>
+          {poster ? (
+            <img src={poster} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
+          ) : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>🎬</div>
+          )}
+        </div>
+        <div style={{ fontSize: '9px', color: '#ddd', padding: '4px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.name}</div>
+      </div>
+    </div>
+  );
+});
+
 const ProgramRowItem = memo(({ data, index, style }) => {
   const { items, onProgramClick } = data;
   const prog = items[index];
@@ -309,7 +339,7 @@ const OTT = forwardRef(({
   // ========== CORE STATE ==========
   const [activeTab, setActiveTab] = useState('live');
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState('list');
+  const [viewMode, setViewMode] = useState('grid');
   const [showSettings, setShowSettings] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
@@ -749,6 +779,13 @@ const OTT = forwardRef(({
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
   const seriesRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
+  const posterGridData = useMemo(() => ({
+    items: filteredItems,
+    onItemClick: handleItemClick,
+    columnCount: 3,
+    selectedId: selectedChannel ? (selectedChannel.stream_id || selectedChannel.id) : null,
+  }), [filteredItems, handleItemClick, selectedChannel]);
+  const isPosterGrid = (activeTab === 'movies' || activeTab === 'series') && viewMode === 'grid';
   const programRowData = useMemo(() => ({ items: programResults, onProgramClick: handleProgramClick }), [programResults, handleProgramClick]);
 
   // ========== DIMENSIONS (stable — only updates on resize) ==========
@@ -888,7 +925,7 @@ const OTT = forwardRef(({
 
         {/* === COLUMN 2: CHANNELS / ITEMS === */}
         <div style={{
-          width: '240px',
+          width: isPosterGrid ? '392px' : '240px',
           minWidth: '190px',
           borderRight: `1px solid ${CSS.divider}`,
           display: playerFullscreen ? 'none' : 'flex', flexDirection: 'column',
@@ -929,6 +966,20 @@ const OTT = forwardRef(({
                 {ProgramRowItem}
               </List>
             ) : filteredItems.length > 0 ? (
+              isPosterGrid ? (
+              <Grid
+                columnCount={3}
+                columnWidth={124}
+                rowCount={Math.ceil(filteredItems.length / 3)}
+                rowHeight={196}
+                height={listHeight - 50}
+                width={384}
+                overscanRowCount={4}
+                itemData={posterGridData}
+              >
+                {PosterCell}
+              </Grid>
+              ) : (
               <List
                 ref={channelListRef}
                 height={listHeight - 50}
@@ -940,6 +991,7 @@ const OTT = forwardRef(({
               >
                 {activeTab === 'movies' ? MovieRowItem : activeTab === 'series' ? SeriesRowItem : ChannelRowItem}
               </List>
+              )
             ) : (
               <div style={{ padding: '40px 16px', textAlign: 'center', color: '#444', fontSize: '11px' }}>
                 {selectedCategory ? 'No items in this folder' : 'Select a folder'}
