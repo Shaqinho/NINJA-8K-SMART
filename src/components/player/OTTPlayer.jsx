@@ -307,7 +307,7 @@ const OTTPlayer = memo(({
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <button onClick={handlePrevChannel} style={ctrlBtnStyle}>◀◀</button>
                 <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>-15</button>
-                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '4px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '12px 20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
                   {isPaused ? '▶' : '❚❚'}
                 </button>
                 <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>+15</button>
@@ -437,7 +437,7 @@ const OTTPlayer = memo(({
 
         {/* Series: Season tabs + episodes */}
         {activeTab === 'series' && seasons.length > 0 && (
-          <div style={{ padding: '0 20px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '0 20px 24px' }}>
             <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '8px', flexShrink: 0 }}>
               {seasons.map(s => {
                 const isActive = s.season_number === selectedSeason;
@@ -454,7 +454,7 @@ const OTTPlayer = memo(({
                 );
               })}
             </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div>
               {currentSeasonEpisodes.map(ep => {
                 const epInfo = ep.info || {};
                 const epDuration = epInfo.duration_secs ? formatDuration(epInfo.duration_secs) : (epInfo.duration || '');
@@ -554,7 +554,7 @@ const OTTPlayer = memo(({
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                 <button onClick={handlePrevChannel} style={ctrlBtnStyle}>◀◀</button>
                 <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>-15</button>
-                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '4px 10px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '12px 20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
                   {isPaused ? '▶' : '❚❚'}
                 </button>
                 <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>+15</button>
@@ -630,9 +630,10 @@ const OTTPlayer = memo(({
 // ========== BUTTON STYLES ==========
 const ctrlBtnStyle = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  padding: '4px 6px', border: 'none', borderRadius: 0,
-  background: 'transparent', color: 'rgba(255,255,255,0.6)',
-  fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 600,
+  padding: '12px 14px', minWidth: '46px', minHeight: '46px',
+  border: 'none', borderRadius: '8px',
+  background: 'transparent', color: 'rgba(255,255,255,0.7)',
+  fontFamily: "'Outfit', sans-serif", fontSize: '15px', fontWeight: 600,
   letterSpacing: '0.3px', textTransform: 'uppercase',
   cursor: 'pointer',
 };
