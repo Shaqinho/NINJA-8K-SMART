@@ -345,6 +345,7 @@ const OTT = forwardRef(({
   const toggleViewMode = () => setViewModes(m => ({ ...m, [activeTab]: m[activeTab] === 'grid' ? 'list' : 'grid' }));
   const [showSettings, setShowSettings] = useState(false);
   const [col1Hidden, setCol1Hidden] = useState(false);
+  const [navbarHidden, setNavbarHidden] = useState(false);
   const [gridSize, setGridSize] = useState(1);
   const [gridAreaWidth, setGridAreaWidth] = useState(0);
   const [gridAreaHeight, setGridAreaHeight] = useState(0);
@@ -352,7 +353,6 @@ const OTT = forwardRef(({
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -831,7 +831,7 @@ const OTT = forwardRef(({
     <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: 'transparent', display: 'flex', flexDirection: 'column', fontFamily: "'Outfit', -apple-system, sans-serif" }}>
 
       {/* ========== NAVBAR ========== */}
-      <nav style={{ display: playerFullscreen ? 'none' : 'flex', alignItems: 'stretch', height: CSS.barH, background: 'rgba(8, 8, 14, 0.92)', borderBottom: `1px solid ${CSS.divider}`, zIndex: 100, flexShrink: 0 }}>
+      <nav style={{ display: (playerFullscreen || navbarHidden) ? 'none' : 'flex', alignItems: 'stretch', height: CSS.barH, background: 'rgba(8, 8, 14, 0.92)', borderBottom: `1px solid ${CSS.divider}`, zIndex: 100, flexShrink: 0 }}>
         {/* Tabs */}
         {['live', 'movies', 'series'].map(tab => (
           <button key={tab} onClick={() => handleTabSwitch(tab)} style={{
@@ -948,7 +948,25 @@ const OTT = forwardRef(({
         }}>
           EXIT
         </button>
+        <button onClick={() => setNavbarHidden(true)} aria-label="hide navbar" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 14px', border: 'none', borderLeft: `1px solid ${CSS.divider}`, borderRadius: 0,
+          background: 'transparent', cursor: 'pointer', transition: 'all 0.15s', userSelect: 'none',
+        }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
+        </button>
       </nav>
+
+      {navbarHidden && !playerFullscreen && (
+        <button onClick={() => setNavbarHidden(false)} aria-label="show navbar" style={{
+          position: 'fixed', top: '8px', right: '8px', zIndex: 300,
+          width: '30px', height: '30px', borderRadius: '7px',
+          background: 'rgba(15,15,23,0.85)', border: '0.5px solid rgba(255,255,255,0.15)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9a8ad6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      )}
 
       {/* ========== MAIN LAYOUT ========== */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
@@ -989,36 +1007,15 @@ const OTT = forwardRef(({
           overflow: 'hidden',
           transition: 'width 0.25s ease',
         }}>
-          {/* Category header */}
-          {selectedCategory && (
-            <div style={{
-              padding: '8px 12px',
-              borderBottom: `1px solid ${CSS.divider}`,
-              display: 'flex', alignItems: 'center', gap: '8px',
-              flexShrink: 0,
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {selectedCategory.category_name}
-                </div>
-                <div style={{ fontSize: '9px', color: '#666' }}>
-                  {filteredItems.length} {activeTab === 'live' ? 'channels' : activeTab === 'movies' ? 'movies' : 'series'}
-                </div>
-              </div>
-              {/* Search toggle */}
-              <button onClick={() => { setSearchOpen(!searchOpen); if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100); }}
-                style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchOpen ? CSS.accent : '#888'} strokeWidth="2">
-                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-                </svg>
-              </button>
-            </div>
-          )}
-
           {/* Items list */}
-          <div ref={gridAreaRef} style={{ flex: 1, overflow: 'hidden' }}>
+          <div ref={gridAreaRef} style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+            {selectedCategory && (
+              <div style={{ position: 'absolute', top: '6px', left: '10px', zIndex: 5, fontSize: '11px', color: 'rgba(255,255,255,0.3)', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+                {selectedCategory.category_name} · {filteredItems.length.toLocaleString('fr-FR')}
+              </div>
+            )}
             {programResults.length > 0 ? (
-              <List height={listHeight - 50} itemCount={programResults.length} itemSize={40} width={240} overscanCount={10} itemData={programRowData}>
+              <List height={gridAreaHeight || (listHeight - 50)} itemCount={programResults.length} itemSize={40} width={240} overscanCount={10} itemData={programRowData}>
                 {ProgramRowItem}
               </List>
             ) : filteredItems.length > 0 ? (
@@ -1038,7 +1035,7 @@ const OTT = forwardRef(({
               ) : (
               <List
                 ref={channelListRef}
-                height={listHeight - 50}
+                height={gridAreaHeight || (listHeight - 50)}
                 itemCount={filteredItems.length}
                 itemSize={activeTab === 'live' ? 40 : 42}
                 width={240}
