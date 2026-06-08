@@ -250,10 +250,11 @@ const SeriesRowItem = memo(({ data, index, style }) => {
 // ========== PROGRAM ROW (Search results) ==========
 // ========== POSTER CELL (Column 2 — Movies/Series grid) ==========
 const PosterCell = memo(({ columnIndex, rowIndex, style, data }) => {
-  const { items, onItemClick, columnCount, selectedId } = data;
+  const { items, onItemClick, columnCount, selectedId, kind } = data;
   const index = rowIndex * columnCount + columnIndex;
   const item = items[index];
   if (!item) return <div style={style} />;
+  const isLogo = kind === 'logo';
   const poster = item.cover || item.logo || item.movie_image;
   const id = item.stream_id || item.id;
   const selected = selectedId != null && id === selectedId;
@@ -265,11 +266,11 @@ const PosterCell = memo(({ columnIndex, rowIndex, style, data }) => {
         border: selected ? '2px solid #6225ff' : '2px solid transparent',
         background: 'rgba(255,255,255,0.03)',
       }}>
-        <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', overflow: 'hidden' }}>
+        <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', overflow: 'hidden', display: isLogo ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', padding: isLogo ? '10px' : 0 }}>
           {poster ? (
-            <img src={poster} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
+            <img src={poster} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: isLogo ? 'contain' : 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
           ) : (
-            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>🎬</div>
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>{isLogo ? '📺' : '🎬'}</div>
           )}
         </div>
         <div style={{ fontSize: '9px', color: '#ddd', padding: '4px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.name}</div>
@@ -339,7 +340,9 @@ const OTT = forwardRef(({
   // ========== CORE STATE ==========
   const [activeTab, setActiveTab] = useState('live');
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState('grid');
+  const [viewModes, setViewModes] = useState({ live: 'list', movies: 'grid', series: 'grid' });
+  const viewMode = viewModes[activeTab] || 'list';
+  const toggleViewMode = () => setViewModes(m => ({ ...m, [activeTab]: m[activeTab] === 'grid' ? 'list' : 'grid' }));
   const [showSettings, setShowSettings] = useState(false);
   const [col1Hidden, setCol1Hidden] = useState(false);
   const [gridSize, setGridSize] = useState(1);
@@ -784,9 +787,10 @@ const OTT = forwardRef(({
 
   const movieRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
   const seriesRowData = useMemo(() => ({ items: filteredItems, onItemClick: handleItemClick }), [filteredItems, handleItemClick]);
-  const isPosterGrid = (activeTab === 'movies' || activeTab === 'series') && viewMode === 'grid';
-  const gridBrowse = isPosterGrid && !selectedChannel;
-  const gridDetail = isPosterGrid && !!selectedChannel;
+  const isGridView = viewMode === 'grid';
+  const gridBrowse = isGridView && !selectedChannel;
+  const gridDetail = isGridView && !!selectedChannel;
+  const gridKind = activeTab === 'live' ? 'logo' : 'poster';
   const GRID_COLS = [4, 5, 6];
   const GRID_ROWS = [2, 3, 4];
   const gridCols = GRID_COLS[gridSize];
@@ -798,6 +802,7 @@ const OTT = forwardRef(({
     onItemClick: handleItemClick,
     columnCount: gridCols,
     selectedId: selectedChannel ? (selectedChannel.stream_id || selectedChannel.id) : null,
+    kind: gridKind,
   };
   const programRowData = useMemo(() => ({ items: programResults, onProgramClick: handleProgramClick }), [programResults, handleProgramClick]);
 
@@ -860,7 +865,44 @@ const OTT = forwardRef(({
           )}
         </div>
 
-        {/* Right buttons */}
+        {/* Right buttons — col 1 toggle first, then view controls */}
+        <button onClick={() => setCol1Hidden(h => !h)} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 16px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+          background: 'transparent', color: CSS.textDim,
+          fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
+          letterSpacing: '0.8px', textTransform: 'uppercase',
+          cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', userSelect: 'none',
+        }}>{col1Hidden ? 'SHOW' : 'HIDE'}</button>
+
+        <button onClick={toggleViewMode} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 20px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+          background: 'transparent', color: CSS.textDim,
+          fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
+          letterSpacing: '0.8px', textTransform: 'uppercase',
+          cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', userSelect: 'none',
+        }}>{viewMode === 'grid' ? 'LIST' : (activeTab === 'live' ? 'LOGOS' : 'GRID')}</button>
+
+        {isGridView && (
+          <>
+            <button onClick={() => setGridSize(s => Math.max(0, s - 1))} disabled={gridSize === 0} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 14px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+              background: 'transparent', color: gridSize === 0 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
+              fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
+              cursor: gridSize === 0 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
+            }}>−</button>
+            <button onClick={() => setGridSize(s => Math.min(2, s + 1))} disabled={gridSize === 2} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 14px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
+              background: 'transparent', color: gridSize === 2 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
+              fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
+              cursor: gridSize === 2 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
+            }}>+</button>
+          </>
+        )}
+
         {activeTab === 'live' && (
         <button onClick={() => {
           if (epgScanning) return;
@@ -881,44 +923,6 @@ const OTT = forwardRef(({
           )}
           {epgMode ? (epgScanning ? `EPG ${epgProgress}%` : `SCAN (${epgSelectedFolders.size})`) : 'EPG NOW'}
         </button>
-        )}
-        {(activeTab === 'movies' || activeTab === 'series') && (
-          <button onClick={() => setViewMode(v => (v === 'grid' ? 'list' : 'grid'))} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '0 20px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
-            background: 'transparent', color: CSS.textDim,
-            fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
-            letterSpacing: '0.8px', textTransform: 'uppercase',
-            cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', userSelect: 'none',
-          }}>
-            {viewMode === 'grid' ? 'LIST' : 'GRID'}
-          </button>
-        )}
-        {isPosterGrid && (
-          <>
-            <button onClick={() => setCol1Hidden(h => !h)} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '0 16px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
-              background: 'transparent', color: CSS.textDim,
-              fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
-              letterSpacing: '0.8px', textTransform: 'uppercase',
-              cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', userSelect: 'none',
-            }}>{col1Hidden ? 'SHOW' : 'HIDE'}</button>
-            <button onClick={() => setGridSize(s => Math.max(0, s - 1))} disabled={gridSize === 0} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '0 14px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
-              background: 'transparent', color: gridSize === 0 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
-              fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
-              cursor: gridSize === 0 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
-            }}>−</button>
-            <button onClick={() => setGridSize(s => Math.min(2, s + 1))} disabled={gridSize === 2} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '0 14px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
-              background: 'transparent', color: gridSize === 2 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
-              fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
-              cursor: gridSize === 2 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
-            }}>+</button>
-          </>
         )}
         {[
           { label: 'SETTINGS', action: () => setShowSettings(true) },
@@ -1018,7 +1022,7 @@ const OTT = forwardRef(({
                 {ProgramRowItem}
               </List>
             ) : filteredItems.length > 0 ? (
-              isPosterGrid ? (
+              isGridView ? (
               <Grid
                 columnCount={gridCols}
                 columnWidth={gridColW}
