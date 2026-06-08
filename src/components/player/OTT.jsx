@@ -772,7 +772,9 @@ const OTT = forwardRef(({
   const gridCols = GRID_COLS[gridSize];
   const gridRows = GRID_ROWS[gridSize];
   const gridColW = gridAreaWidth ? Math.floor(gridAreaWidth / gridCols) : 124;
-  const gridRowH = gridAreaHeight ? Math.floor(gridAreaHeight / gridRows) : 196;
+  const gridRowH = gridKind === 'poster'
+    ? Math.round(gridColW * 1.5) + 40
+    : (gridAreaHeight ? Math.floor(gridAreaHeight / gridRows) : 196);
   const posterGridData = {
     items: filteredItems,
     onItemClick: handleItemClick,
@@ -1047,16 +1049,8 @@ const OTT = forwardRef(({
             setIsPlaying(true);
           }}
           onFullscreenChange={setPlayerFullscreen}
+          onBack={gridDetail ? () => setSelectedChannel(null) : null}
         />
-        )}
-
-        {gridDetail && (
-          <button onClick={() => setSelectedChannel(null)} style={{
-            position: 'fixed', top: CSS.barH + 10, left: 12, zIndex: 200,
-            background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px',
-            color: '#fff', fontSize: '12px', fontWeight: 700, padding: '8px 14px', cursor: 'pointer',
-            letterSpacing: '0.5px',
-          }}>← RETOUR</button>
         )}
       </div>
 

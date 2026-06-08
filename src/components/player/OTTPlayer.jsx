@@ -64,6 +64,7 @@ const OTTPlayer = memo(({
   filteredItems = [],
   onChannelChange,
   onFullscreenChange,
+  onBack,
 }) => {
 
   // ========== PLAYER STATE ==========
@@ -366,15 +367,22 @@ const OTTPlayer = memo(({
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', background: '#0a0a0f', minWidth: 0 }}>
         {/* Title row */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '15px 20px 10px', flexShrink: 0, gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '15px 52px 10px 20px', flexShrink: 0, gap: '12px' }}>
+          {onBack && (
+            <button onClick={onBack} style={{
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px',
+              color: '#fff', fontSize: '12px', fontWeight: 700, padding: '8px 14px', cursor: 'pointer',
+              letterSpacing: '0.5px', flexShrink: 0, whiteSpace: 'nowrap',
+            }}>← BACK</button>
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
-              {year && <span style={{ fontSize: '10px', color: '#888' }}>{String(year).substring(0, 4)}</span>}
-              {genre && <span style={{ fontSize: '9px', color: CSS.accent, fontWeight: 700 }}>{genre}</span>}
-              {video?.width && <span style={{ fontSize: '9px', color: '#4ade80', fontWeight: 600 }}>{video.width}×{video.height}</span>}
-              {rating && <span style={{ fontSize: '9px', color: '#ffd700' }}>★ {rating}</span>}
-              {duration && <span style={{ fontSize: '9px', color: '#666' }}>{duration}</span>}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '5px', flexWrap: 'wrap' }}>
+              {year && <span style={{ fontSize: '12px', color: '#ccc', fontWeight: 600 }}>{String(year).substring(0, 4)}</span>}
+              {genre && <span style={{ fontSize: '12px', color: CSS.accent, fontWeight: 700 }}>{genre}</span>}
+              {video?.width && <span style={{ fontSize: '12px', color: '#4ade80', fontWeight: 700 }}>{video.width}×{video.height}</span>}
+              {rating && <span style={{ fontSize: '12px', color: '#ffd700', fontWeight: 700 }}>★ {rating}</span>}
+              {duration && <span style={{ fontSize: '12px', color: '#aaa', fontWeight: 600 }}>{duration}</span>}
             </div>
           </div>
           <button onClick={handlePlayVod} style={{ background: CSS.gradient, border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
