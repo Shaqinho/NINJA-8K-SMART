@@ -364,23 +364,35 @@ public class LibVLCPlugin extends Plugin {
     public void getAudioTracks(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
-                if (mediaPlayer == null) {
-                    call.reject("Player not initialized");
-                    return;
-                }
-                MediaPlayer.TrackDescription[] tracks = mediaPlayer.getAudioTracks();
                 JSObject result = new JSObject();
-                result.put("count", tracks != null ? tracks.length - 1 : 0); // -1 for "Disable" track
                 com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
-                if (tracks != null) {
-                    for (MediaPlayer.TrackDescription t : tracks) {
-                        if (t.id == -1) continue; // Skip "Disable" option
-                        JSObject track = new JSObject();
-                        track.put("id", t.id);
-                        track.put("name", t.name);
-                        arr.put(track);
+                if (mediaPlayer != null) {
+                    Media media = mediaPlayer.getMedia();
+                    if (media != null) {
+                        int n = media.getTrackCount();
+                        Log.d(TAG, "getAudioTracks: media trackCount=" + n);
+                        for (int i = 0; i < n; i++) {
+                            Media.Track t = media.getTrack(i);
+                            if (t == null || t.type != Media.Track.Type.Audio) continue;
+                            JSObject track = new JSObject();
+                            track.put("id", t.id);
+                            track.put("language", t.language != null ? t.language : "");
+                            String label = (t.description != null && !t.description.isEmpty())
+                                    ? t.description
+                                    : (t.language != null ? t.language : "Audio " + t.id);
+                            track.put("name", label);
+                            if (t instanceof Media.AudioTrack) {
+                                track.put("channels", ((Media.AudioTrack) t).channels);
+                            }
+                            arr.put(track);
+                        }
+                        media.release();
+                    } else {
+                        Log.d(TAG, "getAudioTracks: media is null");
                     }
                 }
+                Log.d(TAG, "getAudioTracks -> " + arr.length() + " audio track(s)");
+                result.put("count", arr.length());
                 result.put("tracks", arr);
                 call.resolve(result);
             } catch (Exception e) {
@@ -393,23 +405,32 @@ public class LibVLCPlugin extends Plugin {
     public void getSubtitleTracks(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
-                if (mediaPlayer == null) {
-                    call.reject("Player not initialized");
-                    return;
-                }
-                MediaPlayer.TrackDescription[] tracks = mediaPlayer.getSpuTracks();
                 JSObject result = new JSObject();
-                result.put("count", tracks != null ? tracks.length - 1 : 0); // -1 for "Disable" track
                 com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
-                if (tracks != null) {
-                    for (MediaPlayer.TrackDescription t : tracks) {
-                        if (t.id == -1) continue; // Skip "Disable" option
-                        JSObject track = new JSObject();
-                        track.put("id", t.id);
-                        track.put("name", t.name);
-                        arr.put(track);
+                if (mediaPlayer != null) {
+                    Media media = mediaPlayer.getMedia();
+                    if (media != null) {
+                        int n = media.getTrackCount();
+                        Log.d(TAG, "getSubtitleTracks: media trackCount=" + n);
+                        for (int i = 0; i < n; i++) {
+                            Media.Track t = media.getTrack(i);
+                            if (t == null || t.type != Media.Track.Type.Text) continue;
+                            JSObject track = new JSObject();
+                            track.put("id", t.id);
+                            track.put("language", t.language != null ? t.language : "");
+                            String label = (t.description != null && !t.description.isEmpty())
+                                    ? t.description
+                                    : (t.language != null ? t.language : "Sub " + t.id);
+                            track.put("name", label);
+                            arr.put(track);
+                        }
+                        media.release();
+                    } else {
+                        Log.d(TAG, "getSubtitleTracks: media is null");
                     }
                 }
+                Log.d(TAG, "getSubtitleTracks -> " + arr.length() + " subtitle track(s)");
+                result.put("count", arr.length());
                 result.put("tracks", arr);
                 call.resolve(result);
             } catch (Exception e) {
