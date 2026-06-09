@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { libVLC } from './libVLC';
-import ProbeService from '../../services/ProbeService';
 import { getLangName } from '../../services/ProbeService';
 
 // ============================================================================
@@ -35,6 +34,18 @@ const formatDuration = (secs) => {
   const m = Math.floor((s % 3600) / 60);
   if (h > 0) return `${h}h${m > 0 ? m.toString().padStart(2, '0') : ''}`;
   return `${m}min`;
+};
+
+// mm:ss / h:mm:ss from milliseconds (for the playback timeline)
+const formatMs = (ms) => {
+  if (!ms || ms < 0 || !isFinite(ms)) return '0:00';
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h > 0
+    ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    : `${m}:${s.toString().padStart(2, '0')}`;
 };
 
 // Tag pill
@@ -95,6 +106,8 @@ const OTTPlayer = memo(({
   const [showControls, setShowControls] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [posMs, setPosMs] = useState(0);
+  const [durMs, setDurMs] = useState(0);
   const [trackMenu, setTrackMenu] = useState(null); // 'audio' | 'sub' | null
   const [trackList, setTrackList] = useState([]);
   const [currentAudioId, setCurrentAudioId] = useState(null);
@@ -102,6 +115,7 @@ const OTTPlayer = memo(({
   const videoAreaRef = useRef(null);
   const controlsTimerRef = useRef(null);
   const pollRef = useRef(0);
+  const stateTimerRef = useRef(null);
 
   // ========== LIBVLC NATIVE POSITION ==========
   const updateNativePosition = useCallback(() => {
@@ -211,15 +225,16 @@ const OTTPlayer = memo(({
     (async () => {
       try {
         if (activeTab === 'movies') {
-          const credentials = { server: xtreamService.server, username: xtreamService.username, password: xtreamService.password };
-          const [details, probeResult] = await Promise.all([
-            xtreamService.getVodInfo(streamId),
-            ProbeService.probeTracks(credentials, selectedChannel, 'vod'),
-          ]);
+          const details = await xtreamService.getVodInfo(streamId);
           setDetailData(details);
-          if (probeResult.success) {
-            setProbeData({ audioTracks: probeResult.audioTracks, subtitleTracks: probeResult.subtitleTracks, video: probeResult.technical });
-          }
+          const ext = details?.movie_data?.container_extension || selectedChannel.container_extension || 'mp4';
+          const url = `${xtreamService.server}/movie/${xtreamService.username}/${xtreamService.password}/${streamId}.${ext}`;
+          const probe = await libVLC.probeStream(url);
+          setProbeData({
+            audioTracks: probe?.audioTracks || [],
+            subtitleTracks: probe?.subtitleTracks || [],
+            video: probe?.video || null,
+          });
         } else if (activeTab === 'series') {
           const info = await xtreamService.getSeriesInfo(streamId);
           setDetailData(info);
@@ -247,6 +262,32 @@ const OTTPlayer = memo(({
       await libVLC.seekTo(target);
     } catch (e) { /* noop */ }
   }, []);
+
+  // Poll playback position/length for the timeline (1s tick).
+  useEffect(() => {
+    const tick = async () => {
+      try {
+        const st = await libVLC.getState();
+        if (st) {
+          if (typeof st.time === 'number') setPosMs(st.time);
+          if (typeof st.length === 'number') setDurMs(st.length > 0 ? st.length : 0);
+        }
+      } catch (e) { /* noop */ }
+    };
+    stateTimerRef.current = setInterval(tick, 1000);
+    tick();
+    return () => clearInterval(stateTimerRef.current);
+  }, []);
+
+  // Click on the timeline to seek (absolute).
+  const handleSeekBar = useCallback(async (e) => {
+    if (!durMs) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const target = Math.round(frac * durMs);
+    setPosMs(target);
+    try { await libVLC.seekTo(target); } catch (err) { /* noop */ }
+  }, [durMs]);
 
   // Les pistes se peuplent APRÈS l'event ESAdded (un peu après Playing) → on poll.
   const fillTracks = useCallback(async (getter) => {
@@ -287,6 +328,8 @@ const OTTPlayer = memo(({
       await libVLC.setFullscreen(false);
       setIsFullscreen(false);
       onFullscreenChange?.(false);
+      await libVLC.pause();
+      setIsPaused(true);
       setTimeout(updateNativePosition, 100);
       setTimeout(updateNativePosition, 200);
       setTimeout(updateNativePosition, 400);
@@ -348,6 +391,18 @@ const OTTPlayer = memo(({
     />
   );
 
+  // VOD playback timeline (seekable). Shown for movies/series once duration is known.
+  const seekBar = (activeTab !== 'live' && durMs > 0) ? (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: CSS.textDim, fontVariantNumeric: 'tabular-nums', padding: '0 6px 4px' }}>
+      <span>{formatMs(posMs)}</span>
+      <div onClick={handleSeekBar} style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.18)', borderRadius: '3px', position: 'relative', cursor: 'pointer' }}>
+        <div style={{ height: '100%', background: CSS.accent, borderRadius: '3px', width: `${Math.min(100, (posMs / durMs) * 100)}%` }} />
+        <div style={{ position: 'absolute', top: '50%', left: `${Math.min(100, (posMs / durMs) * 100)}%`, transform: 'translate(-50%, -50%)', width: '13px', height: '13px', background: '#fff', borderRadius: '50%', boxShadow: '0 0 5px rgba(0,0,0,0.6)' }} />
+      </div>
+      <span>{formatMs(durMs)}</span>
+    </div>
+  ) : null;
+
   // ========== FULLSCREEN OVERLAY ==========
   if (isFullscreen) {
     return (
@@ -361,6 +416,7 @@ const OTTPlayer = memo(({
             padding: '20px 12px 8px',
             display: 'flex', flexDirection: 'column', gap: '4px',
           }}>
+            {seekBar}
             {nowProgram && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '9px', color: CSS.textDim, fontVariantNumeric: 'tabular-nums', padding: '0 4px' }}>
                 <span>{formatEpgTime(nowProgram.start_time)}</span>
@@ -620,6 +676,7 @@ const OTTPlayer = memo(({
         {showControls && (
           <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.88) 40%)', padding: '20px 8px 6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {/* Timeline */}
+            {seekBar}
             {nowProgram && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '8px', color: CSS.textDim, fontVariantNumeric: 'tabular-nums', padding: '0 4px' }}>
                 <span>{formatEpgTime(nowProgram.start_time)}</span>

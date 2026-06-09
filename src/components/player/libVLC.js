@@ -140,6 +140,19 @@ export const libVLC = {
   },
 
   /**
+   * Probe a stream URL WITHOUT playing it (parse-only).
+   * Returns { audioTracks:[{id,language,channels,name}], subtitleTracks:[{id,language,name}], video:{width,height} }
+   */
+  async probeStream(url) {
+    try {
+      return await Native.probeStream({ url });
+    } catch (e) {
+      console.error('[LibVLC] probeStream failed:', e);
+      return { audioTracks: [], subtitleTracks: [], video: null };
+    }
+  },
+
+  /**
    * Get audio tracks { count, tracks: [{ id, name }] }
    */
   async getAudioTracks() {

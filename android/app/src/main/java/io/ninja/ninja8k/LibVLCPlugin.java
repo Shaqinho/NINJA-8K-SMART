@@ -280,7 +280,7 @@ public class LibVLCPlugin extends Plugin {
     public void pause(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
-                if (mediaPlayer != null) mediaPlayer.pause();
+                if (mediaPlayer != null) mediaPlayer.setPause(true);
                 call.resolve();
             } catch (Exception e) {
                 call.reject("pause failed: " + e.getMessage());
@@ -292,7 +292,7 @@ public class LibVLCPlugin extends Plugin {
     public void resume(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
-                if (mediaPlayer != null) mediaPlayer.play();
+                if (mediaPlayer != null) mediaPlayer.setPause(false);
                 call.resolve();
             } catch (Exception e) {
                 call.reject("resume failed: " + e.getMessage());
@@ -435,6 +435,91 @@ public class LibVLCPlugin extends Plugin {
                 call.resolve(result);
             } catch (Exception e) {
                 call.reject("getSubtitleTracks failed: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Probe a URL WITHOUT playing it. Parses the media (network), reads its
+     * audio/subtitle/video tracks, returns them, then releases. Safe timeout.
+     */
+    @PluginMethod
+    public void probeStream(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null) { call.reject("probeStream: no url"); return; }
+        getActivity().runOnUiThread(() -> {
+            try {
+                final Media media = new Media(libVLC, Uri.parse(url));
+                media.setHWDecoderEnabled(false, false);
+                final java.util.concurrent.atomic.AtomicBoolean done =
+                        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+                media.setEventListener(event -> {
+                    if (event.type != Media.Event.ParsedChanged) return;
+                    if (!done.compareAndSet(false, true)) return;
+                    try {
+                        JSObject result = new JSObject();
+                        com.getcapacitor.JSArray audioArr = new com.getcapacitor.JSArray();
+                        com.getcapacitor.JSArray subArr = new com.getcapacitor.JSArray();
+                        int n = media.getTrackCount();
+                        Log.d(TAG, "probeStream: trackCount=" + n);
+                        for (int i = 0; i < n; i++) {
+                            Media.Track t = media.getTrack(i);
+                            if (t == null) continue;
+                            if (t.type == Media.Track.Type.Audio) {
+                                JSObject tr = new JSObject();
+                                tr.put("id", t.id);
+                                tr.put("language", t.language != null ? t.language : "");
+                                tr.put("channels", ((Media.AudioTrack) t).channels);
+                                String label = (t.description != null && !t.description.isEmpty())
+                                        ? t.description
+                                        : (t.language != null ? t.language : "Audio " + t.id);
+                                tr.put("name", label);
+                                audioArr.put(tr);
+                            } else if (t.type == Media.Track.Type.Text) {
+                                JSObject tr = new JSObject();
+                                tr.put("id", t.id);
+                                tr.put("language", t.language != null ? t.language : "");
+                                String label = (t.description != null && !t.description.isEmpty())
+                                        ? t.description
+                                        : (t.language != null ? t.language : "Sub " + t.id);
+                                tr.put("name", label);
+                                subArr.put(tr);
+                            } else if (t.type == Media.Track.Type.Video && !result.has("video")) {
+                                Media.VideoTrack vt = (Media.VideoTrack) t;
+                                JSObject v = new JSObject();
+                                v.put("width", vt.width);
+                                v.put("height", vt.height);
+                                result.put("video", v);
+                            }
+                        }
+                        result.put("audioTracks", audioArr);
+                        result.put("subtitleTracks", subArr);
+                        Log.d(TAG, "probeStream -> audio=" + audioArr.length() + " subs=" + subArr.length());
+                        call.resolve(result);
+                    } catch (Exception ex) {
+                        call.reject("probeStream parse error: " + ex.getMessage());
+                    } finally {
+                        try { media.release(); } catch (Exception ignored) {}
+                    }
+                });
+
+                // Safety net: never hang the fiche if ParsedChanged never fires.
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    if (!done.compareAndSet(false, true)) return;
+                    try {
+                        JSObject result = new JSObject();
+                        result.put("audioTracks", new com.getcapacitor.JSArray());
+                        result.put("subtitleTracks", new com.getcapacitor.JSArray());
+                        Log.d(TAG, "probeStream: timeout, returning empty");
+                        call.resolve(result);
+                    } catch (Exception ignored) {}
+                    try { media.release(); } catch (Exception ignored) {}
+                }, 12000);
+
+                media.parseAsync(Media.Parse.ParseNetwork, 10000);
+            } catch (Exception e) {
+                call.reject("probeStream failed: " + e.getMessage());
             }
         });
     }
