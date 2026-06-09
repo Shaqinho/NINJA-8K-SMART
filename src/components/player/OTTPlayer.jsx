@@ -51,6 +51,30 @@ const TagPill = ({ children, color = 'purple' }) => {
   );
 };
 
+// Audio/subtitle track picker overlay
+const TrackMenu = ({ title, tracks, currentId, onSelect, onClose, allowDisable }) => (
+  <div onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div onClick={(e) => e.stopPropagation()} style={{ background: '#111', border: '2px solid #6225ff', borderRadius: '12px', padding: '20px', minWidth: '260px', maxWidth: '420px', width: '100%', maxHeight: '70vh', overflow: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+        <h3 style={{ color: '#6225ff', fontSize: '15px', fontWeight: 800, margin: 0 }}>{title}</h3>
+        <button onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {allowDisable && (
+          <button onClick={() => onSelect(-1)} style={{ textAlign: 'left', background: currentId === -1 ? 'rgba(98,37,255,0.3)' : 'rgba(255,255,255,0.05)', border: currentId === -1 ? '1px solid #6225ff' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '10px 12px', color: '#ccc', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>Disabled</button>
+        )}
+        {tracks.length === 0 && <div style={{ color: '#666', fontSize: '12px', padding: '8px' }}>No tracks available</div>}
+        {tracks.map((t) => {
+          const sel = t.id === currentId;
+          return (
+            <button key={t.id} onClick={() => onSelect(t.id)} style={{ textAlign: 'left', background: sel ? 'rgba(98,37,255,0.3)' : 'rgba(255,255,255,0.05)', border: sel ? '1px solid #6225ff' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '10px 12px', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>{t.name || `Track ${t.id}`}</button>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+);
+
 
 const OTTPlayer = memo(({
   selectedChannel,
@@ -71,6 +95,10 @@ const OTTPlayer = memo(({
   const [showControls, setShowControls] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [trackMenu, setTrackMenu] = useState(null); // 'audio' | 'sub' | null
+  const [trackList, setTrackList] = useState([]);
+  const [currentAudioId, setCurrentAudioId] = useState(null);
+  const [currentSubId, setCurrentSubId] = useState(-1);
   const videoAreaRef = useRef(null);
   const controlsTimerRef = useRef(null);
 
@@ -218,6 +246,41 @@ const OTTPlayer = memo(({
     else { await libVLC.pause(); setIsPaused(true); }
   }, [isPaused]);
 
+  // Relative seek: read current position, jump by deltaMs (seekTo is absolute)
+  const handleSeek = useCallback(async (deltaMs) => {
+    try {
+      const st = await libVLC.getState();
+      const cur = (st && typeof st.time === 'number') ? st.time : 0;
+      const len = (st && typeof st.length === 'number') ? st.length : 0;
+      let target = cur + deltaMs;
+      if (target < 0) target = 0;
+      if (len > 0 && target > len - 1000) target = Math.max(0, len - 1000);
+      await libVLC.seekTo(target);
+    } catch (e) { /* noop */ }
+  }, []);
+
+  const openAudioMenu = useCallback(async () => {
+    try {
+      const r = await libVLC.getAudioTracks();
+      setTrackList(Array.isArray(r) ? r : (r?.tracks || []));
+    } catch (e) { setTrackList([]); }
+    setTrackMenu('audio');
+  }, []);
+
+  const openSubMenu = useCallback(async () => {
+    try {
+      const r = await libVLC.getSubtitleTracks();
+      setTrackList(Array.isArray(r) ? r : (r?.tracks || []));
+    } catch (e) { setTrackList([]); }
+    setTrackMenu('sub');
+  }, []);
+
+  const selectTrack = useCallback(async (id) => {
+    if (trackMenu === 'audio') { await libVLC.setAudioTrack(id); setCurrentAudioId(id); }
+    else if (trackMenu === 'sub') { await libVLC.setSubtitleTrack(id); setCurrentSubId(id); }
+    setTrackMenu(null);
+  }, [trackMenu]);
+
   const handleFullscreen = useCallback(async () => {
     if (isFullscreen) {
       await libVLC.setFullscreen(false);
@@ -273,6 +336,17 @@ const OTTPlayer = memo(({
   const channelId = selectedChannel ? (selectedChannel.stream_id || selectedChannel.id) : null;
   const isFav = channelId ? favorites[channelId] : false;
 
+  const trackMenuOverlay = trackMenu && (
+    <TrackMenu
+      title={trackMenu === 'audio' ? 'AUDIO' : 'SUBTITLES'}
+      tracks={trackList}
+      currentId={trackMenu === 'audio' ? currentAudioId : currentSubId}
+      onSelect={selectTrack}
+      onClose={() => setTrackMenu(null)}
+      allowDisable={trackMenu === 'sub'}
+    />
+  );
+
   // ========== FULLSCREEN OVERLAY ==========
   if (isFullscreen) {
     return (
@@ -304,16 +378,16 @@ const OTTPlayer = memo(({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <button onClick={() => {}} style={ctrlBtnStyle}>SUB</button>
-                <button onClick={() => {}} style={ctrlBtnStyle}>AUD</button>
+                <button onClick={openSubMenu} style={ctrlBtnStyle}>SUB</button>
+                <button onClick={openAudioMenu} style={ctrlBtnStyle}>AUD</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <button onClick={handlePrevChannel} style={ctrlBtnStyle}>◀◀</button>
-                <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>-15</button>
+                <button onClick={() => handleSeek(-15000)} style={ctrlBtnStyle}>-15</button>
                 <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '12px 20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
                   {isPaused ? '▶' : '❚❚'}
                 </button>
-                <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>+15</button>
+                <button onClick={() => handleSeek(15000)} style={ctrlBtnStyle}>+15</button>
                 <button onClick={handleNextChannel} style={ctrlBtnStyle}>▶▶</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
@@ -322,6 +396,7 @@ const OTTPlayer = memo(({
             </div>
           </div>
         )}
+        {trackMenuOverlay}
       </div>
     );
   }
@@ -559,16 +634,16 @@ const OTTPlayer = memo(({
             {/* Controls row — compact */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <button onClick={() => {}} style={ctrlBtnStyle}>SUB</button>
-                <button onClick={() => {}} style={ctrlBtnStyle}>AUD</button>
+                <button onClick={openSubMenu} style={ctrlBtnStyle}>SUB</button>
+                <button onClick={openAudioMenu} style={ctrlBtnStyle}>AUD</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                 <button onClick={handlePrevChannel} style={ctrlBtnStyle}>◀◀</button>
-                <button onClick={() => libVLC.seekTo(-15000)} style={ctrlBtnStyle}>-15</button>
+                <button onClick={() => handleSeek(-15000)} style={ctrlBtnStyle}>-15</button>
                 <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '12px 20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
                   {isPaused ? '▶' : '❚❚'}
                 </button>
-                <button onClick={() => libVLC.seekTo(15000)} style={ctrlBtnStyle}>+15</button>
+                <button onClick={() => handleSeek(15000)} style={ctrlBtnStyle}>+15</button>
                 <button onClick={handleNextChannel} style={ctrlBtnStyle}>▶▶</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
@@ -634,6 +709,7 @@ const OTTPlayer = memo(({
           )}
         </div>
       </div>
+      {trackMenuOverlay}
     </div>
   );
 });

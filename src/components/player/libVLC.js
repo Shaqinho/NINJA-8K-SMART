@@ -164,6 +164,28 @@ export const libVLC = {
   },
 
   /**
+   * Select audio track by id (from getAudioTracks)
+   */
+  async setAudioTrack(id) {
+    try {
+      await Native.setAudioTrack({ id });
+    } catch (e) {
+      console.error('[LibVLC] SetAudioTrack failed:', e);
+    }
+  },
+
+  /**
+   * Select subtitle track by id (-1 = disable)
+   */
+  async setSubtitleTrack(id) {
+    try {
+      await Native.setSubtitleTrack({ id });
+    } catch (e) {
+      console.error('[LibVLC] SetSubtitleTrack failed:', e);
+    }
+  },
+
+  /**
    * Destroy player and release resources
    */
   async destroy() {

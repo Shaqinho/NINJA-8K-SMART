@@ -277,6 +277,90 @@ public class LibVLCPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void pause(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (mediaPlayer != null) mediaPlayer.pause();
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("pause failed: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void resume(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (mediaPlayer != null) mediaPlayer.play();
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("resume failed: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void seekTo(PluginCall call) {
+        int position = call.getInt("position", 0);
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (mediaPlayer != null) mediaPlayer.setTime(position);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("seekTo failed: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void getState(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                JSObject result = new JSObject();
+                if (mediaPlayer != null) {
+                    result.put("time", mediaPlayer.getTime());
+                    result.put("length", mediaPlayer.getLength());
+                    result.put("playing", mediaPlayer.isPlaying());
+                } else {
+                    result.put("time", 0);
+                    result.put("length", 0);
+                    result.put("playing", false);
+                }
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject("getState failed: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void setAudioTrack(PluginCall call) {
+        int id = call.getInt("id", -1);
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (mediaPlayer != null) mediaPlayer.setAudioTrack(id);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("setAudioTrack failed: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void setSubtitleTrack(PluginCall call) {
+        int id = call.getInt("id", -1);
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (mediaPlayer != null) mediaPlayer.setSpuTrack(id);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("setSubtitleTrack failed: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
     public void getAudioTracks(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
