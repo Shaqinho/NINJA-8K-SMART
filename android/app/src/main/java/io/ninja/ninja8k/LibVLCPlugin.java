@@ -318,6 +318,7 @@ public class LibVLCPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 JSObject result = new JSObject();
+                result.put("build", "canary-1"); // CANARY: si visible côté JS => le .java EST recompilé
                 if (mediaPlayer != null) {
                     result.put("time", mediaPlayer.getTime());
                     result.put("length", mediaPlayer.getLength());

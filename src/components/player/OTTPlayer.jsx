@@ -307,7 +307,9 @@ const OTTPlayer = memo(({
     }
   }, []);
 
-  const openAudioMenu = useCallback(() => {
+  const openAudioMenu = useCallback(async () => {
+    const st = await libVLC.getState();                                   // CANARY (à retirer après test)
+    alert('BUILD=' + (st && st.build) + '  len=' + (st && st.length) + '  time=' + (st && st.time)); // CANARY
     setTrackMenu('audio');
     fillTracks(() => libVLC.getAudioTracks());
   }, [fillTracks]);
