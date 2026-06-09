@@ -395,13 +395,11 @@ const OTTPlayer = memo(({
                 <button onClick={openAudioMenu} style={ctrlBtnStyle}>AUD</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                <button onClick={handlePrevChannel} style={ctrlBtnStyle}>◀◀</button>
                 <button onClick={() => handleSeek(-15000)} style={ctrlBtnStyle}>-15</button>
                 <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '12px 20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
                   {isPaused ? '▶' : '❚❚'}
                 </button>
                 <button onClick={() => handleSeek(15000)} style={ctrlBtnStyle}>+15</button>
-                <button onClick={handleNextChannel} style={ctrlBtnStyle}>▶▶</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <button onClick={handleFullscreen} style={{ ...ctrlBtnStyle, color: '#fff', fontWeight: 700 }}>✕</button>
@@ -651,13 +649,11 @@ const OTTPlayer = memo(({
                 <button onClick={openAudioMenu} style={ctrlBtnStyle}>AUD</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                <button onClick={handlePrevChannel} style={ctrlBtnStyle}>◀◀</button>
                 <button onClick={() => handleSeek(-15000)} style={ctrlBtnStyle}>-15</button>
                 <button onClick={handlePause} style={{ ...ctrlBtnStyle, padding: '12px 20px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
                   {isPaused ? '▶' : '❚❚'}
                 </button>
                 <button onClick={() => handleSeek(15000)} style={ctrlBtnStyle}>+15</button>
-                <button onClick={handleNextChannel} style={ctrlBtnStyle}>▶▶</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <button onClick={handleFullscreen} style={ctrlBtnStyle}>⛶</button>
