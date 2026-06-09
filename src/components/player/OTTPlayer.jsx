@@ -230,18 +230,6 @@ const OTTPlayer = memo(({
   }, [selectedChannel, activeTab, xtreamService]);
 
   // ========== CONTROLS ==========
-  const handlePrevChannel = useCallback(() => {
-    if (!selectedChannel || !filteredItems.length) return;
-    const idx = filteredItems.findIndex(ch => (ch.stream_id || ch.id) === (selectedChannel.stream_id || selectedChannel.id));
-    if (idx > 0) onChannelChange?.(filteredItems[idx - 1]);
-  }, [selectedChannel, filteredItems, onChannelChange]);
-
-  const handleNextChannel = useCallback(() => {
-    if (!selectedChannel || !filteredItems.length) return;
-    const idx = filteredItems.findIndex(ch => (ch.stream_id || ch.id) === (selectedChannel.stream_id || selectedChannel.id));
-    if (idx < filteredItems.length - 1) onChannelChange?.(filteredItems[idx + 1]);
-  }, [selectedChannel, filteredItems, onChannelChange]);
-
   const handlePause = useCallback(async () => {
     if (isPaused) { await libVLC.resume(); setIsPaused(false); }
     else { await libVLC.pause(); setIsPaused(true); }
