@@ -229,14 +229,23 @@ const SeriesRowItem = memo(({ data, index, style }) => {
 // ========== PROGRAM ROW (Search results) ==========
 // ========== POSTER CELL (Column 2 — Movies/Series grid) ==========
 const PosterCell = memo(({ columnIndex, rowIndex, style, data }) => {
-  const { items, onItemClick, columnCount, selectedId, kind, animated } = data;
+  const { items, onItemClick, columnCount, selectedId, kind } = data;
   const index = rowIndex * columnCount + columnIndex;
   const item = items[index];
+  const id = item ? (item.stream_id || item.id) : null;
+  const [panY, setPanY] = useState(false);
+  useEffect(() => { setPanY(false); }, [id]);
   if (!item) return <div style={style} />;
   const isLogo = kind === 'logo';
   const poster = item.cover || item.logo || item.movie_image;
-  const id = item.stream_id || item.id;
   const selected = selectedId != null && id === selectedId;
+  // Demo One : cellule plus large que l'image = poster rogné verticalement → balayage
+  const handlePosterLoad = (e) => {
+    if (isLogo) return;
+    const el = e.target;
+    if (!el.naturalWidth || !el.clientWidth) return;
+    setPanY((el.clientWidth / el.clientHeight) > (el.naturalWidth / el.naturalHeight) * 1.08);
+  };
   return (
     <div style={{ ...style, padding: '6px' }}>
       <div onClick={() => onItemClick(item)} style={{
@@ -247,7 +256,7 @@ const PosterCell = memo(({ columnIndex, rowIndex, style, data }) => {
       }}>
         <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', overflow: 'hidden', display: isLogo ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', padding: isLogo ? '10px' : 0 }}>
           {poster ? (
-            <img src={poster} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: isLogo ? 'contain' : 'cover', ...(animated && !isLogo ? { animation: `ottPanY 7s ease-in-out ${(index % 7) * 0.5}s infinite` } : {}) }} onError={(e) => { e.target.style.display = 'none'; }} />
+            <img src={poster} alt="" loading="lazy" onLoad={handlePosterLoad} style={{ width: '100%', height: '100%', objectFit: isLogo ? 'contain' : 'cover', ...(panY && !isLogo ? { animation: `ottPanY 7s ease-in-out ${(index % 7) * 0.5}s infinite` } : {}) }} onError={(e) => { e.target.style.display = 'none'; }} />
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>{isLogo ? '📺' : '🎬'}</div>
           )}
@@ -325,7 +334,7 @@ const OTT = forwardRef(({
   const [showSettings, setShowSettings] = useState(false);
   const [col1Hidden, setCol1Hidden] = useState(false);
   const [navbarHidden, setNavbarHidden] = useState(false);
-  const [gridSize, setGridSize] = useState(1);
+  const [gridSize, setGridSize] = useState(2);
   const [gridAreaWidth, setGridAreaWidth] = useState(0);
   const [gridAreaHeight, setGridAreaHeight] = useState(0);
   const gridAreaRef = useRef(null);
@@ -767,25 +776,33 @@ const OTT = forwardRef(({
   const gridBrowse = isGridView && !selectedChannel;
   const gridDetail = isGridView && !!selectedChannel;
   const gridKind = activeTab === 'live' ? 'logo' : 'poster';
-  const GRID_COLS = [4, 5, 6, 5];      // logo + cran animé (3)
-  const GRID_ROWS = [2, 3, 4, 3];      // logo + cran animé (3)
-  const POSTER_ROWS = [2, 3, 4];       // fit-to-screen: rangées qui remplissent la hauteur (crans 0-2)
+  // POSTERS (movies/series) — 3 crans : 0 = paysage (montre le moins) → 2 = poster plein (montre tout, défaut)
+  // LOGOS (live) — 3 crans : 0 = petit (+ de colonnes) → 2 = grand (- de colonnes)
+  const LOGO_COLS = [6, 5, 4];
+  const LOGO_ROWS = [4, 3, 2];
   const GRID_LABEL_H = 30;
   const gridAreaW = gridAreaWidth || 384;
   const gridAreaH = gridAreaHeight || 600;
   let gridCols, gridColW, gridRowH;
-  if (gridKind === 'poster' && gridSize <= 2) {
-    // Fit-to-screen: N rangées pleines + colonnes auto-ajustées, posters 2:3
-    const rowsFit = POSTER_ROWS[gridSize];
-    gridRowH = Math.floor(gridAreaH / rowsFit);
-    const posterW = Math.max(80, Math.round((gridRowH - GRID_LABEL_H) * 2 / 3));
-    gridCols = Math.max(1, Math.floor(gridAreaW / posterW));
-    gridColW = Math.floor(gridAreaW / gridCols);
+  if (gridKind === 'poster') {
+    if (gridSize === 0) {
+      // Cran − : vue paysage, cellules larges (posters rognés → Demo One)
+      gridCols = 5;
+      gridColW = Math.floor(gridAreaW / gridCols);
+      gridRowH = Math.floor(gridAreaH / 3);
+    } else {
+      // Cran 1 (dense, 3 rangées) et Cran 2 (plein, 2 rangées) : fit-to-screen 2:3
+      const rowsFit = gridSize === 1 ? 3 : 2;
+      gridRowH = Math.floor(gridAreaH / rowsFit);
+      const posterW = Math.max(80, Math.round((gridRowH - GRID_LABEL_H) * 2 / 3));
+      gridCols = Math.max(1, Math.floor(gridAreaW / posterW));
+      gridColW = Math.floor(gridAreaW / gridCols);
+    }
   } else {
-    // Logos LIVE + cran animé (paysage) : remplissage de la zone
-    gridCols = GRID_COLS[gridSize];
+    // Logos LIVE : remplissage de la zone
+    gridCols = LOGO_COLS[gridSize];
     gridColW = Math.floor(gridAreaW / gridCols);
-    gridRowH = Math.floor(gridAreaH / GRID_ROWS[gridSize]);
+    gridRowH = Math.floor(gridAreaH / LOGO_ROWS[gridSize]);
   }
   const posterGridData = {
     items: filteredItems,
@@ -793,7 +810,6 @@ const OTT = forwardRef(({
     columnCount: gridCols,
     selectedId: selectedChannel ? (selectedChannel.stream_id || selectedChannel.id) : null,
     kind: gridKind,
-    animated: gridKind === 'poster' && gridSize === 3,
   };
   const programRowData = useMemo(() => ({ items: programResults, onProgramClick: handleProgramClick }), [programResults, handleProgramClick]);
 
@@ -885,12 +901,12 @@ const OTT = forwardRef(({
               fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
               cursor: gridSize === 0 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
             }}>−</button>
-            <button onClick={() => setGridSize(s => Math.min(3, s + 1))} disabled={gridSize === 3} style={{
+            <button onClick={() => setGridSize(s => Math.min(2, s + 1))} disabled={gridSize === 2} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: '0 14px', border: 'none', borderRight: `1px solid ${CSS.divider}`, borderRadius: 0,
-              background: 'transparent', color: gridSize === 3 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
+              background: 'transparent', color: gridSize === 2 ? 'rgba(255,255,255,0.2)' : CSS.textDim,
               fontFamily: 'inherit', fontSize: '16px', fontWeight: 700,
-              cursor: gridSize === 3 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
+              cursor: gridSize === 2 ? 'default' : 'pointer', transition: 'all 0.15s', userSelect: 'none',
             }}>+</button>
           </>
         )}
