@@ -101,6 +101,7 @@ const OTTPlayer = memo(({
   const [currentSubId, setCurrentSubId] = useState(-1);
   const videoAreaRef = useRef(null);
   const controlsTimerRef = useRef(null);
+  const pollRef = useRef(0);
 
   // ========== LIBVLC NATIVE POSITION ==========
   const updateNativePosition = useCallback(() => {
@@ -259,21 +260,33 @@ const OTTPlayer = memo(({
     } catch (e) { /* noop */ }
   }, []);
 
-  const openAudioMenu = useCallback(async () => {
-    try {
-      const r = await libVLC.getAudioTracks();
-      setTrackList(Array.isArray(r) ? r : (r?.tracks || []));
-    } catch (e) { setTrackList([]); }
-    setTrackMenu('audio');
+  // Les pistes se peuplent APRÈS l'event ESAdded (un peu après Playing) → on poll.
+  const fillTracks = useCallback(async (getter) => {
+    const myPoll = ++pollRef.current;
+    setTrackList([]);
+    for (let i = 0; i < 12; i++) {                 // ~8s max
+      if (pollRef.current !== myPoll) return;       // un nouvel ouvrir a pris le relais
+      try {
+        const r = await getter();
+        const list = Array.isArray(r) ? r : (r?.tracks || []);
+        if (list.length > 0) {
+          if (pollRef.current === myPoll) setTrackList(list);
+          return;
+        }
+      } catch (e) { /* retry */ }
+      await new Promise(res => setTimeout(res, 700));
+    }
   }, []);
 
-  const openSubMenu = useCallback(async () => {
-    try {
-      const r = await libVLC.getSubtitleTracks();
-      setTrackList(Array.isArray(r) ? r : (r?.tracks || []));
-    } catch (e) { setTrackList([]); }
+  const openAudioMenu = useCallback(() => {
+    setTrackMenu('audio');
+    fillTracks(() => libVLC.getAudioTracks());
+  }, [fillTracks]);
+
+  const openSubMenu = useCallback(() => {
     setTrackMenu('sub');
-  }, []);
+    fillTracks(() => libVLC.getSubtitleTracks());
+  }, [fillTracks]);
 
   const selectTrack = useCallback(async (id) => {
     if (trackMenu === 'audio') { await libVLC.setAudioTrack(id); setCurrentAudioId(id); }
